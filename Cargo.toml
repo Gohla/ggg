@@ -5,6 +5,7 @@ members = [
   "core/math",
   "core/util",
   "core/os",
+  "core/gfx",
 
   "graphics/triangle"
 ]
