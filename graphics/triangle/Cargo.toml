@@ -1,0 +1,15 @@
+[package]
+name = "triangle"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+os = {path = "../../core/os"}
+math = {path = "../../core/math"}
+util = {path = "../../core/util"}
+winit = "0.24"
+wgpu = "0.7"
+ultraviolet = "0.8"
+anyhow = "1.0"
