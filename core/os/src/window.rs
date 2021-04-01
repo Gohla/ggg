@@ -1,4 +1,3 @@
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use thiserror::Error;
 use winit::error::OsError;
 use winit::window::{Window as WinitWindow, WindowBuilder, WindowId};
@@ -13,7 +12,7 @@ pub struct Window {
 }
 
 #[derive(Debug, Error)]
-#[error("Could not create Window")]
+#[error("Could not create window")]
 pub struct WindowCreateError(#[from] OsError);
 
 impl Window {
@@ -53,9 +52,5 @@ impl Window {
 
   pub fn winit_window_id(&self) -> WindowId {
     self.window.id()
-  }
-
-  pub fn winit_raw_window_handle(&self) -> RawWindowHandle {
-    self.window.raw_window_handle()
   }
 }

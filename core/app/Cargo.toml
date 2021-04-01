@@ -1,5 +1,5 @@
 [package]
-name = "os"
+name = "app"
 version = "0.1.0"
 authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
 edition = "2018"
@@ -7,6 +7,10 @@ publish = false
 
 [dependencies]
 math = { path = "../math" }
-winit = "0.24"
-thiserror = "1.0"
+util = { path = "../util" }
+os = { path = "../os" }
+gfx = { path = "../gfx" }
+wgpu = "0.7"
+raw-window-handle = "0.3"
 tracing = "0.1"
+thiserror = "1"

@@ -6,6 +6,7 @@ members = [
   "core/util",
   "core/os",
   "core/gfx",
+  "core/app",
 
   "graphics/triangle"
 ]
@@ -37,6 +38,10 @@ opt-level = 2
 [profile.fastdev.package."util"]
 opt-level = 2
 [profile.fastdev.package."os"]
+opt-level = 2
+[profile.fastdev.package."gfx"]
+opt-level = 2
+[profile.fastdev.package."app"]
 opt-level = 2
 
 [profile.test]
