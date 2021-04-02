@@ -41,6 +41,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "dotenv",
+ "futures",
  "gfx",
  "math",
  "os",
@@ -1798,13 +1799,14 @@ name = "triangle"
 version = "0.1.0"
 dependencies = [
  "app",
- "futures",
  "gfx",
  "gfxc",
  "math",
  "os",
  "tracing",
  "util",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

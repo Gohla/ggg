@@ -18,7 +18,10 @@ pub struct GfxAdapter {
 
 pub struct GfxDevice {
   inner: wgpu::Device,
-  queue: wgpu::Queue,
+}
+
+pub struct GfxQueue {
+  inner: wgpu::Queue,
 }
 
 pub struct GfxSwapChain {
@@ -77,29 +80,31 @@ impl GfxInstance {
 }
 
 impl GfxAdapter {
-  pub fn new(adapter: wgpu::Adapter) -> Self {
+  fn new(adapter: wgpu::Adapter) -> Self {
     Self { inner: adapter }
   }
 }
 
 
-// Device creation
+// Device and queue creation
 
 #[derive(Error, Debug)]
 #[error("Failed to request graphics device because no adapters were found that meet the required options")]
 pub struct DeviceRequestError(#[from] wgpu::RequestDeviceError);
 
 impl GfxAdapter {
-  pub async fn request_device(&self, descriptor: &wgpu::DeviceDescriptor<'_>, trace_path: Option<&std::path::Path>) -> Result<GfxDevice, DeviceRequestError> {
+  pub async fn request_device(&self, descriptor: &wgpu::DeviceDescriptor<'_>, trace_path: Option<&std::path::Path>) -> Result<(GfxDevice, GfxQueue), DeviceRequestError> {
     let (device, queue) = self.inner.request_device(descriptor, trace_path).await?;
-    Ok(GfxDevice::new(device, queue))
+    Ok((GfxDevice::new(device), GfxQueue::new(queue)))
   }
 }
 
 impl GfxDevice {
-  pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-    Self { inner: device, queue }
-  }
+  fn new(device: wgpu::Device) -> Self { Self { inner: device } }
+}
+
+impl GfxQueue {
+  fn new(queue: wgpu::Queue) -> Self { Self { inner: queue } }
 }
 
 
@@ -123,7 +128,7 @@ impl GfxDevice {
 }
 
 impl GfxSwapChain {
-  pub fn new(swap_chain: wgpu::SwapChain, descriptor: wgpu::SwapChainDescriptor) -> Self {
+  fn new(swap_chain: wgpu::SwapChain, descriptor: wgpu::SwapChainDescriptor) -> Self {
     Self { inner: swap_chain, descriptor }
   }
 
@@ -139,52 +144,42 @@ impl GfxSwapChain {
 
 // Getters and Deref implementations
 
-// Instance
-
 impl GfxInstance {
   #[inline]
-  pub fn inner(&self) -> &wgpu::Instance { &self.inner }
+  pub fn get_inner(&self) -> &wgpu::Instance { &self.inner }
 }
 
 impl Deref for GfxInstance {
   type Target = wgpu::Instance;
   #[inline]
-  fn deref(&self) -> &Self::Target { &self.inner() }
+  fn deref(&self) -> &Self::Target { &self.get_inner() }
 }
-
-// Surface
 
 impl GfxSurface {
   #[inline]
-  pub fn inner(&self) -> &wgpu::Surface { &self.inner }
+  pub fn get_inner(&self) -> &wgpu::Surface { &self.inner }
 }
 
 impl Deref for GfxSurface {
   type Target = wgpu::Surface;
   #[inline]
-  fn deref(&self) -> &Self::Target { &self.inner() }
+  fn deref(&self) -> &Self::Target { &self.get_inner() }
 }
-
-// Adapter
 
 impl GfxAdapter {
   #[inline]
-  pub fn inner(&self) -> &wgpu::Adapter { &self.inner }
+  pub fn get_inner(&self) -> &wgpu::Adapter { &self.inner }
 }
 
 impl Deref for GfxAdapter {
   type Target = wgpu::Adapter;
   #[inline]
-  fn deref(&self) -> &Self::Target { &self.inner() }
+  fn deref(&self) -> &Self::Target { &self.get_inner() }
 }
-
-// Device
 
 impl GfxDevice {
   #[inline]
   pub fn inner(&self) -> &wgpu::Device { &self.inner }
-  #[inline]
-  pub fn inner_queue(&self) -> &wgpu::Queue { &self.queue }
 }
 
 impl Deref for GfxDevice {
@@ -193,15 +188,24 @@ impl Deref for GfxDevice {
   fn deref(&self) -> &Self::Target { &self.inner() }
 }
 
-// Swap chain
+impl GfxQueue {
+  #[inline]
+  pub fn inner(&self) -> &wgpu::Queue { &self.inner }
+}
+
+impl Deref for GfxQueue {
+  type Target = wgpu::Queue;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.inner() }
+}
 
 impl GfxSwapChain {
   #[inline]
-  pub fn inner(&self) -> &wgpu::SwapChain { &self.inner }
+  pub fn get_inner(&self) -> &wgpu::SwapChain { &self.inner }
 }
 
 impl Deref for GfxSwapChain {
   type Target = wgpu::SwapChain;
   #[inline]
-  fn deref(&self) -> &Self::Target { &self.inner() }
+  fn deref(&self) -> &Self::Target { &self.get_inner() }
 }

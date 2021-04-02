@@ -2,22 +2,22 @@ use std::ops::Deref;
 
 use thiserror::Error;
 use winit::error::OsError;
-use winit::window::{Window as WinitWindow, WindowBuilder};
+use winit::window::{Window, WindowBuilder};
 
 use math::screen::{LogicalSize, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
 
-pub struct Window {
-  window: WinitWindow,
+pub struct OsWindow {
+  window: Window,
 }
 
 #[derive(Debug, Error)]
 #[error("Could not create window")]
 pub struct WindowCreateError(#[from] OsError);
 
-impl Window {
+impl OsWindow {
   pub fn new<S: Into<String>>(
     os_context: &OsContext,
     inner_size: LogicalSize,
@@ -34,7 +34,7 @@ impl Window {
 
 
   #[inline]
-  pub fn get_inner(&self) -> &WinitWindow {
+  pub fn get_inner(&self) -> &Window {
     &self.window
   }
 
@@ -46,8 +46,8 @@ impl Window {
   }
 }
 
-impl Deref for Window {
-  type Target = WinitWindow;
+impl Deref for OsWindow {
+  type Target = Window;
 
   #[inline]
   fn deref(&self) -> &Self::Target { self.get_inner() }

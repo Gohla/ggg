@@ -12,6 +12,7 @@ os = { path = "../os" }
 gfx = { path = "../gfx" }
 wgpu = "0.7"
 raw-window-handle = "0.3"
+futures = "0.3"
 dotenv = "0.15"
 thiserror = "1"
 tracing = "0.1"

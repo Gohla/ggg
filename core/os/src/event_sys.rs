@@ -9,7 +9,7 @@ use math::screen::{PhysicalPosition, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
-use crate::window::Window;
+use crate::window::OsWindow;
 
 pub struct OsEventSys {
   input_event_tx: Sender<OsInputEvent>,
@@ -71,7 +71,7 @@ impl From<WinitElementState> for ElementState {
 
 
 impl OsEventSys {
-  pub fn new(window: &Window) -> (OsEventSys, Receiver<OsInputEvent>, Receiver<OsEvent>) {
+  pub fn new(window: &OsWindow) -> (OsEventSys, Receiver<OsInputEvent>, Receiver<OsEvent>) {
     let (input_event_tx, input_event_rx) = channel::<OsInputEvent>();
     let (os_event_tx, os_event_rx) = channel::<OsEvent>();
     let os_event_sys = OsEventSys {

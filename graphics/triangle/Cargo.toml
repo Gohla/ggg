@@ -11,10 +11,8 @@ math = { path = "../../core/math" }
 util = { path = "../../core/util" }
 gfx = { path = "../../core/gfx" }
 app = { path = "../../core/app" }
-#winit = "0.24"
-#wgpu = "0.7"
-#ultraviolet = "0.8"
-futures = "0.3"
+winit = "0.24"
+wgpu = "0.7"
 tracing = "0.1"
 
 [build-dependencies]
