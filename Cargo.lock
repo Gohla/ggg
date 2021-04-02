@@ -37,21 +37,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
-
-[[package]]
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "dotenv",
  "gfx",
  "math",
  "os",
  "raw-window-handle",
  "thiserror",
  "tracing",
+ "tracing-log",
+ "tracing-subscriber",
  "util",
  "wgpu",
 ]
@@ -115,12 +112,6 @@ name = "bumpalo"
 version = "3.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63396b8a4b9de3f4fdfb320ab6080762242f66a8ef174c49d8e19b674db4cdbe"
-
-[[package]]
-name = "bytemuck"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bed57e2090563b83ba8f83366628ce535a7584c9afa4c9fc0612a03925c6df58"
 
 [[package]]
 name = "byteorder"
@@ -1379,15 +1370,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
-name = "safe_arch"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ff3d6d9696af502cc3110dacce942840fb06ff4514cad92236ecc455f2ce05"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1779,20 +1761,13 @@ dependencies = [
 name = "triangle"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "app",
- "dotenv",
  "futures",
  "gfx",
  "math",
  "os",
  "tracing",
- "tracing-log",
- "tracing-subscriber",
- "ultraviolet",
  "util",
- "wgpu",
- "winit",
 ]
 
 [[package]]
@@ -1800,15 +1775,6 @@ name = "ttf-parser"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e5d7cd7ab3e47dda6e56542f4bbf3824c15234958c6e1bd6aaa347e93499fdc"
-
-[[package]]
-name = "ultraviolet"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "499afe3577fbe0f46c44b85c3569fb00f5e536be3049a8a6cad134b3507e0fd4"
-dependencies = [
- "wide",
-]
 
 [[package]]
 name = "unicode-xid"
@@ -2048,16 +2014,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72fa9ba80626278fd87351555c363378d08122d7601e58319be3d6fa85a87747"
 dependencies = [
  "bitflags",
-]
-
-[[package]]
-name = "wide"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c51f160ef6333906fad7d31a2010d449148dd1a26bc377e0a1ace2cc9e1e1ee"
-dependencies = [
- "bytemuck",
- "safe_arch",
 ]
 
 [[package]]

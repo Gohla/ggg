@@ -1,8 +1,10 @@
+use std::ops::Deref;
+
 use thiserror::Error;
 use winit::error::OsError;
-use winit::window::{Window as WinitWindow, WindowBuilder, WindowId};
+use winit::window::{Window as WinitWindow, WindowBuilder};
 
-use math::screen::{LogicalSize, PhysicalSize, Scale, ScreenSize};
+use math::screen::{LogicalSize, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
@@ -31,26 +33,22 @@ impl Window {
   }
 
 
-  pub fn window_scale_factor(&self) -> Scale {
-    self.window.scale_factor().into()
+  #[inline]
+  pub fn get_inner(&self) -> &WinitWindow {
+    &self.window
   }
 
-  pub fn window_inner_physical_size(&self) -> PhysicalSize {
-    self.window.inner_size().into_util()
-  }
 
-  pub fn window_inner_size(&self) -> ScreenSize {
+  pub fn get_inner_size(&self) -> ScreenSize {
     let physical_size: (u32, u32) = self.window.inner_size().into();
     let scale = self.window.scale_factor();
     ScreenSize::from_physical_scale(physical_size, scale)
   }
+}
 
+impl Deref for Window {
+  type Target = WinitWindow;
 
-  pub fn winit_window(&self) -> &WinitWindow {
-    &self.window
-  }
-
-  pub fn winit_window_id(&self) -> WindowId {
-    self.window.id()
-  }
+  #[inline]
+  fn deref(&self) -> &Self::Target { self.get_inner() }
 }

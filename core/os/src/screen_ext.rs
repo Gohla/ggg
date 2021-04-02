@@ -25,22 +25,22 @@ impl PhysicalSizeExt for PhysicalSize {
 }
 
 pub trait WinitLogicalSizeExt {
-  fn into_util(self) -> LogicalSize;
+  fn into_math(self) -> LogicalSize;
 }
 
 impl<P: Pixel> WinitLogicalSizeExt for WinitLogicalSize<P> {
-  fn into_util(self) -> LogicalSize {
+  fn into_math(self) -> LogicalSize {
     let size: (f64, f64) = self.into();
     LogicalSize::from(size)
   }
 }
 
 pub trait WinitPhysicalSizeExt {
-  fn into_util(self) -> PhysicalSize;
+  fn into_math(self) -> PhysicalSize;
 }
 
 impl<P: Pixel> WinitPhysicalSizeExt for WinitPhysicalSize<P> {
-  fn into_util(self) -> PhysicalSize {
+  fn into_math(self) -> PhysicalSize {
     let size: (u32, u32) = self.into();
     PhysicalSize::from(size)
   }
@@ -70,22 +70,22 @@ impl PhysicalPositionExt for PhysicalPosition {
 }
 
 pub trait WinitLogicalPositionExt {
-  fn into_util(self) -> LogicalPosition;
+  fn into_math(self) -> LogicalPosition;
 }
 
 impl<P: Pixel> WinitLogicalPositionExt for WinitLogicalPosition<P> {
-  fn into_util(self) -> LogicalPosition {
+  fn into_math(self) -> LogicalPosition {
     let size: (f64, f64) = self.into();
     LogicalPosition::from(size)
   }
 }
 
 pub trait WinitPhysicalPositionExt {
-  fn into_util(self) -> PhysicalPosition;
+  fn into_math(self) -> PhysicalPosition;
 }
 
 impl<P: Pixel> WinitPhysicalPositionExt for WinitPhysicalPosition<P> {
-  fn into_util(self) -> PhysicalPosition {
+  fn into_math(self) -> PhysicalPosition {
     let size: (i32, i32) = self.into();
     PhysicalPosition::from(size)
   }

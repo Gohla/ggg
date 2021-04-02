@@ -1,11 +1,11 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 use winit::event::{ElementState as WinitElementState, Event, KeyboardInput, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ControlFlow;
 use winit::window::WindowId;
-use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 
-use math::screen::{PhysicalPosition, PhysicalSize, Scale, ScreenSize};
+use math::screen::{PhysicalPosition, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
@@ -15,8 +15,7 @@ pub struct OsEventSys {
   input_event_tx: Sender<OsInputEvent>,
   os_event_tx: Sender<OsEvent>,
   window_id: WindowId,
-  scale_factor: Scale,
-  inner_size: PhysicalSize,
+  inner_size: ScreenSize,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -78,9 +77,8 @@ impl OsEventSys {
     let os_event_sys = OsEventSys {
       input_event_tx,
       os_event_tx,
-      window_id: window.winit_window_id(),
-      scale_factor: window.window_scale_factor(),
-      inner_size: window.window_inner_physical_size(),
+      window_id: window.id(),
+      inner_size: window.get_inner_size(),
     };
     (os_event_sys, input_event_rx, os_event_rx, )
   }
@@ -100,7 +98,7 @@ impl OsEventSys {
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::CursorMoved { position, .. } => {
-            self.input_event_tx.send(OsInputEvent::MouseMoved(position.into_util()))
+            self.input_event_tx.send(OsInputEvent::MouseMoved(position.into_math()))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::MouseWheel { delta, .. } => {
@@ -125,17 +123,13 @@ impl OsEventSys {
             *control_flow = ControlFlow::Exit;
           }
           WindowEvent::Resized(inner_size) => {
-            let inner_size = inner_size.into_util();
-            self.inner_size = inner_size;
-            let screen_size = ScreenSize::from_physical_scale(inner_size, self.scale_factor);
-            self.os_event_tx.send(OsEvent::WindowResized(screen_size))
+            self.inner_size = ScreenSize::from_physical_scale(inner_size.into_math(), self.inner_size.scale);
+            self.os_event_tx.send(OsEvent::WindowResized(self.inner_size))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-            let scale_factor = scale_factor.into();
-            self.scale_factor = scale_factor;
-            let screen_size = ScreenSize::from_physical_scale(self.inner_size, scale_factor);
-            self.os_event_tx.send(OsEvent::WindowResized(screen_size))
+            self.inner_size = ScreenSize::from_physical_scale(self.inner_size.physical, scale_factor);
+            self.os_event_tx.send(OsEvent::WindowResized(self.inner_size))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           _ => {}
