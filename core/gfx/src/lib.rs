@@ -103,7 +103,7 @@ impl GfxDevice {
 }
 
 
-// Swap chain creation and resize
+// Swap chain creation, resize, and utility
 
 impl GfxDevice {
   pub fn create_swap_chain(&self, surface: &GfxSurface, adapter: &GfxAdapter, present_mode: wgpu::PresentMode, size: ScreenSize) -> GfxSwapChain {
@@ -129,6 +129,10 @@ impl GfxSwapChain {
 
   pub fn resize(self, surface: &GfxSurface, adapter: &GfxAdapter, device: &GfxDevice, size: ScreenSize) -> GfxSwapChain {
     device.create_swap_chain(surface, adapter, self.descriptor.present_mode, size)
+  }
+
+  pub fn get_format(&self) -> wgpu::TextureFormat {
+    self.descriptor.format
   }
 }
 

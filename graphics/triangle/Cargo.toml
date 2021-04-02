@@ -16,3 +16,6 @@ app = { path = "../../core/app" }
 #ultraviolet = "0.8"
 futures = "0.3"
 tracing = "0.1"
+
+[build-dependencies]
+gfxc = { path = "../../core/gfxc" }

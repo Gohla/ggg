@@ -82,13 +82,57 @@ fn run_loop(
   device: GfxDevice,
   mut swap_chain: GfxSwapChain,
 ) {
+  let vs_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/triangle.vert.spv"));
+  let fs_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/triangle.frag.spv"));
+  let render_pipeline_layout =
+    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+      label: Some("Render Pipeline Layout"),
+      bind_group_layouts: &[],
+      push_constant_ranges: &[],
+    });
+  let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    label: Some("Render Pipeline"),
+    layout: Some(&render_pipeline_layout),
+    vertex: wgpu::VertexState {
+      module: &vs_module,
+      entry_point: "main",
+      buffers: &[],
+    },
+    fragment: Some(wgpu::FragmentState {
+      module: &fs_module,
+      entry_point: "main",
+      targets: &[wgpu::ColorTargetState {
+        format: swap_chain.get_format(), // TODO: need to recreate if swap chain changes!
+        alpha_blend: wgpu::BlendState::REPLACE,
+        color_blend: wgpu::BlendState::REPLACE,
+        write_mask: wgpu::ColorWrite::ALL,
+      }],
+    }),
+    primitive: wgpu::PrimitiveState {
+      topology: wgpu::PrimitiveTopology::TriangleList,
+      strip_index_format: None,
+      front_face: wgpu::FrontFace::Ccw,
+      cull_mode: wgpu::CullMode::Back,
+      // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+      polygon_mode: wgpu::PolygonMode::Fill,
+    },
+    depth_stencil: None,
+    multisample: wgpu::MultisampleState {
+      count: 1,
+      mask: !0,
+      alpha_to_coverage_enabled: false,
+    },
+  });
+
+
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
-  let mut recreate_swapchain = false;
+  let mut recreate_swap_chain = false;
+
   'main: loop {
-    if recreate_swapchain {
+    if recreate_swap_chain {
       swap_chain = swap_chain.resize(&surface, &adapter, &device, window.get_inner_size());
-      recreate_swapchain = false;
+      recreate_swap_chain = false;
     }
 
     // Timing
@@ -99,28 +143,26 @@ fn run_loop(
       match os_event {
         OsEvent::TerminateRequested => break 'main,
         _ => {}
-        // OsEvent::WindowResized(screen_size) => {
-        //   //swap_chain = swap_chain.resize(&surface, &adapter, &device, screen_size);
-        // }
       }
     }
     // Process input
     let _raw_input = os_input_sys.update();
-    // TODO: Simulate tick
+    // Simulate tick
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
         tick_timer.tick_start();
-        //sim.simulate(tick_timer.time_target());
+        // TODO: run simulation
         tick_timer.tick_end();
       }
     }
-    // Draw frame
+
+    // Get frame to draw into
     let frame = match swap_chain.get_current_frame() {
       Ok(frame) => frame,
       Err(e) => {
         match e {
-          SwapChainError::Outdated => recreate_swapchain = true,
-          SwapChainError::Lost => recreate_swapchain = true,
+          SwapChainError::Outdated => recreate_swap_chain = true,
+          SwapChainError::Lost => recreate_swap_chain = true,
           SwapChainError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
           _ => {}
         };
@@ -128,13 +170,16 @@ fn run_loop(
       }
     };
     if frame.suboptimal {
-      recreate_swapchain = true;
+      recreate_swap_chain = true;
     }
+
+    // Create command encoder
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
       label: Some("Render Encoder"),
     });
-    {
-      let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+
+    { // Setup render pass
+      let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         color_attachments: &[
           wgpu::RenderPassColorAttachmentDescriptor {
@@ -153,7 +198,13 @@ fn run_loop(
         ],
         depth_stencil_attachment: None,
       });
+      render_pass.set_pipeline(&render_pipeline);
+      render_pass.draw(0..3, 0..1);
     }
-    device.inner_queue().submit(std::iter::once(encoder.finish()));
+
+    // Finish command encoder to retrieve a command buffer.
+    let command_buffer = encoder.finish();
+    // Submit command encoder and draw.
+    device.inner_queue().submit(std::iter::once(command_buffer));
   }
 }

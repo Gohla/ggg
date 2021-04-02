@@ -36,8 +36,8 @@ pub trait Item<Idx: Index = u32, Ver: Version = u32>: Default + Clone + Copy + D
 #[derive(Default)]
 pub struct IdxAllocator<I: Item<Idx, Ver>, Idx: Index = u32, Ver: Version = u32> {
   slots: Vec<Ver>,
-  num_slots: Idx,
   // Manually maintain number of slots as an u32 to prevent casting.
+  num_slots: Idx,
   free: VecDeque<Idx>,
   _phantom: PhantomData<I>,
 }
