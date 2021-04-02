@@ -1,8 +1,9 @@
-use gfx::{GfxDevice, GfxAdapter, GfxSurface, GfxInstance, GfxSwapChain, GfxQueue};
+use wgpu::{Adapter, CommandBuffer, Device, Instance, PipelineLayout, Queue, RenderPipeline, ShaderModule, Surface};
+
+use gfx::swap_chain::GfxSwapChain;
 use os::input_sys::RawInput;
-use util::timing::{Duration, FrameTime};
 use os::window::OsWindow;
-use wgpu::{CommandBuffer, ShaderModule, PipelineLayout, RenderPipeline};
+use util::timing::{Duration, FrameTime};
 
 fn main() { app::run_with_defaults::<Triangle>("Triangle").unwrap(); }
 
@@ -16,11 +17,11 @@ pub struct Triangle {
 impl app::App for Triangle {
   fn new(
     _window: &OsWindow,
-    _instance: &GfxInstance,
-    _surface: &GfxSurface,
-    _adapter: &GfxAdapter,
-    device: &GfxDevice,
-    _queue: &GfxQueue,
+    _instance: &Instance,
+    _surface: &Surface,
+    _adapter: &Adapter,
+    device: &Device,
+    _queue: &Queue,
     swap_chain: &GfxSwapChain,
   ) -> Self {
     let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/triangle.vert.spv"));
@@ -43,7 +44,7 @@ impl app::App for Triangle {
         module: &fragment_shader_module,
         entry_point: "main",
         targets: &[wgpu::ColorTargetState {
-          format: swap_chain.get_format(), // TODO: need to recreate if swap chain changes!
+          format: swap_chain.get_texture_format(), // TODO: need to recreate if swap chain changes!
           alpha_blend: wgpu::BlendState::REPLACE,
           color_blend: wgpu::BlendState::REPLACE,
           write_mask: wgpu::ColorWrite::ALL,
@@ -79,22 +80,22 @@ impl app::App for Triangle {
   fn render(
     &mut self,
     _window: &OsWindow,
-    _instance: &GfxInstance,
-    _surface: &GfxSurface,
-    _adapter: &GfxAdapter,
-    device: &GfxDevice,
-    _queue: &GfxQueue,
+    _instance: &Instance,
+    _surface: &Surface,
+    _adapter: &Adapter,
+    device: &Device,
+    _queue: &Queue,
     _swap_chain: &GfxSwapChain,
     frame_output_texture: &wgpu::SwapChainTexture,
     _extrapolation: f64,
     _frame_time: FrameTime,
   ) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-      label: Some("Triangle render Encoder"),
+      label: Some("Triangle render encoder"),
     });
     {
       let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("Render Pass"),
+        label: Some("Triangle render pass"),
         color_attachments: &[
           wgpu::RenderPassColorAttachmentDescriptor {
             attachment: &frame_output_texture.view,

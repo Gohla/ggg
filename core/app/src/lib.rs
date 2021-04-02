@@ -5,9 +5,9 @@ use dotenv;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::SwapChainError;
+use wgpu::{Adapter, Device, Instance, Queue, RequestDeviceError, Surface, SwapChainError};
 
-use gfx::{AdapterRequestError, DeviceRequestError, GfxAdapter, GfxDevice, GfxInstance, GfxQueue, GfxSurface, GfxSwapChain};
+use gfx::swap_chain::GfxSwapChain;
 use math::prelude::*;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
@@ -18,11 +18,11 @@ use util::timing::{Duration, FrameTime, FrameTimer, TickTimer};
 pub trait App {
   fn new(
     window: &OsWindow,
-    instance: &GfxInstance,
-    surface: &GfxSurface,
-    adapter: &GfxAdapter,
-    device: &GfxDevice,
-    queue: &GfxQueue,
+    instance: &Instance,
+    surface: &Surface,
+    adapter: &Adapter,
+    device: &Device,
+    queue: &Queue,
     swap_chain: &GfxSwapChain,
   ) -> Self;
 
@@ -39,11 +39,11 @@ pub trait App {
   fn render(
     &mut self,
     window: &OsWindow,
-    instance: &GfxInstance,
-    surface: &GfxSurface,
-    adapter: &GfxAdapter,
-    device: &GfxDevice,
-    queue: &GfxQueue,
+    instance: &Instance,
+    surface: &Surface,
+    adapter: &Adapter,
+    device: &Device,
+    queue: &Queue,
     swap_chain: &GfxSwapChain,
     frame_output_texture: &wgpu::SwapChainTexture,
     extrapolation: f64,
@@ -53,18 +53,32 @@ pub trait App {
 
 
 pub struct Options {
-  inner_size: LogicalSize,
-  min_inner_size: LogicalSize,
   name: String,
+
+  window_inner_size: LogicalSize,
+  window_min_inner_size: LogicalSize,
+
+  graphics_backends: wgpu::BackendBit,
+  graphics_adapter_power_preference: wgpu::PowerPreference,
+  graphics_device_features: wgpu::Features,
+  graphics_device_limits: wgpu::Limits,
+  graphics_swap_chain_present_mode: wgpu::PresentMode,
 }
 
 impl Default for Options {
   fn default() -> Self {
     let size = LogicalSize::new(1920f64, 1080f64);
     Options {
-      inner_size: size,
-      min_inner_size: size,
       name: "GGG application".to_string(),
+
+      window_inner_size: size,
+      window_min_inner_size: size,
+
+      graphics_backends: wgpu::BackendBit::all(),
+      graphics_adapter_power_preference: wgpu::PowerPreference::LowPower,
+      graphics_device_features: wgpu::Features::empty(),
+      graphics_device_limits: wgpu::Limits::default(),
+      graphics_swap_chain_present_mode: wgpu::PresentMode::Mailbox,
     }
   }
 }
@@ -73,10 +87,10 @@ impl Default for Options {
 pub enum CreateError {
   #[error(transparent)]
   WindowCreateFail(#[from] WindowCreateError),
-  #[error(transparent)]
-  AdapterRequestFail(#[from] AdapterRequestError),
-  #[error(transparent)]
-  RequestDeviceFail(#[from] DeviceRequestError),
+  #[error("Failed to request graphics adapter because no adapters were found that meet the required options")]
+  AdapterRequestFail,
+  #[error("Failed to request graphics device because no adapters were found that meet the required options")]
+  RequestDeviceFail(#[from] RequestDeviceError),
   #[error(transparent)]
   ThreadCreateFail(#[from] std::io::Error),
 }
@@ -106,7 +120,7 @@ pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
 
   let os_context = OsContext::new();
   let window = {
-    OsWindow::new(&os_context, options.inner_size, options.min_inner_size, options.name.clone())?
+    OsWindow::new(&os_context, options.window_inner_size, options.window_min_inner_size, options.name.clone())?
   };
   let (os_event_sys, os_event_rx, os_input_sys) = {
     let (event_sys, input_event_rx, event_rx) = OsEventSys::new(&window);
@@ -114,13 +128,18 @@ pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
     (event_sys, event_rx, input_sys)
   };
 
-  let instance = GfxInstance::new_with_primary_backends();
+  let instance = Instance::new(options.graphics_backends);
   let surface = unsafe { instance.create_surface(window.get_inner()) };
-  let adapter = instance.request_low_power_adapter(&surface).await?;
+  let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+    power_preference: options.graphics_adapter_power_preference,
+    compatible_surface: Some(&surface),
+  }).await.ok_or(CreateError::AdapterRequestFail)?;
   let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+    features: options.graphics_device_features,
+    limits: options.graphics_device_limits,
     ..wgpu::DeviceDescriptor::default()
   }, None).await?;
-  let swap_chain = device.create_swap_chain_with_defaults(&surface, &adapter, window.get_inner_size());
+  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, window.get_inner_size());
 
   thread::Builder::new()
     .name(options.name)
@@ -136,11 +155,11 @@ fn run_loop<A: App>(
   window: OsWindow,
   os_event_rx: Receiver<OsEvent>,
   mut os_input_sys: OsInputSys,
-  instance: GfxInstance,
-  surface: GfxSurface,
-  adapter: GfxAdapter,
-  device: GfxDevice,
-  queue: GfxQueue,
+  instance: Instance,
+  surface: Surface,
+  adapter: Adapter,
+  device: Device,
+  queue: Queue,
   mut swap_chain: GfxSwapChain,
 ) {
   let mut app = A::new(
