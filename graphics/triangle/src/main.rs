@@ -1,9 +1,9 @@
-use wgpu::{
-  BlendState, Color, ColorTargetState, ColorWrite, CommandBuffer, CommandEncoderDescriptor, CullMode, FragmentState,
-  FrontFace, include_spirv, LoadOp, MultisampleState, Operations, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
-  PrimitiveState, PrimitiveTopology, RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
-  RenderPipelineDescriptor, ShaderModule, SwapChainTexture, VertexState
-};
+use std::mem::size_of;
+
+use bytemuck::{Pod, Zeroable};
+use ultraviolet::Vec3;
+use wgpu::{BlendState, Buffer, BufferAddress, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBuffer, CommandEncoderDescriptor, CullMode, FragmentState, FrontFace, include_spirv, IndexFormat, InputStepMode, LoadOp, MultisampleState, Operations, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModule, SwapChainTexture, VertexAttribute, VertexBufferLayout, VertexState};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use app::{Gfx, Os};
 use os::input_sys::RawInput;
@@ -16,7 +16,37 @@ pub struct Triangle {
   _fragment_shader_module: ShaderModule,
   _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
+  vertex_buffer: Buffer,
+  index_buffer: Buffer,
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct Vertex {
+  pos: Vec3,
+  col: Vec3,
+}
+
+impl Vertex {
+  fn buffer_layout() -> VertexBufferLayout<'static> {
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float3, 1 => Float3];
+    VertexBufferLayout {
+      array_stride: size_of::<Vertex>() as BufferAddress,
+      step_mode: InputStepMode::Vertex,
+      attributes: ATTRIBUTES,
+    }
+  }
+}
+
+const VERTICES: &[Vertex] = &[
+  Vertex { pos: Vec3::new(0.0, 0.5, 0.0), col: Vec3::new(1.0, 0.0, 0.0) },
+  Vertex { pos: Vec3::new(-0.5, -0.5, 0.0), col: Vec3::new(0.0, 1.0, 0.0) },
+  Vertex { pos: Vec3::new(0.5, -0.5, 0.0), col: Vec3::new(0.0, 0.0, 1.0) },
+];
+
+const INDICES: &[u16] = &[ // Indices are not necessary for a triangle, but here for demo purposes anyway.
+  0, 1, 2
+];
 
 impl app::App for Triangle {
   fn new(
@@ -37,7 +67,7 @@ impl app::App for Triangle {
       vertex: VertexState {
         module: &vertex_shader_module,
         entry_point: "main",
-        buffers: &[],
+        buffers: &[Vertex::buffer_layout()],
       },
       fragment: Some(FragmentState {
         module: &fragment_shader_module,
@@ -63,11 +93,27 @@ impl app::App for Triangle {
         alpha_to_coverage_enabled: false,
       },
     });
+    let vertex_buffer = gfx.device.create_buffer_init(
+      &BufferInitDescriptor {
+        label: Some("Triangle vertex buffer"),
+        contents: bytemuck::cast_slice(VERTICES),
+        usage: BufferUsage::VERTEX,
+      }
+    );
+    let index_buffer = gfx.device.create_buffer_init(
+      &BufferInitDescriptor {
+        label: Some("Triangle index buffer"),
+        contents: bytemuck::cast_slice(INDICES),
+        usage: BufferUsage::INDEX,
+      }
+    );
     Self {
       _vertex_shader_module: vertex_shader_module,
       _fragment_shader_module: fragment_shader_module,
       _pipeline_layout: pipeline_layout,
       render_pipeline,
+      vertex_buffer,
+      index_buffer,
     }
   }
 
@@ -94,12 +140,7 @@ impl app::App for Triangle {
             attachment: &frame_output_texture.view,
             resolve_target: None,
             ops: Operations {
-              load: LoadOp::Clear(Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-              }),
+              load: LoadOp::Clear(Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
               store: true,
             },
           }
@@ -107,7 +148,9 @@ impl app::App for Triangle {
         depth_stencil_attachment: None,
       });
       render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.draw(0..3, 0..1);
+      render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+      render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
     }
     Box::new(std::iter::once(encoder.finish()))
   }

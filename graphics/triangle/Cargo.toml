@@ -11,8 +11,9 @@ math = { path = "../../core/math" }
 util = { path = "../../core/util" }
 gfx = { path = "../../core/gfx" }
 app = { path = "../../core/app" }
-winit = "0.24"
 wgpu = "0.7"
+ultraviolet = { version = "0.8", features = ["bytemuck"] }
+bytemuck = { version = "1.5", features = ["derive"] }
 tracing = "0.1"
 
 [build-dependencies]
