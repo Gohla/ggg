@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, VertexAttribute, VertexBufferLayout};
+use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, Os, Tick};
 use gfx::buffer::DeviceBufferEx;
@@ -35,17 +35,12 @@ const VERTICES: &[Vertex] = &[
   Vertex { pos: Vec3::new(0.5, -0.5, 0.0), col: Vec3::new(0.0, 0.0, 1.0) },
 ];
 
-const INDICES: &[u16] = &[ // Indices are not necessary for a triangle, but here for demo purposes anyway.
-  0, 1, 2
-];
-
 pub struct Triangle {
   _vertex_shader_module: ShaderModule,
   _fragment_shader_module: ShaderModule,
   _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
   vertex_buffer: Buffer,
-  index_buffer: Buffer,
 }
 
 impl app::App for Triangle {
@@ -57,14 +52,12 @@ impl app::App for Triangle {
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .build(&gfx.device);
     let vertex_buffer = gfx.device.create_vertex_buffer(VERTICES);
-    let index_buffer = gfx.device.create_index_buffer(INDICES);
     Self {
       _vertex_shader_module: vertex_shader_module,
       _fragment_shader_module: fragment_shader_module,
       _pipeline_layout: pipeline_layout,
       render_pipeline,
       vertex_buffer,
-      index_buffer,
     }
   }
 
@@ -78,9 +71,8 @@ impl app::App for Triangle {
       let mut render_pass = RenderPassBuilder::new()
         .begin_render_pass_for_swap_chain(&mut encoder, &frame.output_texture);
       render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
       render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-      render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+      render_pass.draw(0..VERTICES.len() as u32, 0..1);
     }
     Box::new(std::iter::once(encoder.finish()))
   }

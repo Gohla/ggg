@@ -8,8 +8,8 @@ members = [
   "core/gfx",
   "core/gfxc",
   "core/app",
-
-  "graphics/triangle"
+  "graphics/triangle",
+  "graphics/quads"
 ]
 
 # Development profile: full debug information, some optimisations.
@@ -23,8 +23,6 @@ split-debuginfo = "unpacked"
 codegen-units = 8
 lto = false
 incremental = true
-#[profile.dev.package.backtrace] # Fully optimize backtrace crate to speed up backtrace collection
-#opt-level = 3
 
 # Fast development profile: no debug information, some optimisations.
 [profile.fastdev]
@@ -45,6 +43,10 @@ opt-level = 2
 [profile.fastdev.package."gfxc"]
 opt-level = 2
 [profile.fastdev.package."app"]
+opt-level = 2
+[profile.fastdev.package."triangle"]
+opt-level = 2
+[profile.fastdev.package."quads"]
 opt-level = 2
 
 [profile.test]

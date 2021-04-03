@@ -1,4 +1,4 @@
-use wgpu::{ColorTargetState, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
+use wgpu::{BindGroupLayout, ColorTargetState, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
 
 use crate::swap_chain::GfxSwapChain;
 
@@ -50,6 +50,19 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.layout.label = Some(label);
     self
   }
+
+  #[inline]
+  pub fn with_bind_group_layouts(mut self, bind_group_layouts: &'a [&'a BindGroupLayout]) -> Self {
+    self.layout.bind_group_layouts = bind_group_layouts;
+    self
+  }
+
+  #[inline]
+  pub fn with_push_constant_ranges(mut self, push_constant_ranges: &'a [PushConstantRange]) -> Self {
+    self.layout.push_constant_ranges = push_constant_ranges;
+    self
+  }
+
 
   #[inline]
   pub fn with_label(mut self, label: &'a str) -> Self {

@@ -1,0 +1,21 @@
+[package]
+name = "quads"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+os = { path = "../../core/os" }
+math = { path = "../../core/math" }
+util = { path = "../../core/util" }
+gfx = { path = "../../core/gfx" }
+app = { path = "../../core/app" }
+wgpu = "0.7"
+ultraviolet = { version = "0.8", features = ["bytemuck"] }
+bytemuck = { version = "1.5", features = ["derive"] }
+image = "0.23"
+tracing = "0.1"
+
+[build-dependencies]
+gfxc = { path = "../../core/gfxc" }
