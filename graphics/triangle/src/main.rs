@@ -35,7 +35,7 @@ const VERTICES: &[Vertex] = &[
   Vertex { pos: Vec3::new(0.5, -0.5, 0.0), col: Vec3::new(0.0, 0.0, 1.0) },
 ];
 
-pub struct Triangle {
+pub struct App {
   _vertex_shader_module: ShaderModule,
   _fragment_shader_module: ShaderModule,
   _pipeline_layout: PipelineLayout,
@@ -43,7 +43,7 @@ pub struct Triangle {
   vertex_buffer: Buffer,
 }
 
-impl app::App for Triangle {
+impl app::Application for App {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.vert.spv"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.frag.spv"));
@@ -78,4 +78,4 @@ impl app::App for Triangle {
   }
 }
 
-fn main() { app::run_with_defaults::<Triangle>("Triangle").unwrap(); }
+fn main() { app::run_with_defaults::<App>("Triangle").unwrap(); }

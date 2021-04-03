@@ -665,6 +665,7 @@ name = "gfx"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "image",
  "math",
  "raw-window-handle",
  "thiserror",

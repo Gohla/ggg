@@ -41,7 +41,7 @@ pub struct Frame<'a> {
   pub frame_time: FrameTime,
 }
 
-pub trait App {
+pub trait Application {
   fn new(
     os: &Os,
     gfx: &Gfx,
@@ -109,18 +109,18 @@ pub enum CreateError {
   ThreadCreateFail(#[from] std::io::Error),
 }
 
-pub fn run_with_defaults<A: App>(name: &str) -> Result<(), CreateError> {
+pub fn run_with_defaults<A: Application>(name: &str) -> Result<(), CreateError> {
   run::<A>(Options {
     name: name.into(),
     ..Options::default()
   })
 }
 
-pub fn run<A: App>(options: Options) -> Result<(), CreateError> {
+pub fn run<A: Application>(options: Options) -> Result<(), CreateError> {
   futures::executor::block_on(run_async::<A>(options))
 }
 
-pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
+pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateError> {
   dotenv::dotenv().ok();
 
   let fmt_layer = fmt::layer()
@@ -167,7 +167,7 @@ pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
 }
 
 
-fn run_loop<A: App>(
+fn run_loop<A: Application>(
   os_event_rx: Receiver<OsEvent>,
   mut os_input_sys: OsInputSys,
   os: Os,

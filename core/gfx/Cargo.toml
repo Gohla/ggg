@@ -10,4 +10,5 @@ math = { path = "../math" }
 wgpu = "0.7"
 raw-window-handle = "0.3"
 bytemuck = "1.5"
+image = { version = "0.23", default-features = false }
 thiserror = "1"

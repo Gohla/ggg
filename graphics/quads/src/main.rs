@@ -9,6 +9,7 @@ use gfx::buffer::DeviceBufferEx;
 use gfx::command::DeviceCommandEncoderEx;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
+use gfx::texture::Texture2dRgbaBuilder;
 use os::input_sys::RawInput;
 
 #[repr(C)]
@@ -41,7 +42,7 @@ const INDICES: &[u16] = &[
   1, 3, 2
 ];
 
-pub struct Triangle {
+pub struct App {
   _vertex_shader_module: ShaderModule,
   _fragment_shader_module: ShaderModule,
   diffuse_bind_group: BindGroup,
@@ -51,99 +52,17 @@ pub struct Triangle {
   index_buffer: Buffer,
 }
 
-impl app::App for Triangle {
+impl app::Application for App {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/cube.vert.spv"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/cube.frag.spv"));
 
     let diffuse_image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap();
-    let diffuse_rgba = diffuse_image.into_rgba8();
-    let dimensions = diffuse_rgba.dimensions();
-    let texture_size = wgpu::Extent3d {
-      width: dimensions.0,
-      height: dimensions.1,
-      depth: 1,
-    };
-    let diffuse_texture = gfx.device.create_texture(
-      &wgpu::TextureDescriptor {
-        size: texture_size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-        label: None,
-      }
-    );
-    gfx.queue.write_texture(
-      wgpu::TextureCopyView {
-        texture: &diffuse_texture,
-        mip_level: 0,
-        origin: wgpu::Origin3d::ZERO,
-      },
-      diffuse_rgba.as_raw(),
-      wgpu::TextureDataLayout {
-        offset: 0,
-        bytes_per_row: 4 * dimensions.0,
-        rows_per_image: dimensions.1,
-      },
-      texture_size,
-    );
-    let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let diffuse_sampler = gfx.device.create_sampler(&wgpu::SamplerDescriptor {
-      address_mode_u: wgpu::AddressMode::ClampToEdge,
-      address_mode_v: wgpu::AddressMode::ClampToEdge,
-      address_mode_w: wgpu::AddressMode::ClampToEdge,
-      mag_filter: wgpu::FilterMode::Linear,
-      min_filter: wgpu::FilterMode::Nearest,
-      mipmap_filter: wgpu::FilterMode::Nearest,
-      ..Default::default()
-    });
-    let texture_bind_group_layout = gfx.device.create_bind_group_layout(
-      &wgpu::BindGroupLayoutDescriptor {
-        entries: &[
-          wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStage::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-              multisampled: false,
-              view_dimension: wgpu::TextureViewDimension::D2,
-              sample_type: wgpu::TextureSampleType::Float { filterable: false },
-            },
-            count: None,
-          },
-          wgpu::BindGroupLayoutEntry {
-            binding: 1,
-            visibility: wgpu::ShaderStage::FRAGMENT,
-            ty: wgpu::BindingType::Sampler {
-              comparison: false,
-              filtering: true,
-            },
-            count: None,
-          },
-        ],
-        label: None,
-      }
-    );
-    let diffuse_bind_group = gfx.device.create_bind_group(
-      &wgpu::BindGroupDescriptor {
-        layout: &texture_bind_group_layout,
-        entries: &[
-          wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
-          },
-          wgpu::BindGroupEntry {
-            binding: 1,
-            resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-          }
-        ],
-        label: Some("diffuse_bind_group"),
-      }
-    );
+    let (_diffuse, diffuse_bind_group_layout, diffuse_bind_group) = Texture2dRgbaBuilder::new(diffuse_image.into_rgba8())
+      .build_with_default_bind_group(&gfx.device, &gfx.queue);
 
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&texture_bind_group_layout])
+      .with_bind_group_layouts(&[&diffuse_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .build(&gfx.device);
@@ -180,4 +99,4 @@ impl app::App for Triangle {
   }
 }
 
-fn main() { app::run_with_defaults::<Triangle>("Cubes").unwrap(); }
+fn main() { app::run_with_defaults::<App>("Quads").unwrap(); }
