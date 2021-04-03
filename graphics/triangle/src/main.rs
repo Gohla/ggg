@@ -1,8 +1,12 @@
-use wgpu::{Adapter, CommandBuffer, Device, Instance, PipelineLayout, Queue, RenderPipeline, ShaderModule, Surface};
+use wgpu::{
+  BlendState, Color, ColorTargetState, ColorWrite, CommandBuffer, CommandEncoderDescriptor, CullMode, FragmentState,
+  FrontFace, include_spirv, LoadOp, MultisampleState, Operations, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
+  PrimitiveState, PrimitiveTopology, RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
+  RenderPipelineDescriptor, ShaderModule, SwapChainTexture, VertexState
+};
 
-use gfx::swap_chain::GfxSwapChain;
+use app::{Gfx, Os};
 use os::input_sys::RawInput;
-use os::window::OsWindow;
 use util::timing::{Duration, FrameTime};
 
 fn main() { app::run_with_defaults::<Triangle>("Triangle").unwrap(); }
@@ -16,50 +20,44 @@ pub struct Triangle {
 
 impl app::App for Triangle {
   fn new(
-    _window: &OsWindow,
-    _instance: &Instance,
-    _surface: &Surface,
-    _adapter: &Adapter,
-    device: &Device,
-    _queue: &Queue,
-    swap_chain: &GfxSwapChain,
+    _os: &Os,
+    gfx: &Gfx,
   ) -> Self {
-    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/triangle.vert.spv"));
-    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/triangle.frag.spv"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.vert.spv"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.frag.spv"));
     let pipeline_layout =
-      device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+      gfx.device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Triangle render pipeline layout"),
         bind_group_layouts: &[],
         push_constant_ranges: &[],
       });
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    let render_pipeline = gfx.device.create_render_pipeline(&RenderPipelineDescriptor {
       label: Some("Triangle render pipeline"),
       layout: Some(&pipeline_layout),
-      vertex: wgpu::VertexState {
+      vertex: VertexState {
         module: &vertex_shader_module,
         entry_point: "main",
         buffers: &[],
       },
-      fragment: Some(wgpu::FragmentState {
+      fragment: Some(FragmentState {
         module: &fragment_shader_module,
         entry_point: "main",
-        targets: &[wgpu::ColorTargetState {
-          format: swap_chain.get_texture_format(), // TODO: need to recreate if swap chain changes!
-          alpha_blend: wgpu::BlendState::REPLACE,
-          color_blend: wgpu::BlendState::REPLACE,
-          write_mask: wgpu::ColorWrite::ALL,
+        targets: &[ColorTargetState {
+          format: gfx.swap_chain.get_texture_format(), // TODO: need to recreate if swap chain changes!
+          alpha_blend: BlendState::REPLACE,
+          color_blend: BlendState::REPLACE,
+          write_mask: ColorWrite::ALL,
         }],
       }),
-      primitive: wgpu::PrimitiveState {
-        topology: wgpu::PrimitiveTopology::TriangleList,
+      primitive: PrimitiveState {
+        topology: PrimitiveTopology::TriangleList,
         strip_index_format: None,
-        front_face: wgpu::FrontFace::Ccw,
-        cull_mode: wgpu::CullMode::Back,
-        // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-        polygon_mode: wgpu::PolygonMode::Fill,
+        front_face: FrontFace::Ccw,
+        cull_mode: CullMode::Back,
+        polygon_mode: PolygonMode::Fill,
       },
       depth_stencil: None,
-      multisample: wgpu::MultisampleState {
+      multisample: MultisampleState {
         count: 1,
         mask: !0,
         alpha_to_coverage_enabled: false,
@@ -79,29 +77,24 @@ impl app::App for Triangle {
 
   fn render(
     &mut self,
-    _window: &OsWindow,
-    _instance: &Instance,
-    _surface: &Surface,
-    _adapter: &Adapter,
-    device: &Device,
-    _queue: &Queue,
-    _swap_chain: &GfxSwapChain,
-    frame_output_texture: &wgpu::SwapChainTexture,
+    _os: &Os,
+    gfx: &Gfx,
+    frame_output_texture: &SwapChainTexture,
     _extrapolation: f64,
     _frame_time: FrameTime,
   ) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+    let mut encoder = gfx.device.create_command_encoder(&CommandEncoderDescriptor {
       label: Some("Triangle render encoder"),
     });
     {
-      let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+      let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
         label: Some("Triangle render pass"),
         color_attachments: &[
-          wgpu::RenderPassColorAttachmentDescriptor {
+          RenderPassColorAttachmentDescriptor {
             attachment: &frame_output_texture.view,
             resolve_target: None,
-            ops: wgpu::Operations {
-              load: wgpu::LoadOp::Clear(wgpu::Color {
+            ops: Operations {
+              load: LoadOp::Clear(Color {
                 r: 0.1,
                 g: 0.2,
                 b: 0.3,

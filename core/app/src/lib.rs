@@ -5,7 +5,10 @@ use dotenv;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::{Adapter, Device, Instance, Queue, RequestDeviceError, Surface, SwapChainError};
+use wgpu::{
+  Adapter, BackendBit, CommandBuffer, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference,
+  PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture,
+};
 
 use gfx::swap_chain::GfxSwapChain;
 use math::prelude::*;
@@ -15,15 +18,23 @@ use os::input_sys::{OsInputSys, RawInput};
 use os::window::{OsWindow, WindowCreateError};
 use util::timing::{Duration, FrameTime, FrameTimer, TickTimer};
 
+pub struct Os {
+  pub window: OsWindow,
+}
+
+pub struct Gfx {
+  pub instance: Instance,
+  pub surface: Surface,
+  pub adapter: Adapter,
+  pub device: Device,
+  pub queue: Queue,
+  pub swap_chain: GfxSwapChain,
+}
+
 pub trait App {
   fn new(
-    window: &OsWindow,
-    instance: &Instance,
-    surface: &Surface,
-    adapter: &Adapter,
-    device: &Device,
-    queue: &Queue,
-    swap_chain: &GfxSwapChain,
+    os: &Os,
+    gfx: &Gfx,
   ) -> Self;
 
   fn process_input(
@@ -38,17 +49,12 @@ pub trait App {
 
   fn render(
     &mut self,
-    window: &OsWindow,
-    instance: &Instance,
-    surface: &Surface,
-    adapter: &Adapter,
-    device: &Device,
-    queue: &Queue,
-    swap_chain: &GfxSwapChain,
-    frame_output_texture: &wgpu::SwapChainTexture,
+    os: &Os,
+    gfx: &Gfx,
+    frame_output_texture: &SwapChainTexture,
     extrapolation: f64,
     frame_time: FrameTime,
-  ) -> Box<dyn Iterator<Item=wgpu::CommandBuffer>>;
+  ) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
 
@@ -58,11 +64,11 @@ pub struct Options {
   window_inner_size: LogicalSize,
   window_min_inner_size: LogicalSize,
 
-  graphics_backends: wgpu::BackendBit,
-  graphics_adapter_power_preference: wgpu::PowerPreference,
-  graphics_device_features: wgpu::Features,
-  graphics_device_limits: wgpu::Limits,
-  graphics_swap_chain_present_mode: wgpu::PresentMode,
+  graphics_backends: BackendBit,
+  graphics_adapter_power_preference: PowerPreference,
+  graphics_device_features: Features,
+  graphics_device_limits: Limits,
+  graphics_swap_chain_present_mode: PresentMode,
 }
 
 impl Default for Options {
@@ -74,11 +80,11 @@ impl Default for Options {
       window_inner_size: size,
       window_min_inner_size: size,
 
-      graphics_backends: wgpu::BackendBit::all(),
-      graphics_adapter_power_preference: wgpu::PowerPreference::LowPower,
-      graphics_device_features: wgpu::Features::empty(),
-      graphics_device_limits: wgpu::Limits::default(),
-      graphics_swap_chain_present_mode: wgpu::PresentMode::Mailbox,
+      graphics_backends: BackendBit::all(),
+      graphics_adapter_power_preference: PowerPreference::LowPower,
+      graphics_device_features: Features::empty(),
+      graphics_device_limits: Limits::default(),
+      graphics_swap_chain_present_mode: PresentMode::Mailbox,
     }
   }
 }
@@ -127,24 +133,26 @@ pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
     let input_sys = OsInputSys::new(input_event_rx);
     (event_sys, event_rx, input_sys)
   };
+  let os = Os { window };
 
   let instance = Instance::new(options.graphics_backends);
-  let surface = unsafe { instance.create_surface(window.get_inner()) };
-  let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+  let surface = unsafe { instance.create_surface(os.window.get_inner()) };
+  let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),
   }).await.ok_or(CreateError::AdapterRequestFail)?;
-  let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+  let (device, queue) = adapter.request_device(&DeviceDescriptor {
     features: options.graphics_device_features,
     limits: options.graphics_device_limits,
-    ..wgpu::DeviceDescriptor::default()
+    ..DeviceDescriptor::default()
   }, None).await?;
-  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, window.get_inner_size());
+  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, os.window.get_inner_size());
+  let gfx = Gfx { instance, surface, adapter, device, queue, swap_chain };
 
   thread::Builder::new()
     .name(options.name)
     .spawn(move || {
-      run_loop::<A>(window, os_event_rx, os_input_sys, instance, surface, adapter, device, queue, swap_chain);
+      run_loop::<A>(os_event_rx, os_input_sys, os, gfx);
     })?;
   os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
   Ok(()) // Ignored, but needed to conform to the return type.
@@ -152,25 +160,12 @@ pub async fn run_async<A: App>(options: Options) -> Result<(), CreateError> {
 
 
 fn run_loop<A: App>(
-  window: OsWindow,
   os_event_rx: Receiver<OsEvent>,
   mut os_input_sys: OsInputSys,
-  instance: Instance,
-  surface: Surface,
-  adapter: Adapter,
-  device: Device,
-  queue: Queue,
-  mut swap_chain: GfxSwapChain,
+  os: Os,
+  mut gfx: Gfx,
 ) {
-  let mut app = A::new(
-    &window,
-    &instance,
-    &surface,
-    &adapter,
-    &device,
-    &queue,
-    &swap_chain,
-  );
+  let mut app = A::new(&os, &gfx);
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
   let mut recreate_swap_chain = false;
@@ -199,11 +194,11 @@ fn run_loop<A: App>(
     }
     // Recreate swap chain if needed
     if recreate_swap_chain {
-      swap_chain = swap_chain.resize(&surface, &adapter, &device, window.get_inner_size());
+      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, os.window.get_inner_size());
       recreate_swap_chain = false;
     }
     // Get frame to draw into
-    let frame = match swap_chain.get_current_frame() {
+    let frame = match gfx.swap_chain.get_current_frame() {
       Ok(frame) => frame,
       Err(e) => {
         match e {
@@ -220,18 +215,13 @@ fn run_loop<A: App>(
     }
     // Render
     let command_buffers = app.render(
-      &window,
-      &instance,
-      &surface,
-      &adapter,
-      &device,
-      &queue,
-      &swap_chain,
+      &os,
+      &gfx,
       &frame.output,
       tick_timer.extrapolation(),
       frame_time,
     );
     // Submit command buffers
-    queue.submit(command_buffers);
+    gfx.queue.submit(command_buffers);
   }
 }
