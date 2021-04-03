@@ -9,4 +9,5 @@ publish = false
 math = { path = "../math" }
 wgpu = "0.7"
 raw-window-handle = "0.3"
+bytemuck = "1.5"
 thiserror = "1"

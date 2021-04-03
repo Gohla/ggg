@@ -31,6 +31,16 @@ pub struct Gfx {
   pub swap_chain: GfxSwapChain,
 }
 
+pub struct Tick {
+  pub fixed_time_step: Duration
+}
+
+pub struct Frame<'a> {
+  pub output_texture: &'a SwapChainTexture,
+  pub extrapolation: f64,
+  pub frame_time: FrameTime,
+}
+
 pub trait App {
   fn new(
     os: &Os,
@@ -44,16 +54,14 @@ pub trait App {
 
   fn simulate(
     &mut self,
-    fixed_time_step: Duration,
+    tick: Tick,
   );
 
-  fn render(
+  fn render<'a>(
     &mut self,
     os: &Os,
     gfx: &Gfx,
-    frame_output_texture: &SwapChainTexture,
-    extrapolation: f64,
-    frame_time: FrameTime,
+    frame: Frame<'a>,
   ) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
@@ -188,7 +196,8 @@ fn run_loop<A: App>(
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
         tick_timer.tick_start();
-        app.simulate(tick_timer.time_target());
+        let tick = Tick { fixed_time_step: tick_timer.time_target() };
+        app.simulate(tick);
         tick_timer.tick_end();
       }
     }
@@ -198,7 +207,7 @@ fn run_loop<A: App>(
       recreate_swap_chain = false;
     }
     // Get frame to draw into
-    let frame = match gfx.swap_chain.get_current_frame() {
+    let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
       Ok(frame) => frame,
       Err(e) => {
         match e {
@@ -210,17 +219,16 @@ fn run_loop<A: App>(
         continue;
       }
     };
-    if frame.suboptimal {
+    if swap_chain_frame.suboptimal {
       recreate_swap_chain = true;
     }
     // Render
-    let command_buffers = app.render(
-      &os,
-      &gfx,
-      &frame.output,
-      tick_timer.extrapolation(),
+    let frame = Frame {
+      output_texture: &swap_chain_frame.output,
+      extrapolation: tick_timer.extrapolation(),
       frame_time,
-    );
+    };
+    let command_buffers = app.render(&os, &gfx, frame);
     // Submit command buffers
     gfx.queue.submit(command_buffers);
   }
