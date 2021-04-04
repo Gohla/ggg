@@ -4,7 +4,7 @@ use thiserror::Error;
 use winit::error::OsError;
 use winit::window::{Window, WindowBuilder};
 
-use math::screen::{LogicalSize, ScreenSize};
+use common::screen::{LogicalSize, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;

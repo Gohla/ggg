@@ -1,6 +1,6 @@
 use wgpu::{Adapter, Device, PresentMode, Surface, SwapChain, SwapChainDescriptor, TextureFormat};
 
-use math::screen::ScreenSize;
+use common::screen::ScreenSize;
 
 pub struct GfxSwapChain {
   inner: SwapChain,

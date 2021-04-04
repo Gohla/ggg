@@ -114,23 +114,23 @@ impl Timer {
 
 pub struct FrameTimer {
   timer: Timer,
-  frame: u64,
+  count: u64,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct FrameTime {
   pub elapsed: Duration,
-  pub frame_time: Duration,
-  pub frame: u64,
+  pub delta: Duration,
+  pub count: u64,
 }
 
 impl FrameTimer {
-  pub fn new() -> FrameTimer { FrameTimer { timer: Timer::new(), frame: 0 } }
+  pub fn new() -> FrameTimer { FrameTimer { timer: Timer::new(), count: 0 } }
 
   pub fn frame(&mut self) -> FrameTime {
     let Time { elapsed, delta: frame_time } = self.timer.update();
-    let frame_time = FrameTime { elapsed, frame_time, frame: self.frame };
-    self.frame += 1;
+    let frame_time = FrameTime { elapsed, delta: frame_time, count: self.count };
+    self.count += 1;
     frame_time
   }
 }

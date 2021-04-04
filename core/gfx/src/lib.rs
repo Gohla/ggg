@@ -4,3 +4,5 @@ pub mod buffer;
 pub mod command;
 pub mod render_pass;
 pub mod texture;
+
+pub mod camera;

@@ -1,9 +1,9 @@
-use std::collections::HashSet;
 use std::sync::mpsc::Receiver;
 
-use winit::event::{ElementState as WinitElementState, KeyboardInput, VirtualKeyCode};
+use winit::event::{ElementState as WinitElementState, KeyboardInput};
 
-use math::screen::{PhysicalDelta, PhysicalPosition};
+use common::input::RawInput;
+use common::screen::PhysicalDelta;
 
 use crate::event_sys::{ElementState, MouseButton, OsInputEvent};
 
@@ -48,6 +48,7 @@ impl OsInputSys {
         }
         OsInputEvent::KeyboardInput(KeyboardInput { virtual_keycode, state, .. }) => {
           if let Some(virtual_keycode) = virtual_keycode {
+            let virtual_keycode: common::input::VirtualKeyCode = unsafe { std::mem::transmute(virtual_keycode) };
             match state {
               WinitElementState::Pressed => {
                 input_state.keyboard_buttons.insert(virtual_keycode);
@@ -74,72 +75,4 @@ impl OsInputSys {
     self.prev_state = Some(input_state.clone());
     return input_state;
   }
-}
-
-
-#[derive(Clone, Debug, Default)]
-pub struct RawInput {
-  pub mouse_buttons: MouseButtons,
-  pub mouse_pos: PhysicalPosition,
-  pub mouse_pos_delta: PhysicalDelta,
-  pub mouse_wheel_delta: MouseWheelDelta,
-  pub keyboard_buttons: HashSet<VirtualKeyCode>,
-  pub keyboard_buttons_pressed: HashSet<VirtualKeyCode>,
-  pub keyboard_buttons_released: HashSet<VirtualKeyCode>,
-  pub characters: Vec<char>,
-}
-
-impl RawInput {
-  pub fn is_key_down(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons.contains(&key)
-  }
-  pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons_pressed.contains(&key)
-  }
-  pub fn is_key_released(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons_released.contains(&key)
-  }
-
-
-  pub fn remove_mouse_input(&mut self) {
-    self.mouse_buttons.left = false;
-    self.mouse_buttons.right = false;
-    self.mouse_buttons.middle = false;
-    self.mouse_pos_delta = PhysicalDelta::default();
-    self.mouse_wheel_delta = MouseWheelDelta::default();
-  }
-
-  pub fn remove_keyboard_input(&mut self) {
-    self.keyboard_buttons.clear();
-    self.keyboard_buttons_pressed.clear();
-    self.keyboard_buttons_released.clear();
-    self.characters.clear();
-  }
-
-
-  fn clear_deltas(&mut self) {
-    self.mouse_pos_delta = PhysicalDelta::default();
-    self.mouse_wheel_delta = MouseWheelDelta::default();
-    self.keyboard_buttons_pressed.clear();
-    self.keyboard_buttons_released.clear();
-    self.characters.clear();
-  }
-}
-
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MouseButtons {
-  pub left: bool,
-  pub right: bool,
-  pub middle: bool,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MouseWheelDelta {
-  pub x: f64,
-  pub y: f64,
-}
-
-impl MouseWheelDelta {
-  pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { x, y } }
 }

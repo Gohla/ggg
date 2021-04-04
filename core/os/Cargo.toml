@@ -6,7 +6,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-math = { path = "../math" }
+common = { path = "../common" }
 winit = "0.24"
 thiserror = "1.0"
 tracing = "0.1"

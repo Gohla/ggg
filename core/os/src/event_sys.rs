@@ -5,7 +5,7 @@ use winit::event::{ElementState as WinitElementState, Event, KeyboardInput, Mous
 use winit::event_loop::ControlFlow;
 use winit::window::WindowId;
 
-use math::screen::{PhysicalPosition, ScreenSize};
+use common::screen::{PhysicalPosition, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;

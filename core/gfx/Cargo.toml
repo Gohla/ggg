@@ -6,9 +6,10 @@ edition = "2018"
 publish = false
 
 [dependencies]
-math = { path = "../math" }
+common = { path = "../../core/common" }
 wgpu = "0.7"
 raw-window-handle = "0.3"
 bytemuck = "1.5"
 image = { version = "0.23", default-features = false }
+ultraviolet = "0.8"
 thiserror = "1"

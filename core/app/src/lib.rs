@@ -10,13 +10,14 @@ use wgpu::{
   PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture,
 };
 
+use common::prelude::*;
+use common::timing::{Duration, FrameTime, FrameTimer, TickTimer};
 use gfx::swap_chain::GfxSwapChain;
-use math::prelude::*;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
-use os::input_sys::{OsInputSys, RawInput};
+use os::input_sys::{OsInputSys};
 use os::window::{OsWindow, WindowCreateError};
-use util::timing::{Duration, FrameTime, FrameTimer, TickTimer};
+use common::input::RawInput;
 
 pub struct Os {
   pub window: OsWindow,
@@ -38,7 +39,7 @@ pub struct Tick {
 pub struct Frame<'a> {
   pub output_texture: &'a SwapChainTexture,
   pub extrapolation: f64,
-  pub frame_time: FrameTime,
+  pub time: FrameTime,
 }
 
 pub trait Application {
@@ -47,14 +48,24 @@ pub trait Application {
     gfx: &Gfx,
   ) -> Self;
 
+  type Input;
+
   fn process_input(
     &mut self,
-    raw_input: RawInput,
-  );
+    input: RawInput,
+  ) -> Self::Input;
 
   fn simulate(
     &mut self,
     tick: Tick,
+    input: &Self::Input,
+  );
+
+  fn screen_resize(
+    &mut self,
+    os: &Os,
+    gfx: &Gfx,
+    inner_screen_size: ScreenSize,
   );
 
   fn render<'a>(
@@ -62,6 +73,7 @@ pub trait Application {
     os: &Os,
     gfx: &Gfx,
     frame: Frame<'a>,
+    input: &Self::Input,
   ) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
@@ -181,7 +193,7 @@ fn run_loop<A: Application>(
   'main: loop {
     // Timing
     let frame_time = frame_timer.frame();
-    tick_timer.update_lag(frame_time.frame_time);
+    tick_timer.update_lag(frame_time.delta);
     // Process OS events
     for os_event in os_event_rx.try_iter() {
       match os_event {
@@ -191,20 +203,22 @@ fn run_loop<A: Application>(
     }
     // Process input
     let raw_input = os_input_sys.update();
-    app.process_input(raw_input);
+    let input = app.process_input(raw_input);
     // Simulate tick
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
         tick_timer.tick_start();
         let tick = Tick { fixed_time_step: tick_timer.time_target() };
-        app.simulate(tick);
+        app.simulate(tick, &input);
         tick_timer.tick_end();
       }
     }
     // Recreate swap chain if needed
     if recreate_swap_chain {
-      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, os.window.get_inner_size());
+      let inner_screen_size = os.window.get_inner_size();
+      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, inner_screen_size);
       recreate_swap_chain = false;
+      app.screen_resize(&os, &gfx, inner_screen_size);
     }
     // Get frame to draw into
     let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
@@ -226,9 +240,9 @@ fn run_loop<A: Application>(
     let frame = Frame {
       output_texture: &swap_chain_frame.output,
       extrapolation: tick_timer.extrapolation(),
-      frame_time,
+      time: frame_time,
     };
-    let command_buffers = app.render(&os, &gfx, frame);
+    let command_buffers = app.render(&os, &gfx, frame, &input);
     // Submit command buffers
     gfx.queue.submit(command_buffers);
   }

@@ -2,8 +2,7 @@ cargo-features = ["named-profiles", "profile-overrides"]
 
 [workspace]
 members = [
-  "core/math",
-  "core/util",
+  "core/common",
   "core/os",
   "core/gfx",
   "core/gfxc",
@@ -32,9 +31,7 @@ debug = false
 # Fully optimize all dependencies, but not our own crates, to speed up compilation.
 [profile.fastdev.package."*"]
 opt-level = 3
-[profile.fastdev.package."math"]
-opt-level = 2
-[profile.fastdev.package."util"]
+[profile.fastdev.package."common"]
 opt-level = 2
 [profile.fastdev.package."os"]
 opt-level = 2

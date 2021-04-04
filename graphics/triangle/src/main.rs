@@ -5,11 +5,12 @@ use ultraviolet::Vec3;
 use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, Os, Tick};
+use common::input::RawInput;
+use common::prelude::ScreenSize;
 use gfx::buffer::DeviceBufferEx;
 use gfx::command::DeviceCommandEncoderEx;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use os::input_sys::RawInput;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -51,7 +52,7 @@ impl app::Application for App {
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .build(&gfx.device);
-    let vertex_buffer = gfx.device.create_vertex_buffer(VERTICES);
+    let vertex_buffer = gfx.device.create_static_vertex_buffer(VERTICES);
     Self {
       _vertex_shader_module: vertex_shader_module,
       _fragment_shader_module: fragment_shader_module,
@@ -61,11 +62,15 @@ impl app::Application for App {
     }
   }
 
-  fn process_input(&mut self, _raw_input: RawInput) {}
+  type Input = ();
 
-  fn simulate(&mut self, _tick: Tick) {}
+  fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn simulate(&mut self, _tick: Tick, _input: &()) {}
+
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, _inner_screen_size: ScreenSize) {}
+
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut encoder = gfx.device.create_default_command_encoder();
     {
       let mut render_pass = RenderPassBuilder::new()

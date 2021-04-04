@@ -1,6 +1,6 @@
 use winit::dpi::{LogicalPosition as WinitLogicalPosition, LogicalSize as WinitLogicalSize, PhysicalPosition as WinitPhysicalPosition, PhysicalSize as WinitPhysicalSize, Pixel};
 
-use math::screen::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
+use common::screen::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 
 pub trait LogicalSizeExt {
   fn into_winit(self) -> WinitLogicalSize<f64>;
