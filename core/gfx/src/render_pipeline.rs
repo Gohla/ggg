@@ -1,4 +1,4 @@
-use wgpu::{BindGroupLayout, ColorTargetState, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
+use wgpu::{BindGroupLayout, ColorTargetState, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState, CompareFunction};
 
 use crate::swap_chain::GfxSwapChain;
 
@@ -30,7 +30,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         entry_point: "main",
         buffers: &[],
       },
-      primitive: PrimitiveState::default(),
+      primitive: PrimitiveState { front_face: FrontFace::Cw, ..PrimitiveState::default() },
       depth_stencil: None,
       multisample: MultisampleState::default(),
       fragment: None,
@@ -122,6 +122,25 @@ impl<'a> RenderPipelineBuilder<'a> {
 
 
   #[inline]
+  pub fn with_depth_stencil(mut self, depth_stencil: DepthStencilState) -> Self {
+    self.depth_stencil = Some(depth_stencil);
+    self
+  }
+
+  #[inline]
+  pub fn with_depth_texture(self, format: TextureFormat) -> Self {
+    self.with_depth_stencil(DepthStencilState {
+      format,
+      depth_write_enabled: true,
+      depth_compare: CompareFunction::Less,
+      stencil: Default::default(),
+      bias: Default::default(),
+      clamp_depth: false,
+    })
+  }
+
+
+  #[inline]
   pub fn with_fragment_state(mut self, module: &'a ShaderModule, entry_point: &'a str, targets: &'a [ColorTargetState]) -> Self {
     self.fragment = Some(FragmentState {
       module,
@@ -131,6 +150,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self
   }
 
+  #[inline]
   pub fn with_default_fragment_state(mut self, module: &'a ShaderModule, swap_chain: &GfxSwapChain) -> Self {
     self.fragment = Some(FragmentState {
       module,

@@ -1,8 +1,10 @@
 use std::ops::Deref;
 
 use bytemuck::Pod;
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferUsage, Device, Queue, ShaderStage};
+use wgpu::{BindGroup, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferUsage, Device, Queue, ShaderStage};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+
+use crate::bind_group::BindGroupDeviceEx;
 
 pub trait DeviceBufferEx {
   fn create_buffer<T: Pod>(&self, data: &[T], usage: BufferUsage) -> Buffer;
@@ -72,17 +74,9 @@ impl<'a> UniformBuffer {
     (layout, bind)
   }
 
-  pub fn create_binding(&self, device: &Device, shader_visibility: ShaderStage) -> (BindGroupLayout, BindGroup) {
+  pub fn create_singleton_binding(&self, device: &Device, shader_visibility: ShaderStage) -> (BindGroupLayout, BindGroup) {
     let (layout_entry, bind_entry) = self.create_binding_entries(0, shader_visibility);
-    let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-      entries: &[layout_entry],
-      label: None,
-    });
-    let bind = device.create_bind_group(&BindGroupDescriptor {
-      layout: &layout,
-      entries: &[bind_entry],
-      label: None,
-    });
+    let (layout, bind) = device.create_bind_layout_group(&[layout_entry], &[bind_entry]);
     (layout, bind)
   }
 

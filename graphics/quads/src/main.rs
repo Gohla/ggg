@@ -7,12 +7,12 @@ use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, Index
 use app::{Frame, Gfx, Os, Tick};
 use common::input::RawInput;
 use common::prelude::ScreenSize;
-use gfx::buffer::{BufferEx, DeviceBufferEx};
 use gfx::camera::{CameraInput, CameraSys};
-use gfx::command::DeviceCommandEncoderEx;
+use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use gfx::texture::Texture2dRgbaBuilder;
+use gfx::sampler::SamplerBuilder;
+use gfx::texture::{GfxTexture, TextureBuilder};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -86,6 +86,8 @@ pub struct App {
   _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
 
+  depth_texture: GfxTexture,
+
   vertex_buffer: Buffer,
   index_buffer: Buffer,
   instance_buffer: Buffer,
@@ -97,23 +99,33 @@ pub struct Input {
 
 impl app::Application for App {
   fn new(os: &Os, gfx: &Gfx) -> Self {
-    let camera_sys = CameraSys::with_defaults_orthographic(os.window.get_inner_size().physical);
+    let viewport = os.window.get_inner_size().physical;
+    let camera_sys = CameraSys::with_defaults_orthographic(viewport);
 
-    let diffuse_image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap();
-    let (_diffuse, diffuse_bind_group_layout, diffuse_bind_group) = Texture2dRgbaBuilder::new(diffuse_image.into_rgba8())
-      .build_with_default_bind_group(&gfx.device, &gfx.queue);
+    let (diffuse_bind_group_layout, diffuse_bind_group) = {
+      let image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap().into_rgba8();
+      let texture = TextureBuilder::new_from_2d_rgba_image(&image).build(&gfx.device);
+      texture.write_2d_rgba_image(&gfx.queue, image);
+      let sampler = SamplerBuilder::new().build(&gfx.device);
+      let (view_layout_entry, view_bind_entry) = texture.create_bind_group_entries(0, ShaderStage::FRAGMENT);
+      let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
+      gfx.device.create_bind_layout_group(&[view_layout_entry, sampler_layout_entry], &[view_bind_entry, sampler_bind_entry])
+    };
 
     let uniform_buffer = gfx.device.create_uniform_buffer(&[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
-    let (uniform_bind_group_layout, uniform_bind_group) = uniform_buffer.create_binding(&gfx.device, ShaderStage::VERTEX);
+    let (uniform_bind_group_layout, uniform_bind_group) = uniform_buffer.create_singleton_binding(&gfx.device, ShaderStage::VERTEX);
     let uniform_buffer = uniform_buffer.into_inner();
 
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.vert.spv"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.frag.spv"));
 
+    let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
+
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
+      .with_depth_texture(depth_texture.format)
       .build(&gfx.device);
     let vertex_buffer = gfx.device.create_static_vertex_buffer(VERTICES);
     let index_buffer = gfx.device.create_static_index_buffer(INDICES);
@@ -142,6 +154,8 @@ impl app::Application for App {
       _pipeline_layout: pipeline_layout,
       render_pipeline,
 
+      depth_texture,
+
       vertex_buffer,
       index_buffer,
       instance_buffer,
@@ -157,8 +171,10 @@ impl app::Application for App {
 
   fn simulate(&mut self, _tick: Tick, _input: &Input) {}
 
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, inner_screen_size: ScreenSize) {
-    self.camera_sys.viewport = inner_screen_size.physical;
+  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, inner_screen_size: ScreenSize) {
+    let viewport = inner_screen_size.physical;
+    self.camera_sys.viewport = viewport;
+    self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
@@ -168,6 +184,7 @@ impl app::Application for App {
     let mut encoder = gfx.device.create_default_command_encoder();
     {
       let mut render_pass = RenderPassBuilder::new()
+        .with_depth_texture(&self.depth_texture.view)
         .begin_render_pass_for_swap_chain(&mut encoder, &frame.output_texture);
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);

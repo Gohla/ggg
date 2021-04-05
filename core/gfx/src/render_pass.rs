@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, RenderPass, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, SwapChainTexture};
+use wgpu::{CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, SwapChainTexture, TextureView};
 
 pub struct RenderPassBuilder<'a, 'b> {
   pub label: Option<&'b str>,
@@ -34,6 +34,17 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
     self
   }
 
+  #[inline]
+  pub fn with_depth_texture(self, depth_texture_view: &'a TextureView) -> Self {
+    self.with_depth_stencil_attachment(RenderPassDepthStencilAttachmentDescriptor {
+      attachment: depth_texture_view,
+      depth_ops: Some(Operations {
+        load: LoadOp::Clear(1.0),
+        store: true,
+      }),
+      stencil_ops: None,
+    })
+  }
 
   pub fn begin_render_pass(self, encoder: &'a mut CommandEncoder) -> RenderPass<'a> {
     encoder.begin_render_pass(&RenderPassDescriptor {
