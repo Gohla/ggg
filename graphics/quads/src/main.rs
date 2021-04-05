@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
-use ultraviolet::{Mat4, Vec2};
+use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, ShaderStage, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, Os, Tick};
@@ -50,6 +50,28 @@ struct Uniform {
   view_projection: Mat4,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+struct Instance {
+  model: Mat4,
+}
+
+impl Instance {
+  fn from_isometry(isometry: Isometry3) -> Self { Self { model: isometry.into_homogeneous_matrix() } }
+
+  fn buffer_layout() -> VertexBufferLayout<'static> {
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![2 => Float4, 3 => Float4, 4 => Float4, 5 => Float4];
+    VertexBufferLayout {
+      array_stride: size_of::<Instance>() as BufferAddress,
+      step_mode: InputStepMode::Instance,
+      attributes: ATTRIBUTES,
+    }
+  }
+}
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
+
 pub struct App {
   camera_sys: CameraSys,
 
@@ -66,7 +88,7 @@ pub struct App {
 
   vertex_buffer: Buffer,
   index_buffer: Buffer,
-
+  instance_buffer: Buffer,
 }
 
 pub struct Input {
@@ -75,13 +97,13 @@ pub struct Input {
 
 impl app::Application for App {
   fn new(os: &Os, gfx: &Gfx) -> Self {
-    let camera_sys = CameraSys::new(os.window.get_inner_size().physical);
+    let camera_sys = CameraSys::with_defaults_orthographic(os.window.get_inner_size().physical);
 
     let diffuse_image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap();
     let (_diffuse, diffuse_bind_group_layout, diffuse_bind_group) = Texture2dRgbaBuilder::new(diffuse_image.into_rgba8())
       .build_with_default_bind_group(&gfx.device, &gfx.queue);
 
-    let uniform_buffer = gfx.device.create_uniform_buffer(&[Uniform { view_projection: camera_sys.view_projection_matrix() }]);
+    let uniform_buffer = gfx.device.create_uniform_buffer(&[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
     let (uniform_bind_group_layout, uniform_bind_group) = uniform_buffer.create_binding(&gfx.device, ShaderStage::VERTEX);
     let uniform_buffer = uniform_buffer.into_inner();
 
@@ -91,10 +113,20 @@ impl app::Application for App {
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
       .build(&gfx.device);
     let vertex_buffer = gfx.device.create_static_vertex_buffer(VERTICES);
     let index_buffer = gfx.device.create_static_index_buffer(INDICES);
+    let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW).flat_map(|y| {
+      let y = y as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
+      (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+        let x = x as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        let translation = Vec3::new(x as f32 + 0.5, y as f32 + 0.5, 0.0);
+        let rotation = Rotor3::from_euler_angles(0.0, x, y);
+        Instance::from_isometry(Isometry3::new(translation, rotation))
+      })
+    }).collect();
+    let instance_buffer = gfx.device.create_static_vertex_buffer(&instances);
 
     Self {
       camera_sys,
@@ -112,7 +144,7 @@ impl app::Application for App {
 
       vertex_buffer,
       index_buffer,
-
+      instance_buffer,
     }
   }
 
@@ -126,12 +158,12 @@ impl app::Application for App {
   fn simulate(&mut self, _tick: Tick, _input: &Input) {}
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, inner_screen_size: ScreenSize) {
-    self.camera_sys.set_viewport(inner_screen_size.physical);
+    self.camera_sys.viewport = inner_screen_size.physical;
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta);
-    self.uniform_buffer.write(&gfx.queue, &[Uniform { view_projection: self.camera_sys.view_projection_matrix() }]);
+    self.uniform_buffer.write(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
 
     let mut encoder = gfx.device.create_default_command_encoder();
     {
@@ -142,7 +174,8 @@ impl app::Application for App {
       render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
       render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
       render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-      render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+      render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+      render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
     }
 
     Box::new(std::iter::once(encoder.finish()))
