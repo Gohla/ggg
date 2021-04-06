@@ -1,7 +1,7 @@
 use ultraviolet::{Mat4, Vec2, Vec3};
 use ultraviolet::projection;
 
-use common::input::{RawInput, VirtualKeyCode};
+use common::input::{KeyboardButton, RawInput};
 use common::screen::PhysicalSize;
 use common::timing::Duration;
 
@@ -150,11 +150,11 @@ pub struct CameraInput {
 impl From<&RawInput> for CameraInput {
   fn from(input: &RawInput) -> Self {
     CameraInput {
-      move_up: input.is_key_down(VirtualKeyCode::W),
-      move_right: input.is_key_down(VirtualKeyCode::D),
-      move_down: input.is_key_down(VirtualKeyCode::S),
-      move_left: input.is_key_down(VirtualKeyCode::A),
-      zoom_delta: input.mouse_wheel_delta.y as f32,
+      move_up: input.is_keyboard_button_down(KeyboardButton::W),
+      move_right: input.is_keyboard_button_down(KeyboardButton::D),
+      move_down: input.is_keyboard_button_down(KeyboardButton::S),
+      move_left: input.is_keyboard_button_down(KeyboardButton::A),
+      zoom_delta: input.mouse_wheel_pixel_delta.vertical as f32 + input.mouse_wheel_line_delta.vertical as f32,
     }
   }
 }

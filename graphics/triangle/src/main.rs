@@ -7,7 +7,7 @@ use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, P
 use app::{Frame, Gfx, Os, Tick};
 use common::input::RawInput;
 use common::prelude::ScreenSize;
-use gfx::buffer::DeviceBufferEx;
+use gfx::buffer::BufferBuilder;
 use gfx::command::DeviceCommandEncoderEx;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -51,8 +51,14 @@ impl app::Application for App {
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .with_layout_label("Triangle pipeline layout")
+      .with_label("Triangle render pipeline")
       .build(&gfx.device);
-    let vertex_buffer = gfx.device.create_static_vertex_buffer(VERTICES);
+    let vertex_buffer = BufferBuilder::new()
+      .with_static_vertex_usage()
+      .with_label("Static vertex buffer")
+      .build_with_data(&gfx.device, VERTICES)
+      .buffer;
     Self {
       _vertex_shader_module: vertex_shader_module,
       _fragment_shader_module: fragment_shader_module,
@@ -74,6 +80,7 @@ impl app::Application for App {
     let mut encoder = gfx.device.create_default_command_encoder();
     {
       let mut render_pass = RenderPassBuilder::new()
+        .with_label("Triangle render pass")
         .begin_render_pass_for_swap_chain(&mut encoder, &frame.output_texture);
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

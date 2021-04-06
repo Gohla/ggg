@@ -6,6 +6,7 @@ members = [
   "core/os",
   "core/gfx",
   "core/gfxc",
+  "core/gui",
   "core/app",
   "graphics/triangle",
   "graphics/quads"
@@ -38,6 +39,8 @@ opt-level = 2
 [profile.fastdev.package."gfx"]
 opt-level = 2
 [profile.fastdev.package."gfxc"]
+opt-level = 2
+[profile.fastdev.package."gui"]
 opt-level = 2
 [profile.fastdev.package."app"]
 opt-level = 2

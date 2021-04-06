@@ -437,6 +437,11 @@ impl PhysicalDelta {
     let scale = scale.into();
     LogicalDelta::new(self.x / scale, self.y / scale)
   }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    return self.x == 0 && self.y == 0
+  }
 }
 
 impl From<(i64, i64)> for PhysicalDelta {

@@ -1,4 +1,4 @@
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, Sampler, SamplerDescriptor, ShaderStage};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerDescriptor, ShaderStage};
 
 // Sampler builder creation and modification
 
@@ -7,7 +7,28 @@ pub struct SamplerBuilder<'a> {
 }
 
 impl<'a> SamplerBuilder<'a> {
+  #[inline]
   pub fn new() -> Self { Self { descriptor: SamplerDescriptor::default() } }
+
+
+  #[inline]
+  pub fn with_label(mut self, label: &'a str) -> Self {
+    self.descriptor.label = Some(label);
+    self
+  }
+
+
+  #[inline]
+  pub fn with_mag_filter(mut self, mag_filter: FilterMode) -> Self {
+    self.descriptor.mag_filter = mag_filter;
+    self
+  }
+
+  #[inline]
+  pub fn with_min_filter(mut self, min_filter: FilterMode) -> Self {
+    self.descriptor.min_filter = min_filter;
+    self
+  }
 }
 
 // Sampler creation

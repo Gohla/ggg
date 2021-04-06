@@ -11,6 +11,7 @@ pub struct TextureBuilder<'a> {
 }
 
 impl<'a> TextureBuilder<'a> {
+  #[inline]
   pub fn new(size: Extent3d, dimension: TextureDimension, format: TextureFormat, usage: TextureUsage) -> Self {
     Self {
       texture_descriptor: TextureDescriptor {
@@ -26,6 +27,7 @@ impl<'a> TextureBuilder<'a> {
     }
   }
 
+  #[inline]
   pub fn new_from_2d_rgba_image(image: &RgbaImage) -> Self {
     let (width, height) = image.dimensions();
     Self::new(
@@ -36,6 +38,7 @@ impl<'a> TextureBuilder<'a> {
     )
   }
 
+  #[inline]
   pub fn new_depth_32_float(size: PhysicalSize) -> Self {
     Self::new(
       Extent3d { width: size.width, height: size.height, depth: 1 },
@@ -43,6 +46,19 @@ impl<'a> TextureBuilder<'a> {
       TextureFormat::Depth32Float,
       TextureUsage::RENDER_ATTACHMENT,
     )
+  }
+
+
+  #[inline]
+  pub fn with_texture_label(mut self, label: &'a str) -> Self {
+    self.texture_descriptor.label = Some(label);
+    self
+  }
+
+  #[inline]
+  pub fn with_texture_view_label(mut self, label: &'a str) -> Self {
+    self.texture_view_descriptor.label = Some(label);
+    self
   }
 }
 
@@ -56,6 +72,7 @@ pub struct GfxTexture {
 }
 
 impl<'a> TextureBuilder<'a> {
+  #[inline]
   pub fn build(self, device: &Device) -> GfxTexture {
     let texture = device.create_texture(&self.texture_descriptor);
     let view = texture.create_view(&self.texture_view_descriptor);
@@ -66,6 +83,7 @@ impl<'a> TextureBuilder<'a> {
 // Writing image data
 
 impl<'a> GfxTexture {
+  #[inline]
   pub fn write_2d_rgba_image(&self, queue: &Queue, image: RgbaImage) {
     queue.write_texture(
       TextureCopyView {
@@ -87,6 +105,7 @@ impl<'a> GfxTexture {
 // Bind group (layout) entries creation
 
 impl<'a> GfxTexture {
+  #[inline]
   pub fn create_bind_group_entries(
     &'a self,
     binding_index: u32,

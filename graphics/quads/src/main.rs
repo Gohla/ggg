@@ -7,6 +7,8 @@ use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, Index
 use app::{Frame, Gfx, Os, Tick};
 use common::input::RawInput;
 use common::prelude::ScreenSize;
+use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
@@ -77,7 +79,7 @@ pub struct App {
 
   diffuse_bind_group: BindGroup,
 
-  uniform_buffer: Buffer,
+  uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
 
   _vertex_shader_module: ShaderModule,
@@ -104,17 +106,29 @@ impl app::Application for App {
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap().into_rgba8();
-      let texture = TextureBuilder::new_from_2d_rgba_image(&image).build(&gfx.device);
+      let texture = TextureBuilder::new_from_2d_rgba_image(&image)
+        .with_texture_label("Cobblestone diffuse texture")
+        .with_texture_view_label("Cobblestone diffuse texture view")
+        .build(&gfx.device);
       texture.write_2d_rgba_image(&gfx.queue, image);
-      let sampler = SamplerBuilder::new().build(&gfx.device);
+      let sampler = SamplerBuilder::new()
+        .with_label("Cobblestone diffuse sampler")
+        .build(&gfx.device);
       let (view_layout_entry, view_bind_entry) = texture.create_bind_group_entries(0, ShaderStage::FRAGMENT);
       let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
-      gfx.device.create_bind_layout_group(&[view_layout_entry, sampler_layout_entry], &[view_bind_entry, sampler_bind_entry])
+      CombinedBindGroupLayoutBuilder::new()
+        .with_layout_entries(&[view_layout_entry, sampler_layout_entry])
+        .with_entries(&[view_bind_entry, sampler_bind_entry])
+        .with_layout_label("Cobblestone diffuse bind group layout")
+        .with_label("Cobblestone diffuse bind group")
+        .build(&gfx.device)
     };
 
-    let uniform_buffer = gfx.device.create_uniform_buffer(&[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
-    let (uniform_bind_group_layout, uniform_bind_group) = uniform_buffer.create_singleton_binding(&gfx.device, ShaderStage::VERTEX);
-    let uniform_buffer = uniform_buffer.into_inner();
+    let uniform_buffer = BufferBuilder::new()
+      .with_uniform_usage()
+      .build_with_data(&gfx.device, &[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
+    let (uniform_bind_group_layout, uniform_bind_group) = uniform_buffer.create_uniform_singleton_binding(&gfx.device, ShaderStage::VERTEX);
+    let uniform_buffer = uniform_buffer;
 
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.vert.spv"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.frag.spv"));
@@ -126,9 +140,19 @@ impl app::Application for App {
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
       .with_depth_texture(depth_texture.format)
+      .with_layout_label("Quads pipeline layout")
+      .with_label("Quads render pipeline")
       .build(&gfx.device);
-    let vertex_buffer = gfx.device.create_static_vertex_buffer(VERTICES);
-    let index_buffer = gfx.device.create_static_index_buffer(INDICES);
+    let vertex_buffer = BufferBuilder::new()
+      .with_static_vertex_usage()
+      .with_label("Static vertex buffer")
+      .build_with_data(&gfx.device, VERTICES)
+      .buffer;
+    let index_buffer = BufferBuilder::new()
+      .with_static_index_usage()
+      .with_label("Static index buffer")
+      .build_with_data(&gfx.device, INDICES)
+      .buffer;
     let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW).flat_map(|y| {
       let y = y as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
       (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -138,7 +162,12 @@ impl app::Application for App {
         Instance::from_isometry(Isometry3::new(translation, rotation))
       })
     }).collect();
-    let instance_buffer = gfx.device.create_static_vertex_buffer(&instances);
+    let instance_buffer = BufferBuilder::new()
+      .with_static_vertex_usage()
+      .with_label("Instance buffer")
+      .build_with_data(&gfx.device, &instances)
+      .buffer
+      ;
 
     Self {
       camera_sys,

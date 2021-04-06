@@ -54,6 +54,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
     })
   }
 
+  /// Ignores the previously set `color_attachments`.
   pub fn begin_render_pass_for_swap_chain(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
     encoder.begin_render_pass(&RenderPassDescriptor {
       label: self.label,

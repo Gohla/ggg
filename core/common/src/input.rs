@@ -4,73 +4,119 @@ use crate::screen::{PhysicalDelta, PhysicalPosition};
 
 #[derive(Clone, Debug, Default)]
 pub struct RawInput {
-  pub mouse_buttons: MouseButtons,
-  pub mouse_pos: PhysicalPosition,
-  pub mouse_pos_delta: PhysicalDelta,
-  pub mouse_wheel_delta: MouseWheelDelta,
-  pub keyboard_buttons: HashSet<VirtualKeyCode>,
-  pub keyboard_buttons_pressed: HashSet<VirtualKeyCode>,
-  pub keyboard_buttons_released: HashSet<VirtualKeyCode>,
-  pub characters: Vec<char>,
-}
+  pub mouse_buttons: HashSet<MouseButton>,
+  pub mouse_buttons_pressed: HashSet<MouseButton>,
+  pub mouse_buttons_released: HashSet<MouseButton>,
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MouseButtons {
-  pub left: bool,
-  pub right: bool,
-  pub middle: bool,
-}
+  pub mouse_position: PhysicalPosition,
+  pub mouse_position_delta: PhysicalDelta,
+  pub mouse_wheel_pixel_delta: MouseWheelDelta,
+  pub mouse_wheel_line_delta: MouseWheelDelta,
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MouseWheelDelta {
-  pub x: f64,
-  pub y: f64,
+  pub keyboard_modifiers: HashSet<KeyboardModifier>,
+  pub keyboard_modifiers_pressed: HashSet<KeyboardModifier>,
+  pub keyboard_modifiers_released: HashSet<KeyboardModifier>,
+
+  pub keyboard_buttons: HashSet<KeyboardButton>,
+  pub keyboard_buttons_pressed: HashSet<KeyboardButton>,
+  pub keyboard_buttons_released: HashSet<KeyboardButton>,
+
+  pub characters_pressed: Vec<char>,
 }
 
 impl RawInput {
-  pub fn is_key_down(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons.contains(&key)
+  pub fn is_mouse_button_down(&self, button: MouseButton) -> bool {
+    self.mouse_buttons.contains(&button)
   }
-  pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons_pressed.contains(&key)
+  pub fn is_mouse_button_pressed(&self, button: MouseButton) -> bool {
+    self.mouse_buttons_pressed.contains(&button)
   }
-  pub fn is_key_released(&self, key: VirtualKeyCode) -> bool {
-    self.keyboard_buttons_released.contains(&key)
+  pub fn is_mouse_button_released(&self, button: MouseButton) -> bool {
+    self.mouse_buttons_released.contains(&button)
+  }
+
+  pub fn is_keyboard_modifier_down(&self, modifier: KeyboardModifier) -> bool {
+    self.keyboard_modifiers.contains(&modifier)
+  }
+  pub fn is_keyboard_modifier_pressed(&self, modifier: KeyboardModifier) -> bool {
+    self.keyboard_modifiers_pressed.contains(&modifier)
+  }
+  pub fn is_keyboard_modifier_released(&self, modifier: KeyboardModifier) -> bool {
+    self.keyboard_modifiers_released.contains(&modifier)
+  }
+
+  pub fn is_keyboard_button_down(&self, button: KeyboardButton) -> bool {
+    self.keyboard_buttons.contains(&button)
+  }
+  pub fn is_keyboard_button_pressed(&self, button: KeyboardButton) -> bool {
+    self.keyboard_buttons_pressed.contains(&button)
+  }
+  pub fn is_keyboard_button_released(&self, button: KeyboardButton) -> bool {
+    self.keyboard_buttons_released.contains(&button)
   }
 
 
   pub fn remove_mouse_input(&mut self) {
-    self.mouse_buttons.left = false;
-    self.mouse_buttons.right = false;
-    self.mouse_buttons.middle = false;
-    self.mouse_pos_delta = PhysicalDelta::default();
-    self.mouse_wheel_delta = MouseWheelDelta::default();
+    self.mouse_buttons.clear();
+    self.mouse_buttons_pressed.clear();
+    self.mouse_buttons_released.clear();
+    self.mouse_position_delta = PhysicalDelta::default();
+    self.mouse_wheel_pixel_delta = MouseWheelDelta::default();
+    self.mouse_wheel_line_delta = MouseWheelDelta::default();
   }
 
   pub fn remove_keyboard_input(&mut self) {
+    self.keyboard_modifiers.clear();
+    self.keyboard_modifiers_pressed.clear();
+    self.keyboard_modifiers_released.clear();
     self.keyboard_buttons.clear();
     self.keyboard_buttons_pressed.clear();
     self.keyboard_buttons_released.clear();
-    self.characters.clear();
+    self.characters_pressed.clear();
   }
 
   pub fn clear_deltas(&mut self) {
-    self.mouse_pos_delta = PhysicalDelta::default();
-    self.mouse_wheel_delta = MouseWheelDelta::default();
+    self.mouse_position_delta = PhysicalDelta::default();
+    self.mouse_wheel_pixel_delta = MouseWheelDelta::default();
+    self.mouse_wheel_line_delta = MouseWheelDelta::default();
+    self.keyboard_modifiers_pressed.clear();
+    self.keyboard_modifiers_released.clear();
     self.keyboard_buttons_pressed.clear();
     self.keyboard_buttons_released.clear();
-    self.characters.clear();
+    self.characters_pressed.clear();
   }
 }
 
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub enum MouseButton {
+  Left,
+  Right,
+  Middle,
+  Other(u16),
+}
+
+#[derive(Copy, Clone, Default, PartialOrd, PartialEq, Debug)]
+pub struct MouseWheelDelta {
+  pub horizontal: f64,
+  pub vertical: f64,
+}
+
 impl MouseWheelDelta {
-  pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { x, y } }
+  pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { horizontal: x, vertical: y } }
+}
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub enum KeyboardModifier {
+  Shift,
+  Control,
+  Alternate,
+  Meta,
 }
 
 /// Symbolic name for a keyboard key.
 #[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 #[repr(u32)]
-pub enum VirtualKeyCode {
+pub enum KeyboardButton {
   /// The '1' key over the letters.
   Key1,
   /// The '2' key over the letters.
