@@ -1,7 +1,9 @@
 use image::RgbaImage;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsage, TextureView, TextureViewDescriptor, TextureViewDimension};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureUsage, TextureView, TextureViewDescriptor};
 
 use common::screen::PhysicalSize;
+
+use crate::bind_group::{BindGroupEntryBuilder, BindGroupLayoutEntryBuilder};
 
 // Texture builder creation and modification
 
@@ -12,15 +14,15 @@ pub struct TextureBuilder<'a> {
 
 impl<'a> TextureBuilder<'a> {
   #[inline]
-  pub fn new(size: Extent3d, dimension: TextureDimension, format: TextureFormat, usage: TextureUsage) -> Self {
+  pub fn new() -> Self {
     Self {
       texture_descriptor: TextureDescriptor {
-        size,
+        size: Extent3d::default(),
         mip_level_count: 1,
         sample_count: 1,
-        dimension,
-        format,
-        usage,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsage::SAMPLED | TextureUsage::COPY_DST,
         label: None,
       },
       texture_view_descriptor: TextureViewDescriptor::default(),
@@ -30,24 +32,76 @@ impl<'a> TextureBuilder<'a> {
   #[inline]
   pub fn new_from_2d_rgba_image(image: &RgbaImage) -> Self {
     let (width, height) = image.dimensions();
-    Self::new(
-      Extent3d { width, height, depth: 1 },
-      TextureDimension::D2,
-      TextureFormat::Rgba8UnormSrgb,
-      TextureUsage::SAMPLED | TextureUsage::COPY_DST,
-    )
+    Self::new()
+      .with_2d_size(width, height)
+      .with_rgba8_unorm_srgb_format()
+      .with_sampled_usage()
   }
 
   #[inline]
   pub fn new_depth_32_float(size: PhysicalSize) -> Self {
-    Self::new(
-      Extent3d { width: size.width, height: size.height, depth: 1 },
-      TextureDimension::D2,
-      TextureFormat::Depth32Float,
-      TextureUsage::RENDER_ATTACHMENT,
-    )
+    Self::new()
+      .with_2d_size(size.width, size.height)
+      .with_depth32_float_format()
+      .with_render_attachment_usage()
   }
 
+
+  #[inline]
+  pub fn with_size(mut self, size: Extent3d) -> Self {
+    self.texture_descriptor.size = size;
+    self
+  }
+
+  #[inline]
+  pub fn with_dimension(mut self, dimension: TextureDimension) -> Self {
+    self.texture_descriptor.dimension = dimension;
+    self
+  }
+
+  #[inline]
+  pub fn with_2d_size(self, width: u32, height: u32) -> Self {
+    self
+      .with_size(Extent3d { width, height, depth: 1 })
+      .with_dimension(TextureDimension::D2)
+  }
+
+  #[inline]
+  pub fn with_format(mut self, format: TextureFormat) -> Self {
+    self.texture_descriptor.format = format;
+    self
+  }
+
+  #[inline]
+  pub fn with_rgba8_unorm_srgb_format(self) -> Self {
+    self.with_format(TextureFormat::Rgba8UnormSrgb)
+  }
+
+  #[inline]
+  pub fn with_depth32_float_format(self) -> Self {
+    self.with_format(TextureFormat::Depth32Float)
+  }
+
+  #[inline]
+  pub fn with_usage(mut self, usage: TextureUsage) -> Self {
+    self.texture_descriptor.usage = usage;
+    self
+  }
+
+  #[inline]
+  pub fn with_sampled_usage(self) -> Self {
+    self.with_usage(TextureUsage::SAMPLED | TextureUsage::COPY_DST)
+  }
+
+  #[inline]
+  pub fn with_static_sampled_usage(self) -> Self {
+    self.with_usage(TextureUsage::SAMPLED)
+  }
+
+  #[inline]
+  pub fn with_render_attachment_usage(self) -> Self {
+    self.with_usage(TextureUsage::RENDER_ATTACHMENT)
+  }
 
   #[inline]
   pub fn with_texture_label(mut self, label: &'a str) -> Self {
@@ -80,25 +134,35 @@ impl<'a> TextureBuilder<'a> {
   }
 }
 
-// Writing image data
+// Writing texture data
 
 impl<'a> GfxTexture {
   #[inline]
-  pub fn write_2d_rgba_image(&self, queue: &Queue, image: RgbaImage) {
+  pub fn write_texture_data(&self, queue: &Queue, data: &[u8], bytes_per_row: u32, rows_per_image: u32) {
     queue.write_texture(
       TextureCopyView {
         texture: &self.texture,
         mip_level: 0,
         origin: Origin3d::ZERO,
       },
-      image.as_raw(),
+      data,
       TextureDataLayout {
         offset: 0,
-        bytes_per_row: 4 * self.size.width,
-        rows_per_image: self.size.height,
+        bytes_per_row,
+        rows_per_image,
       },
       self.size,
     );
+  }
+
+  #[inline]
+  pub fn write_rgba_texture_data(&self, queue: &Queue, data: &[u8]) {
+    self.write_texture_data(queue, data, 4 * self.size.width, self.size.height);
+  }
+
+  #[inline]
+  pub fn write_2d_rgba_image(&self, queue: &Queue, image: RgbaImage) {
+    self.write_rgba_texture_data(queue, image.as_raw());
   }
 }
 
@@ -106,25 +170,28 @@ impl<'a> GfxTexture {
 
 impl<'a> GfxTexture {
   #[inline]
+  pub fn create_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStage) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntryBuilder::new_float_2d_texture()
+      .with_binding(binding_index)
+      .with_shader_visibility(shader_visibility)
+      .build()
+  }
+
+  #[inline]
+  pub fn create_bind_group_entry(&'a self, binding_index: u32) -> BindGroupEntry<'a> {
+    BindGroupEntryBuilder::new_texture_view(&self.view)
+      .with_binding(binding_index)
+      .build()
+  }
+
+  #[inline]
   pub fn create_bind_group_entries(
     &'a self,
     binding_index: u32,
     shader_visibility: ShaderStage,
   ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
-    let bind_group_layout = BindGroupLayoutEntry {
-      binding: binding_index,
-      visibility: shader_visibility,
-      ty: BindingType::Texture {
-        multisampled: false,
-        view_dimension: TextureViewDimension::D2,
-        sample_type: TextureSampleType::Float { filterable: false },
-      },
-      count: None,
-    };
-    let bind_group = BindGroupEntry {
-      binding: binding_index,
-      resource: BindingResource::TextureView(&self.view),
-    };
+    let bind_group_layout = self.create_bind_group_layout_entry(binding_index, shader_visibility);
+    let bind_group = self.create_bind_group_entry(binding_index);
     (bind_group_layout, bind_group)
   }
 }

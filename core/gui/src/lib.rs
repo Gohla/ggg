@@ -1,29 +1,107 @@
+use std::mem::size_of;
+
 use bytemuck::{Pod, Zeroable};
-use egui::{CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Vec2};
-use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BlendFactor, BlendOperation, BlendState, Color, ColorTargetState, Device, FilterMode, InputStepMode, PipelineLayout, RenderPipeline, ShaderStage, TextureFormat, VertexBufferLayout};
+use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2, Ui};
+use egui::epaint::{Mesh, Vertex};
+use wgpu::{BindGroup, BindGroupLayout, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
-use gfx::bind_group::{BindGroupLayoutBuilder, CombinedBindGroupLayoutBuilder};
+use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::prelude::*;
+use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
+use gfx::texture::TextureBuilder;
 
 pub struct Gui {
   context: CtxRef,
   input: EguiRawInput,
+
+  index_buffer: Option<GfxBuffer>,
+  vertex_buffer: Option<GfxBuffer>,
+  uniform_buffer: GfxBuffer,
+  _static_bind_group_layout: BindGroupLayout,
+  static_bind_group: BindGroup,
+  texture_bind_group_layout: BindGroupLayout,
+  texture_bind_group: Option<BindGroup>,
+  previous_texture_version: u64,
+  _pipeline_layout: PipelineLayout,
+  render_pipeline: RenderPipeline,
 }
 
 impl Gui {
-  pub fn new() -> Self {
+  pub fn new(device: &Device, swap_chain_texture_format: TextureFormat) -> Self {
+    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.vert.spv"));
+    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.frag.spv"));
+    let uniform_buffer = BufferBuilder::new()
+      .with_uniform_usage()
+      .with_label("GUI uniform buffer")
+      .build_with_data(device, &[Uniform::default()]);
+    let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
+      uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+    let sampler = SamplerBuilder::new()
+      .with_mag_filter(FilterMode::Linear)
+      .with_min_filter(FilterMode::Linear)
+      .with_label("GUI texture sampler")
+      .build(device);
+    let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
+    let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
+      .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_bind_layout_entry])
+      .with_layout_label("GUI static bind group layout")
+      .with_entries(&[uniform_buffer_bind_entry, sampler_bind_entry])
+      .with_label("GUI static bind group")
+      .build(device);
+    let texture_bind_group_layout = BindGroupLayoutBuilder::new()
+      .with_entries(&[BindGroupLayoutEntryBuilder::new_float_2d_texture()
+        .with_binding(0)
+        .with_fragment_shader_visibility()
+        .build()
+      ])
+      .with_label("GUI texture bind group layout")
+      .build(device);
+    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+      .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
+      .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
+        array_stride: 5 * 4,
+        step_mode: InputStepMode::Vertex,
+        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Uint],
+      }])
+      .with_fragment_state(&fragment_shader_module, "main", &[ColorTargetState {
+        format: swap_chain_texture_format,
+        alpha_blend: BlendState { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
+          src_factor: BlendFactor::OneMinusDstAlpha,
+          dst_factor: BlendFactor::One,
+          operation: BlendOperation::Add,
+        },
+        color_blend: BlendState {
+          src_factor: BlendFactor::One,
+          dst_factor: BlendFactor::OneMinusSrcAlpha,
+          operation: BlendOperation::Add,
+        },
+        write_mask: Default::default(),
+      }])
+      .with_layout_label("GUI pipeline layout")
+      .with_label("GUI render pipeline")
+      .build(device);
     Self {
       context: CtxRef::default(),
       input: EguiRawInput::default(),
+      index_buffer: None,
+      vertex_buffer: None,
+      uniform_buffer,
+      _static_bind_group_layout: static_bind_group_layout,
+      static_bind_group,
+      texture_bind_group_layout,
+      texture_bind_group: None,
+      previous_texture_version: 0,
+      _pipeline_layout: pipeline_layout,
+      render_pipeline,
     }
   }
 
-  pub fn process_input(&mut self, input: RawInput) {
+  pub fn process_input(&mut self, input: &RawInput) {
     // Mouse wheel delta
     self.input.scroll_delta = Vec2::new( // TODO: properly handle line to pixel conversion?
                                          (input.mouse_wheel_pixel_delta.horizontal + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
@@ -130,7 +208,12 @@ impl Gui {
     }
   }
 
-  pub fn begin_frame(&mut self, screen_size: ScreenSize, elapsed_seconds: f64, delta_seconds: f64) -> egui::CtxRef {
+  pub fn begin_frame(
+    &mut self,
+    screen_size: ScreenSize,
+    elapsed_seconds: f64,
+    delta_seconds: f64,
+  ) -> egui::Ui {
     self.input.screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32)));
     let pixels_per_point: f64 = screen_size.scale.into();
     self.input.pixels_per_point = Some(pixels_per_point as f32);
@@ -140,104 +223,182 @@ impl Gui {
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
-    self.context.clone()
-  }
-
-  pub fn end_frame(&self) {
-    let (output, shapes) = self.context.end_frame();
-    let clipped_meshes = self.context.tessellate(shapes);
+    Ui::__test()
     // let wants_keyboard_input = self.context.wants_keyboard_input();
     // let wants_pointer_input = self.context.wants_pointer_input();
   }
+
+  pub fn render(
+    &mut self,
+    screen_size: ScreenSize,
+    device: &Device,
+    queue: &Queue,
+    encoder: &mut CommandEncoder,
+    swap_chain_texture: &SwapChainTexture,
+  ) {
+    // Update texture if no texture was created yet, or if the texture has changed.
+    let texture = self.context.texture();
+    if self.texture_bind_group.is_none() || texture.version != self.previous_texture_version {
+      self.previous_texture_version = texture.version;
+      // Convert into Rgba8UnormSrgb format.
+      let mut pixels: Vec<u8> = Vec::with_capacity(texture.pixels.len() * 4);
+      for srgba in texture.srgba_pixels() {
+        pixels.push(srgba.r());
+        pixels.push(srgba.g());
+        pixels.push(srgba.b());
+        pixels.push(srgba.a());
+      }
+      // Create and write texture.
+      let texture = TextureBuilder::new()
+        .with_2d_size(texture.width as u32, texture.height as u32)
+        .with_rgba8_unorm_srgb_format()
+        .with_sampled_usage()
+        .with_texture_label("GUI texture")
+        .with_texture_view_label("GUI texture view")
+        .build(device)
+        ;
+      texture.write_rgba_texture_data(queue, pixels.as_slice());
+      // Create texture bind group.
+      let texture_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
+        .with_entries(&[texture.create_bind_group_entry(0)])
+        .with_label("GUI texture bind group")
+        .build(device);
+      self.texture_bind_group = Some(texture_bind_group)
+    }
+
+    // Get vertices to draw.
+    let (_output, shapes) = self.context.end_frame(); // TODO: handle output.
+    let clipped_meshes: Vec<ClippedMesh> = self.context.tessellate(shapes);
+
+    // Upload buffers.
+    self.uniform_buffer.write_whole_data(queue, &[Uniform::from_screen_size(screen_size)]);
+    let num_indices: usize = clipped_meshes.iter().map(|cm| cm.1.indices.len()).sum();
+    let required_index_buffer_size = (num_indices * size_of::<u32>()) as BufferAddress;
+    let mut index_buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(required_index_buffer_size, device));
+    if index_buffer.size < required_index_buffer_size {
+      index_buffer.destroy();
+      index_buffer = create_index_buffer(required_index_buffer_size, device);
+    }
+    let num_vertices: usize = clipped_meshes.iter().map(|cm| cm.1.vertices.len()).sum();
+    let required_vertex_buffer_size = (num_vertices * size_of::<Vertex>()) as BufferAddress;
+    let mut vertex_buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(required_vertex_buffer_size, device));
+    if vertex_buffer.size < required_vertex_buffer_size {
+      vertex_buffer.destroy();
+      vertex_buffer = create_vertex_buffer(required_index_buffer_size, device);
+    }
+
+    // Draw
+    let mut index_offset = 0;
+    let mut index_buffer_offset = 0;
+    let mut vertex_offset = 0;
+    let mut vertex_buffer_offset = 0;
+    struct Draw {
+      clip_rect: Rect,
+      index_offset: u32,
+      index_count: u32,
+      vertex_offset: u32,
+    }
+    let mut draws = Vec::with_capacity(clipped_meshes.len());
+    for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes { // TODO: use texture id?
+      index_buffer.write_data(queue, index_buffer_offset, indices);
+      index_offset += indices.len();
+      index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
+      vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
+      vertex_offset += vertices.len();
+      vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
+      draws.push(Draw { clip_rect: *clip_rect, index_offset: index_offset as u32, index_count: indices.len() as u32, vertex_offset: vertex_offset as u32 })
+    }
+
+    // Render
+    {
+      let mut render_pass = RenderPassBuilder::new()
+        .with_label("GUI render pass")
+        .begin_render_pass_for_swap_chain(encoder, swap_chain_texture);
+      render_pass.push_debug_group("GUI");
+      render_pass.set_pipeline(&self.render_pipeline);
+      render_pass.set_bind_group(0, &self.static_bind_group, &[]);
+      render_pass.set_bind_group(1, self.texture_bind_group.as_ref().unwrap(), &[]);
+      render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
+      render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+      let scale_factor: f64 = screen_size.scale.into();
+      let scale_factor = scale_factor as f32;
+      let physical_width = screen_size.physical.width;
+      let physical_height = screen_size.physical.height;
+      for Draw { clip_rect, index_offset, index_count, vertex_offset } in draws {
+        // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
+        // Transform clip rect to physical pixels.
+        let clip_min_x = scale_factor * clip_rect.min.x;
+        let clip_min_y = scale_factor * clip_rect.min.y;
+        let clip_max_x = scale_factor * clip_rect.max.x;
+        let clip_max_y = scale_factor * clip_rect.max.y;
+
+        // Make sure clip rect can fit within an `u32`.
+        let clip_min_x = clip_min_x.clamp(0.0, physical_width as f32);
+        let clip_min_y = clip_min_y.clamp(0.0, physical_height as f32);
+        let clip_max_x = clip_max_x.clamp(clip_min_x, physical_width as f32);
+        let clip_max_y = clip_max_y.clamp(clip_min_y, physical_height as f32);
+
+        let clip_min_x = clip_min_x.round() as u32;
+        let clip_min_y = clip_min_y.round() as u32;
+        let clip_max_x = clip_max_x.round() as u32;
+        let clip_max_y = clip_max_y.round() as u32;
+
+        let width = (clip_max_x - clip_min_x).max(1);
+        let height = (clip_max_y - clip_min_y).max(1);
+
+        // Clip scissor rectangle to target size
+        let x = clip_min_x.min(physical_width);
+        let y = clip_min_y.min(physical_height);
+        let width = width.min(physical_width - x);
+        let height = height.min(physical_height - y);
+
+        // Skip rendering with zero-sized clip areas
+        if width == 0 || height == 0 {
+          continue;
+        }
+
+        render_pass.set_scissor_rect(x, y, width, height);
+        render_pass.draw_indexed(index_offset..index_offset + index_count, vertex_offset as i32, 0..1);
+      }
+      render_pass.pop_debug_group();
+    }
+
+    self.index_buffer = Some(index_buffer);
+    self.vertex_buffer = Some(vertex_buffer);
+  }
+}
+
+fn create_index_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
+  BufferBuilder::new()
+    .with_index_usage()
+    .with_size(size)
+    .with_label("GUI index buffer")
+    .build(device)
+}
+
+fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
+  BufferBuilder::new()
+    .with_vertex_usage()
+    .with_size(size)
+    .with_label("GUI vertex buffer")
+    .build(device)
 }
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]
-struct GuiUniform {
+struct Uniform {
   screen_size: [f32; 2],
 }
 
-pub struct GuiRenderPass {
-  index_buffers: Vec<GfxBuffer>,
-  vertex_buffers: Vec<GfxBuffer>,
-  uniform_buffer: GfxBuffer,
-  static_bind_group_layout: BindGroupLayout,
-  static_bind_group: BindGroup,
-  dynamic_bind_group_layout: BindGroupLayout,
-  dynamic_bind_group: Option<BindGroup>,
-  pipeline_layout: PipelineLayout,
-  render_pipeline: RenderPipeline,
+impl Uniform {
+  pub fn from_screen_size(screen_size: ScreenSize) -> Self {
+    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32] }
+  }
 }
 
-impl GuiRenderPass {
-  pub fn new(device: &Device, swap_chain_texture_format: TextureFormat) -> Self {
-    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.vert.spv"));
-    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.frag.spv"));
-
-    let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("GUI uniform buffer")
-      .build_with_data(device, &[GuiUniform::default()]);
-    let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
-    let sampler = SamplerBuilder::new()
-      .with_mag_filter(FilterMode::Linear)
-      .with_min_filter(FilterMode::Linear)
-      .with_label("GUI texture sampler")
-      .build(device);
-    let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
-    let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_bind_layout_entry])
-      .with_layout_label("GUI static bind group layout")
-      .with_entries(&[uniform_buffer_bind_entry, sampler_bind_entry])
-      .with_label("GUI static bind group")
-      .build(device);
-    let dynamic_bind_group_layout = BindGroupLayoutBuilder::new()
-      .with_entries(&[BindGroupLayoutEntry {
-        binding: 0,
-        visibility: wgpu::ShaderStage::FRAGMENT,
-        ty: wgpu::BindingType::Texture {
-          multisampled: false,
-          sample_type: wgpu::TextureSampleType::Float { filterable: true },
-          view_dimension: wgpu::TextureViewDimension::D2,
-        },
-        count: None,
-      }])
-      .with_label("GUI dynamic bind group layout")
-      .build(device);
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&static_bind_group_layout, &dynamic_bind_group_layout])
-      .with_vertex_buffer_layouts(&[VertexBufferLayout {
-        array_stride: 5 * 4,
-        step_mode: InputStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Uint],
-      }])
-      .with_fragment_state(&fragment_shader_module, "main", &[ColorTargetState {
-        format: swap_chain_texture_format,
-        alpha_blend: BlendState {
-          src_factor: BlendFactor::OneMinusDstAlpha,
-          dst_factor: BlendFactor::One,
-          operation: BlendOperation::Add,
-        },
-        color_blend: BlendState {
-          src_factor: BlendFactor::One,
-          dst_factor: BlendFactor::OneMinusSrcAlpha,
-          operation: BlendOperation::Add,
-        },
-        write_mask: Default::default(),
-      }])
-      .with_layout_label("GUI pipeline layout")
-      .with_label("GUI render pipeline")
-      .build(device);
-    Self {
-      index_buffers: Vec::with_capacity(64),
-      vertex_buffers: Vec::with_capacity(64),
-      uniform_buffer,
-      static_bind_group_layout,
-      static_bind_group,
-      dynamic_bind_group_layout,
-      dynamic_bind_group: None,
-      pipeline_layout,
-      render_pipeline,
-    }
-  }
+// Needed since we can't use bytemuck for external types.
+fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
+  let len = slice.len() * std::mem::size_of::<T>();
+  let ptr = slice.as_ptr() as *const u8;
+  unsafe { std::slice::from_raw_parts(ptr, len) }
 }

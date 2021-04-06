@@ -15,6 +15,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use gui::Gui;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -93,6 +94,8 @@ pub struct App {
   vertex_buffer: Buffer,
   index_buffer: Buffer,
   instance_buffer: Buffer,
+
+  gui: Gui,
 }
 
 pub struct Input {
@@ -169,6 +172,8 @@ impl app::Application for App {
       .buffer
       ;
 
+    let gui = Gui::new(&gfx.device, gfx.swap_chain.get_texture_format());
+
     Self {
       camera_sys,
 
@@ -188,6 +193,8 @@ impl app::Application for App {
       vertex_buffer,
       index_buffer,
       instance_buffer,
+
+      gui,
     }
   }
 
@@ -195,6 +202,7 @@ impl app::Application for App {
 
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
+    self.gui.process_input(&input);
     Input { camera }
   }
 
@@ -206,9 +214,12 @@ impl app::Application for App {
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, frame: Frame<'a>, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta);
-    self.uniform_buffer.write(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
+
+    let mut ui = self.gui.begin_frame(os.window.get_inner_size(), frame.time.elapsed.as_s(), frame.time.delta.as_s());
+    ui.heading("My egui Application");
 
     let mut encoder = gfx.device.create_default_command_encoder();
     {
@@ -223,6 +234,7 @@ impl app::Application for App {
       render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
       render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
     }
+    self.gui.render(os.window.get_inner_size(), &gfx.device, &gfx.queue, &mut encoder, &frame.output_texture);
 
     Box::new(std::iter::once(encoder.finish()))
   }

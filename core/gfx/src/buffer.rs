@@ -97,17 +97,30 @@ impl<'a> BufferBuilder<'a> {
 // Buffer writing
 
 impl GfxBuffer {
-  /// Data must fit within the buffer.
+  /// Bytes must fit within the buffer. Offset must be within the size of the buffer and must not cause an overflow when
+  /// writing the data.
   #[inline]
-  pub fn write<T: Pod>(&self, queue: &Queue, data: &[T]) {
-    self.write_with_offset(queue, 0, data);
+  pub fn write_bytes(&self, queue: &Queue, bytes_offset: BufferAddress, bytes: &[u8]) {
+    queue.write_buffer(&self, bytes_offset, bytes);
+  }
+
+  /// Bytes must fit within the buffer.
+  #[inline]
+  pub fn write_whole_bytes(&self, queue: &Queue, bytes: &[u8]) {
+    self.write_data(queue, 0, bytes);
   }
 
   /// Data must fit within the buffer. Offset must be within the size of the buffer and must not cause an overflow when
   /// writing the data.
   #[inline]
-  pub fn write_with_offset<T: Pod>(&self, queue: &Queue, offset: BufferAddress, data: &[T]) {
-    queue.write_buffer(&self, offset, bytemuck::cast_slice(data));
+  pub fn write_data<T: Pod>(&self, queue: &Queue, bytes_offset: BufferAddress, data: &[T]) {
+    queue.write_buffer(&self, bytes_offset, bytemuck::cast_slice(data));
+  }
+
+  /// Data must fit within the buffer.
+  #[inline]
+  pub fn write_whole_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
+    self.write_data(queue, 0, data);
   }
 }
 
