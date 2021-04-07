@@ -13,8 +13,8 @@ impl GfxSwapChain {
     let descriptor = SwapChainDescriptor {
       usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
       format: adapter.get_swap_chain_preferred_format(&surface),
-      width: size.physical.width,
-      height: size.physical.height,
+      width: size.physical.width as u32,
+      height: size.physical.height as u32,
       present_mode,
     };
     let swap_chain = device.create_swap_chain(&surface, &descriptor);

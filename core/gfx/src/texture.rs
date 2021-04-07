@@ -41,7 +41,7 @@ impl<'a> TextureBuilder<'a> {
   #[inline]
   pub fn new_depth_32_float(size: PhysicalSize) -> Self {
     Self::new()
-      .with_2d_size(size.width, size.height)
+      .with_2d_size(size.width as u32, size.height as u32)
       .with_depth32_float_format()
       .with_render_attachment_usage()
   }

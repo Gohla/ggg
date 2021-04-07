@@ -1,5 +1,6 @@
 use egui::{CollapsingHeader, CtxRef, Grid, menu, Ui, Window};
 
+use common::input::RawInput;
 use common::timing::TimingStats;
 
 #[derive(Default)]
@@ -91,6 +92,45 @@ impl DebugGui {
             ui.end_row();
             ui.label("Render extrapolation");
             ui.label(format!("{:5.1}%", timing_stats.render_extrapolation * 100.0));
+            ui.end_row();
+          });
+      });
+    });
+  }
+
+  pub fn show_input(
+    &mut self,
+    ctx: &CtxRef,
+    input: &RawInput,
+  ) {
+    if !self.show_input { return; }
+    Window::new("Input").show(ctx, |ui| {
+      CollapsingHeader::new("Mouse").default_open(true).show(ui, |ui| {
+        Grid::new("Grid")
+          .striped(true)
+          .spacing([10.0, 4.0])
+          .show(ui, |ui| {
+            ui.label("Buttons");
+            ui.label(format!("{:?}", input.mouse_buttons));
+            ui.end_row();
+            ui.label("Physical position");
+            ui.label(format!("x: {}, y: {}", input.mouse_position.physical.x, input.mouse_position.physical.y));
+            ui.end_row();
+            ui.label("Logical position");
+            ui.label(format!("x: {}, y: {}", input.mouse_position.logical.x, input.mouse_position.logical.y));
+            ui.end_row();
+          });
+      });
+      CollapsingHeader::new("Keyboard").default_open(true).show(ui, |ui| {
+        Grid::new("Grid")
+          .striped(true)
+          .spacing([10.0, 4.0])
+          .show(ui, |ui| {
+            ui.label("Modifiers");
+            ui.label(format!("{:?}", input.keyboard_modifiers));
+            ui.end_row();
+            ui.label("Buttons");
+            ui.label(format!("{:?}", input.keyboard_buttons));
             ui.end_row();
           });
       });

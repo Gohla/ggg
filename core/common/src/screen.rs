@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::ops::{Div, Mul};
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 //
 // Scale (DPI) factor.
@@ -31,28 +31,28 @@ impl Div<Scale> for f64 {
   fn div(self, rhs: Scale) -> f64 { self / rhs.0 }
 }
 
-impl Mul<Scale> for u32 {
+impl Mul<Scale> for u64 {
   type Output = f64;
 
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
 
-impl Div<Scale> for u32 {
+impl Div<Scale> for u64 {
   type Output = f64;
 
   #[inline]
   fn div(self, rhs: Scale) -> f64 { self as f64 / rhs.0 }
 }
 
-impl Mul<Scale> for i32 {
+impl Mul<Scale> for i64 {
   type Output = f64;
 
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
 
-impl Div<Scale> for i32 {
+impl Div<Scale> for i64 {
   type Output = f64;
 
   #[inline]
@@ -63,8 +63,16 @@ impl From<f64> for Scale {
   fn from(scale: f64) -> Self { Scale(scale) }
 }
 
+impl From<u64> for Scale {
+  fn from(scale: u64) -> Self { Scale(scale as _) }
+}
+
 impl From<f32> for Scale {
   fn from(scale: f32) -> Self { Scale(scale as _) }
+}
+
+impl From<u32> for Scale {
+  fn from(scale: u32) -> Self { Scale(scale as _) }
 }
 
 impl From<Scale> for f64 {
@@ -86,13 +94,13 @@ impl Default for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalSize {
-  pub width: u32,
-  pub height: u32,
+  pub width: u64,
+  pub height: u64,
 }
 
 impl PhysicalSize {
   #[inline]
-  pub fn new(width: u32, height: u32) -> Self { Self { width, height } }
+  pub fn new(width: u64, height: u64) -> Self { Self { width, height } }
 
   /// Loss of precision in physical size: conversion from f64 into u32.
   #[inline]
@@ -107,32 +115,42 @@ impl PhysicalSize {
 
 impl From<(u64, u64)> for PhysicalSize {
   #[inline]
-  fn from((width, height): (u64, u64)) -> Self { Self::new(width as _, height as _) }
+  fn from((width, height): (u64, u64)) -> Self { Self::new(width, height) }
 }
 
 impl From<(u32, u32)> for PhysicalSize {
   #[inline]
-  fn from((width, height): (u32, u32)) -> Self { Self::new(width, height) }
+  fn from((width, height): (u32, u32)) -> Self { Self::new(width as _, height as _) }
+}
+
+impl From<[u64; 2]> for PhysicalSize {
+  #[inline]
+  fn from([width, height]: [u64; 2]) -> Self { Self::new(width, height) }
+}
+
+impl From<[u32; 2]> for PhysicalSize {
+  #[inline]
+  fn from([width, height]: [u32; 2]) -> Self { Self::new(width as _, height as _) }
 }
 
 impl From<PhysicalSize> for (u64, u64) {
   #[inline]
-  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width as _, physical_size.height as _) }
-}
-
-impl From<PhysicalSize> for (u32, u32) {
-  #[inline]
-  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width, physical_size.height) }
+  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
 }
 
 impl From<PhysicalSize> for (f64, f64) {
   #[inline]
-  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width as _, physical_size.height as _) }
+  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
 }
 
-impl From<PhysicalSize> for (f32, f32) {
+impl From<PhysicalSize> for [u64; 2] {
   #[inline]
-  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width as _, physical_size.height as _) }
+  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
+}
+
+impl From<PhysicalSize> for [f64; 2] {
+  #[inline]
+  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
 }
 
 
@@ -160,11 +178,10 @@ impl LogicalSize {
   #[inline]
   pub fn from_physical<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
 
-  /// Loss of precision in physical size: conversion from f64 into u32.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalSize {
     let scale = scale.into();
-    PhysicalSize::new((self.width * scale).round() as u32, (self.height * scale).round() as u32)
+    PhysicalSize::new((self.width * scale).round() as _, (self.height * scale).round() as _)
   }
 }
 
@@ -188,9 +205,34 @@ impl From<(u32, u32)> for LogicalSize {
   fn from((width, height): (u32, u32)) -> Self { Self::new(width as _, height as _) }
 }
 
+impl From<[f64; 2]> for LogicalSize {
+  #[inline]
+  fn from([width, height]: [f64; 2]) -> Self { Self::new(width, height) }
+}
+
+impl From<[f32; 2]> for LogicalSize {
+  #[inline]
+  fn from([width, height]: [f32; 2]) -> Self { Self::new(width as _, height as _) }
+}
+
+impl From<[u64; 2]> for LogicalSize {
+  #[inline]
+  fn from([width, height]: [u64; 2]) -> Self { Self::new(width as _, height as _) }
+}
+
+impl From<[u32; 2]> for LogicalSize {
+  #[inline]
+  fn from([width, height]: [u32; 2]) -> Self { Self::new(width as _, height as _) }
+}
+
 impl From<LogicalSize> for (f64, f64) {
   #[inline]
-  fn from(logical_size: LogicalSize) -> Self { (logical_size.width, logical_size.height) }
+  fn from(l: LogicalSize) -> Self { (l.width, l.height) }
+}
+
+impl From<LogicalSize> for [f64; 2] {
+  #[inline]
+  fn from(l: LogicalSize) -> Self { [l.width, l.height] }
 }
 
 
@@ -207,7 +249,6 @@ impl ScreenSize {
   #[inline]
   pub fn new(physical: PhysicalSize, scale: Scale, logical: LogicalSize) -> Self { Self { physical, scale, logical } }
 
-  /// Loss of precision in physical size: conversion from f64 into u32.
   #[inline]
   pub fn from_logical_scale<L: Into<LogicalSize>, S: Into<Scale>>(logical: L, scale: S) -> Self {
     let logical = logical.into();
@@ -225,7 +266,7 @@ impl ScreenSize {
   }
 
   #[inline]
-  pub fn from_unscaled(width: u32, height: u32) -> Self {
+  pub fn from_unscaled(width: u64, height: u64) -> Self {
     let physical = PhysicalSize::new(width, height);
     let scale = Scale::default();
     let logical = physical.into_logical(scale);
@@ -235,17 +276,17 @@ impl ScreenSize {
 
 impl From<ScreenSize> for LogicalSize {
   #[inline]
-  fn from(screen_size: ScreenSize) -> Self { screen_size.logical }
+  fn from(s: ScreenSize) -> Self { s.logical }
 }
 
 impl From<ScreenSize> for PhysicalSize {
   #[inline]
-  fn from(screen_size: ScreenSize) -> Self { screen_size.physical }
+  fn from(s: ScreenSize) -> Self { s.physical }
 }
 
 impl From<ScreenSize> for Scale {
   #[inline]
-  fn from(screen_size: ScreenSize) -> Self { screen_size.scale }
+  fn from(s: ScreenSize) -> Self { s.scale }
 }
 
 
@@ -257,15 +298,14 @@ impl From<ScreenSize> for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalPosition {
-  pub x: i32,
-  pub y: i32,
+  pub x: i64,
+  pub y: i64,
 }
 
 impl PhysicalPosition {
   #[inline]
-  pub fn new(x: i32, y: i32) -> Self { Self { x, y } }
+  pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
-  /// Loss of precision in physical position: conversion from f64 into i32.
   #[inline]
   pub fn from_logical<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self { logical.into().into_physical(scale) }
 
@@ -276,43 +316,79 @@ impl PhysicalPosition {
   }
 }
 
+impl Add<PhysicalPosition> for PhysicalPosition {
+  type Output = PhysicalPosition;
+
+  #[inline]
+  fn add(self, rhs: PhysicalPosition) -> Self::Output {
+    PhysicalPosition::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+
+impl AddAssign<PhysicalPosition> for PhysicalPosition {
+  #[inline]
+  fn add_assign(&mut self, rhs: PhysicalPosition) {
+    self.x += rhs.x;
+    self.y += rhs.y;
+  }
+}
+
+impl Sub<PhysicalPosition> for PhysicalPosition {
+  type Output = PhysicalDelta;
+
+  #[inline]
+  fn sub(self, rhs: PhysicalPosition) -> Self::Output {
+    PhysicalDelta::new(self.x - rhs.x, self.y - rhs.y)
+  }
+}
+
 impl From<(i64, i64)> for PhysicalPosition {
   #[inline]
-  fn from((x, y): (i64, i64)) -> Self { Self::new(x as _, y as _) }
+  fn from((x, y): (i64, i64)) -> Self { Self::new(x, y) }
 }
 
 impl From<(i32, i32)> for PhysicalPosition {
   #[inline]
-  fn from((x, y): (i32, i32)) -> Self { Self::new(x, y) }
+  fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
+}
+
+impl From<[i64; 2]> for PhysicalPosition {
+  #[inline]
+  fn from([x, y]: [i64; 2]) -> Self { Self::new(x, y) }
+}
+
+impl From<[i32; 2]> for PhysicalPosition {
+  #[inline]
+  fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
 }
 
 impl From<PhysicalPosition> for (i64, i64) {
   #[inline]
-  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x as _, physical_position.y as _) }
-}
-
-impl From<PhysicalPosition> for (i32, i32) {
-  #[inline]
-  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x, physical_position.y) }
+  fn from(p: PhysicalPosition) -> Self { (p.x, p.y) }
 }
 
 impl From<PhysicalPosition> for (f64, f64) {
   #[inline]
-  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x as _, physical_position.y as _) }
+  fn from(p: PhysicalPosition) -> Self { (p.x as _, p.y as _) }
 }
 
-impl From<PhysicalPosition> for (f32, f32) {
+impl From<PhysicalPosition> for [i64; 2] {
   #[inline]
-  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x as _, physical_position.y as _) }
+  fn from(p: PhysicalPosition) -> Self { [p.x, p.y] }
+}
+
+impl From<PhysicalPosition> for [f64; 2] {
+  #[inline]
+  fn from(p: PhysicalPosition) -> Self { [p.x as _, p.y as _] }
 }
 
 // Position in logical screen space.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[non_exhaustive]
 pub struct LogicalPosition {
   pub x: f64,
   pub y: f64,
-  _private: (), // Make construction private, use Self::new.
 }
 
 impl LogicalPosition {
@@ -322,7 +398,7 @@ impl LogicalPosition {
     debug_assert!(!x.is_nan(), "X {} is NaN", x);
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
-    Self { x, y, _private: () }
+    Self { x, y }
   }
 
   #[inline]
@@ -333,6 +409,32 @@ impl LogicalPosition {
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalPosition {
     let scale = scale.into();
     PhysicalPosition::new((self.x * scale).round() as _, (self.y * scale).round() as _)
+  }
+}
+
+impl Add<LogicalPosition> for LogicalPosition {
+  type Output = LogicalPosition;
+
+  #[inline]
+  fn add(self, rhs: LogicalPosition) -> Self::Output {
+    LogicalPosition::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+
+impl AddAssign<LogicalPosition> for LogicalPosition {
+  #[inline]
+  fn add_assign(&mut self, rhs: LogicalPosition) {
+    self.x += rhs.x;
+    self.y += rhs.y;
+  }
+}
+
+impl Sub<LogicalPosition> for LogicalPosition {
+  type Output = LogicalDelta;
+
+  #[inline]
+  fn sub(self, rhs: LogicalPosition) -> Self::Output {
+    LogicalDelta::new(self.x - rhs.x, self.y - rhs.y)
   }
 }
 
@@ -351,9 +453,29 @@ impl From<(i32, i32)> for LogicalPosition {
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
 
+impl From<[f64; 2]> for LogicalPosition {
+  #[inline]
+  fn from([x, y]: [f64; 2]) -> Self { Self::new(x, y) }
+}
+
+impl From<[f32; 2]> for LogicalPosition {
+  #[inline]
+  fn from([x, y]: [f32; 2]) -> Self { Self::new(x as _, y as _) }
+}
+
+impl From<[i32; 2]> for LogicalPosition {
+  #[inline]
+  fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
+}
+
 impl From<LogicalPosition> for (f64, f64) {
   #[inline]
-  fn from(logical_position: LogicalPosition) -> Self { (logical_position.x, logical_position.y) }
+  fn from(l: LogicalPosition) -> Self { (l.x, l.y) }
+}
+
+impl From<LogicalPosition> for [f64; 2] {
+  #[inline]
+  fn from(l: LogicalPosition) -> Self { [l.x, l.y] }
 }
 
 
@@ -362,21 +484,19 @@ impl From<LogicalPosition> for (f64, f64) {
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub struct ScreenPosition {
   pub physical: PhysicalPosition,
-  pub scale: Scale,
   pub logical: LogicalPosition,
 }
 
 impl ScreenPosition {
   #[inline]
-  pub fn new(physical: PhysicalPosition, scale: Scale, logical: LogicalPosition) -> Self { Self { physical, scale, logical } }
+  pub fn new(physical: PhysicalPosition, logical: LogicalPosition) -> Self { Self { physical, logical } }
 
-  /// Loss of precision in physical position: conversion from f64 into i32.
   #[inline]
   pub fn from_logical_scale<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self {
     let logical = logical.into();
     let scale = scale.into();
     let physical = logical.into_physical(scale);
-    Self::new(physical, scale, logical)
+    Self::new(physical, logical)
   }
 
   #[inline]
@@ -384,15 +504,40 @@ impl ScreenPosition {
     let physical = physical.into();
     let scale = scale.into();
     let logical = physical.into_logical(scale);
-    Self::new(physical, scale, logical)
+    Self::new(physical, logical)
   }
 
   #[inline]
-  pub fn from_unscaled(x: i32, y: i32) -> Self {
+  pub fn from_unscaled(x: i64, y: i64) -> Self {
     let physical = PhysicalPosition::new(x, y);
-    let scale = Scale::default();
-    let logical = physical.into_logical(scale);
-    Self::new(physical, scale, logical)
+    let logical = physical.into_logical(Scale::default());
+    Self::new(physical, logical)
+  }
+}
+
+impl Add<ScreenPosition> for ScreenPosition {
+  type Output = ScreenPosition;
+
+  #[inline]
+  fn add(self, rhs: ScreenPosition) -> Self::Output {
+    ScreenPosition::new(self.physical + rhs.physical, self.logical + rhs.logical)
+  }
+}
+
+impl AddAssign<ScreenPosition> for ScreenPosition {
+  #[inline]
+  fn add_assign(&mut self, rhs: ScreenPosition) {
+    self.physical += rhs.physical;
+    self.logical += rhs.logical;
+  }
+}
+
+impl Sub<ScreenPosition> for ScreenPosition {
+  type Output = ScreenDelta;
+
+  #[inline]
+  fn sub(self, rhs: ScreenPosition) -> Self::Output {
+    ScreenDelta::new(self.physical - rhs.physical, self.logical - rhs.logical)
   }
 }
 
@@ -406,11 +551,6 @@ impl From<ScreenPosition> for PhysicalPosition {
   fn from(screen_position: ScreenPosition) -> Self { screen_position.physical }
 }
 
-impl From<ScreenPosition> for Scale {
-  #[inline]
-  fn from(screen_position: ScreenPosition) -> Self { screen_position.scale }
-}
-
 
 //
 // Delta
@@ -420,13 +560,13 @@ impl From<ScreenPosition> for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalDelta {
-  pub x: i32,
-  pub y: i32,
+  pub x: i64,
+  pub y: i64,
 }
 
 impl PhysicalDelta {
   #[inline]
-  pub fn new(x: i32, y: i32) -> Self { Self { x, y } }
+  pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
   /// Loss of precision in physical delta: conversion from f64 into i32.
   #[inline]
@@ -440,38 +580,65 @@ impl PhysicalDelta {
 
   #[inline]
   pub fn is_empty(&self) -> bool {
-    return self.x == 0 && self.y == 0
+    return self.x == 0 && self.y == 0;
+  }
+}
+
+impl Add<PhysicalDelta> for PhysicalDelta {
+  type Output = PhysicalDelta;
+
+  #[inline]
+  fn add(self, rhs: PhysicalDelta) -> Self::Output {
+    PhysicalDelta::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+
+impl AddAssign<PhysicalDelta> for PhysicalDelta {
+  #[inline]
+  fn add_assign(&mut self, rhs: PhysicalDelta) {
+    self.x += rhs.x;
+    self.y += rhs.y;
   }
 }
 
 impl From<(i64, i64)> for PhysicalDelta {
   #[inline]
-  fn from((x, y): (i64, i64)) -> Self { Self::new(x as _, y as _) }
+  fn from((x, y): (i64, i64)) -> Self { Self::new(x, y) }
 }
 
 impl From<(i32, i32)> for PhysicalDelta {
   #[inline]
-  fn from((x, y): (i32, i32)) -> Self { Self::new(x, y) }
+  fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
+}
+
+impl From<[i64; 2]> for PhysicalDelta {
+  #[inline]
+  fn from([x, y]: [i64; 2]) -> Self { Self::new(x, y) }
+}
+
+impl From<[i32; 2]> for PhysicalDelta {
+  #[inline]
+  fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
 }
 
 impl From<PhysicalDelta> for (i64, i64) {
   #[inline]
-  fn from(physical_position: PhysicalDelta) -> Self { (physical_position.x as _, physical_position.y as _) }
+  fn from(p: PhysicalDelta) -> Self { (p.x, p.y) }
 }
 
-impl From<PhysicalDelta> for (i32, i32) {
+impl From<PhysicalDelta> for [i64; 2] {
   #[inline]
-  fn from(physical_position: PhysicalDelta) -> Self { (physical_position.x, physical_position.y) }
+  fn from(p: PhysicalDelta) -> Self { [p.x, p.y] }
 }
 
 
 // Delta in logical screen space.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[non_exhaustive]
 pub struct LogicalDelta {
   pub x: f64,
   pub y: f64,
-  _private: (), // Make construction private, use Self::new.
 }
 
 impl LogicalDelta {
@@ -481,17 +648,36 @@ impl LogicalDelta {
     debug_assert!(!x.is_nan(), "X {} is NaN", x);
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
-    Self { x, y, _private: () }
+    Self { x, y }
   }
 
   #[inline]
   pub fn from_physical<P: Into<PhysicalDelta>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
 
-  /// Loss of precision in physical delta: conversion from f64 into i32.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalDelta {
     let scale = scale.into();
     PhysicalDelta::new((self.x * scale).round() as _, (self.y * scale).round() as _)
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool { return self.x == 0.0 && self.y == 0.0 }
+}
+
+impl Add<LogicalDelta> for LogicalDelta {
+  type Output = LogicalDelta;
+
+  #[inline]
+  fn add(self, rhs: LogicalDelta) -> Self::Output {
+    LogicalDelta::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+
+impl AddAssign<LogicalDelta> for LogicalDelta {
+  #[inline]
+  fn add_assign(&mut self, rhs: LogicalDelta) {
+    self.x += rhs.x;
+    self.y += rhs.y;
   }
 }
 
@@ -510,9 +696,29 @@ impl From<(i32, i32)> for LogicalDelta {
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
 
+impl From<[f64; 2]> for LogicalDelta {
+  #[inline]
+  fn from([x, y]: [f64; 2]) -> Self { Self::new(x, y) }
+}
+
+impl From<[f32; 2]> for LogicalDelta {
+  #[inline]
+  fn from([x, y]: [f32; 2]) -> Self { Self::new(x as _, y as _) }
+}
+
+impl From<[i32; 2]> for LogicalDelta {
+  #[inline]
+  fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
+}
+
 impl From<LogicalDelta> for (f64, f64) {
   #[inline]
-  fn from(logical_position: LogicalDelta) -> Self { (logical_position.x, logical_position.y) }
+  fn from(l: LogicalDelta) -> Self { (l.x, l.y) }
+}
+
+impl From<LogicalDelta> for [f64; 2] {
+  #[inline]
+  fn from(l: LogicalDelta) -> Self { [l.x, l.y] }
 }
 
 
@@ -521,21 +727,19 @@ impl From<LogicalDelta> for (f64, f64) {
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub struct ScreenDelta {
   pub physical: PhysicalDelta,
-  pub scale: Scale,
   pub logical: LogicalDelta,
 }
 
 impl ScreenDelta {
   #[inline]
-  pub fn new(physical: PhysicalDelta, scale: Scale, logical: LogicalDelta) -> Self { Self { physical, scale, logical } }
+  pub fn new(physical: PhysicalDelta, logical: LogicalDelta) -> Self { Self { physical, logical } }
 
-  /// Loss of precision in physical position: conversion from f64 into i32.
   #[inline]
   pub fn from_logical_scale<L: Into<LogicalDelta>, S: Into<Scale>>(logical: L, scale: S) -> Self {
     let logical = logical.into();
     let scale = scale.into();
     let physical = logical.into_physical(scale);
-    Self::new(physical, scale, logical)
+    Self::new(physical, logical)
   }
 
   #[inline]
@@ -543,15 +747,34 @@ impl ScreenDelta {
     let physical = physical.into();
     let scale = scale.into();
     let logical = physical.into_logical(scale);
-    Self::new(physical, scale, logical)
+    Self::new(physical, logical)
   }
 
   #[inline]
-  pub fn from_unscaled(x: i32, y: i32) -> Self {
+  pub fn from_unscaled(x: i64, y: i64) -> Self {
     let physical = PhysicalDelta::new(x, y);
-    let scale = Scale::default();
-    let logical = physical.into_logical(scale);
-    Self::new(physical, scale, logical)
+    let logical = physical.into_logical(Scale::default());
+    Self::new(physical, logical)
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool { return self.physical.is_empty() && self.logical.is_empty(); }
+}
+
+impl Add<ScreenDelta> for ScreenDelta {
+  type Output = ScreenDelta;
+
+  #[inline]
+  fn add(self, rhs: ScreenDelta) -> Self::Output {
+    ScreenDelta::new(self.physical + rhs.physical, self.logical + rhs.logical)
+  }
+}
+
+impl AddAssign<ScreenDelta> for ScreenDelta {
+  #[inline]
+  fn add_assign(&mut self, rhs: ScreenDelta) {
+    self.physical += rhs.physical;
+    self.logical += rhs.logical;
   }
 }
 
@@ -563,9 +786,4 @@ impl From<ScreenDelta> for LogicalDelta {
 impl From<ScreenDelta> for PhysicalDelta {
   #[inline]
   fn from(screen_position: ScreenDelta) -> Self { screen_position.physical }
-}
-
-impl From<ScreenDelta> for Scale {
-  #[inline]
-  fn from(screen_position: ScreenDelta) -> Self { screen_position.scale }
 }

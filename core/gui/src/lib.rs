@@ -129,12 +129,12 @@ impl Gui {
     if process_mouse_input {
       // Mouse wheel delta // TODO: properly handle line to pixel conversion?
       self.input.scroll_delta = Vec2::new(
-        (input.mouse_wheel_pixel_delta.horizontal + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
-        (input.mouse_wheel_pixel_delta.vertical + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
+        (input.mouse_wheel_pixel_delta.physical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
+        (input.mouse_wheel_pixel_delta.physical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
       );
 
       // Mouse movement
-      let mouse_position = Pos2::new(input.mouse_position.x as f32, input.mouse_position.y as f32);
+      let mouse_position = Pos2::new(input.mouse_position.physical.x as f32, input.mouse_position.physical.y as f32);
       if !input.mouse_position_delta.is_empty() {
         self.input.events.push(Event::PointerMoved(mouse_position))
       }
@@ -344,8 +344,8 @@ impl Gui {
       render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
       let scale_factor: f64 = screen_size.scale.into();
       let scale_factor = scale_factor as f32;
-      let physical_width = screen_size.physical.width;
-      let physical_height = screen_size.physical.height;
+      let physical_width = screen_size.physical.width as u32;
+      let physical_height = screen_size.physical.height as u32;
       for Draw { clip_rect, indices, base_vertex } in draws {
         // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
         // Transform clip rect to physical pixels.

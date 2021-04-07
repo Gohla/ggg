@@ -7,7 +7,7 @@ use winit::event_loop::ControlFlow;
 use winit::window::WindowId;
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton};
-use common::screen::{PhysicalPosition, ScreenSize};
+use common::screen::{ScreenDelta, ScreenPosition, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
@@ -24,9 +24,9 @@ pub struct OsEventSys {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum OsInputEvent {
   MouseInput { button: MouseButton, state: ElementState },
-  MouseMoved(PhysicalPosition),
-  MouseWheelMovedPixels { horizontal_delta: f64, vertical_delta: f64 },
-  MouseWheelMovedLines { horizontal_delta: f64, vertical_delta: f64 },
+  MouseMoved(ScreenPosition),
+  MouseWheelMovedPixels(ScreenDelta),
+  MouseWheelMovedLines { horizontal_delta_lines: f64, vertical_delta_lines: f64 },
   KeyboardModifierChange { modifier: KeyboardModifier, state: ElementState },
   KeyboardInput { button: KeyboardButton, state: ElementState },
   CharacterInput(char),
@@ -81,7 +81,8 @@ impl OsEventSys {
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::CursorMoved { position, .. } => {
-            self.input_event_tx.send(OsInputEvent::MouseMoved(position.into_math()))
+            let screen_position = ScreenPosition::from_physical_scale(position.into_common(), self.inner_size.scale);
+            self.input_event_tx.send(OsInputEvent::MouseMoved(screen_position))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::CursorEntered { .. } => {
@@ -94,12 +95,14 @@ impl OsEventSys {
           }
           WindowEvent::MouseWheel { delta, .. } => {
             match delta {
-              MouseScrollDelta::LineDelta(horizontal_delta, vertical_delta) =>
-                self.input_event_tx.send(OsInputEvent::MouseWheelMovedLines { horizontal_delta: horizontal_delta as f64, vertical_delta: vertical_delta as f64 })
+              MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
+                self.input_event_tx.send(OsInputEvent::MouseWheelMovedLines { horizontal_delta_lines: horizontal_delta_lines as f64, vertical_delta_lines: vertical_delta_lines as f64 })
                   .unwrap_or_else(|_| *control_flow = ControlFlow::Exit),
-              MouseScrollDelta::PixelDelta(WinitPhysicalPosition { x: horizontal_delta, y: vertical_delta }) =>
-                self.input_event_tx.send(OsInputEvent::MouseWheelMovedPixels { horizontal_delta, vertical_delta })
-                  .unwrap_or_else(|_| *control_flow = ControlFlow::Exit),
+              MouseScrollDelta::PixelDelta(WinitPhysicalPosition { x, y }) => {
+                let screen_delta = ScreenDelta::from_physical_scale((x as i64, y as i64), self.inner_size.scale);
+                self.input_event_tx.send(OsInputEvent::MouseWheelMovedPixels(screen_delta))
+                  .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
+              }
             };
           }
           WindowEvent::KeyboardInput { input, .. } => {
@@ -161,7 +164,7 @@ impl OsEventSys {
             *control_flow = ControlFlow::Exit;
           }
           WindowEvent::Resized(inner_size) => {
-            self.inner_size = ScreenSize::from_physical_scale(inner_size.into_math(), self.inner_size.scale);
+            self.inner_size = ScreenSize::from_physical_scale(inner_size.into_common(), self.inner_size.scale);
             self.os_event_tx.send(OsEvent::WindowResized(self.inner_size))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }

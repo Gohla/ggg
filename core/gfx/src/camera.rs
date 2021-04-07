@@ -68,9 +68,9 @@ impl CameraSys {
   /// relative to the center of the screen).
   #[inline]
   pub fn screen_to_view(&self, x: f32, y: f32) -> Vec3 {
-    let (width, height): (f32, f32) = self.viewport.into();
-    let x = 2.0 * x / width - 1.0;
-    let y = 2.0 * y / height - 1.0;
+    let (width, height): (f64, f64) = self.viewport.into();
+    let x = 2.0 * x / width as f32 - 1.0;
+    let y = 2.0 * y / height as f32 - 1.0;
     let vec = Vec3::new(x, y, 0.0);
     Vec3::from_homogeneous_point(self.view_projection_inverse * vec.into_homogeneous_point())
   }
@@ -97,7 +97,9 @@ impl CameraSys {
       *zoom_factor *= 1.0 - input.zoom_delta * (*magnification_speed);
     }
 
-    let (width, height): (f32, f32) = self.viewport.into();
+    let (width, height): (f64, f64) = self.viewport.into();
+    let width = width as f32;
+    let height = height as f32;
 
     // View matrix.
     let view = Mat4::look_at_lh(
@@ -154,7 +156,7 @@ impl From<&RawInput> for CameraInput {
       move_right: input.is_keyboard_button_down(KeyboardButton::D),
       move_down: input.is_keyboard_button_down(KeyboardButton::S),
       move_left: input.is_keyboard_button_down(KeyboardButton::A),
-      zoom_delta: input.mouse_wheel_pixel_delta.vertical as f32 + input.mouse_wheel_line_delta.vertical as f32,
+      zoom_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
     }
   }
 }

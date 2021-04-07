@@ -278,6 +278,9 @@ fn run_loop<A: Application>(
     });
     let gui_frame = GuiFrame { context: gui_context };
 
+    // Show input debugging GUI if enabled.
+    debug_gui.show_input(&gui_frame, &raw_input);
+
     // Let the application process input.
     let input = app.process_input(&gui_frame, raw_input);
 

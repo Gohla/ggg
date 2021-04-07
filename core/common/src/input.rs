@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::screen::{PhysicalDelta, PhysicalPosition};
+use crate::screen::{ScreenDelta, ScreenPosition};
 
 #[derive(Clone, Debug, Default)]
 pub struct RawInput {
@@ -8,9 +8,9 @@ pub struct RawInput {
   pub mouse_buttons_pressed: HashSet<MouseButton>,
   pub mouse_buttons_released: HashSet<MouseButton>,
 
-  pub mouse_position: PhysicalPosition,
-  pub mouse_position_delta: PhysicalDelta,
-  pub mouse_wheel_pixel_delta: MouseWheelDelta,
+  pub mouse_position: ScreenPosition,
+  pub mouse_position_delta: ScreenDelta,
+  pub mouse_wheel_pixel_delta: ScreenDelta,
   pub mouse_wheel_line_delta: MouseWheelDelta,
 
   pub keyboard_modifiers: HashSet<KeyboardModifier>,
@@ -60,8 +60,8 @@ impl RawInput {
     self.mouse_buttons.clear();
     self.mouse_buttons_pressed.clear();
     self.mouse_buttons_released.clear();
-    self.mouse_position_delta = PhysicalDelta::default();
-    self.mouse_wheel_pixel_delta = MouseWheelDelta::default();
+    self.mouse_position_delta = ScreenDelta::default();
+    self.mouse_wheel_pixel_delta = ScreenDelta::default();
     self.mouse_wheel_line_delta = MouseWheelDelta::default();
   }
 
@@ -78,8 +78,8 @@ impl RawInput {
   pub fn clear_deltas(&mut self) {
     self.mouse_buttons_pressed.clear();
     self.mouse_buttons_released.clear();
-    self.mouse_position_delta = PhysicalDelta::default();
-    self.mouse_wheel_pixel_delta = MouseWheelDelta::default();
+    self.mouse_position_delta = ScreenDelta::default();
+    self.mouse_wheel_pixel_delta = ScreenDelta::default();
     self.mouse_wheel_line_delta = MouseWheelDelta::default();
     self.keyboard_modifiers_pressed.clear();
     self.keyboard_modifiers_released.clear();

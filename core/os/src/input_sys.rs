@@ -1,7 +1,7 @@
 use std::sync::mpsc::Receiver;
 
 use common::input::RawInput;
-use common::screen::PhysicalDelta;
+use common::screen::ScreenDelta;
 
 use crate::event_sys::{ElementState, OsInputEvent};
 
@@ -44,13 +44,12 @@ impl OsInputSys {
         OsInputEvent::MouseMoved(position) => {
           input_state.mouse_position = position;
         }
-        OsInputEvent::MouseWheelMovedPixels { horizontal_delta, vertical_delta } => {
-          input_state.mouse_wheel_pixel_delta.horizontal += horizontal_delta;
-          input_state.mouse_wheel_pixel_delta.vertical += vertical_delta;
+        OsInputEvent::MouseWheelMovedPixels(screen_delta) => {
+          input_state.mouse_wheel_pixel_delta += screen_delta;
         }
-        OsInputEvent::MouseWheelMovedLines { horizontal_delta, vertical_delta } => {
-          input_state.mouse_wheel_line_delta.horizontal += horizontal_delta;
-          input_state.mouse_wheel_line_delta.vertical += vertical_delta;
+        OsInputEvent::MouseWheelMovedLines { horizontal_delta_lines, vertical_delta_lines } => {
+          input_state.mouse_wheel_line_delta.horizontal += horizontal_delta_lines;
+          input_state.mouse_wheel_line_delta.vertical += vertical_delta_lines;
         }
         OsInputEvent::KeyboardModifierChange { modifier, state } => {
           match state {
@@ -83,8 +82,8 @@ impl OsInputSys {
     }
 
     input_state.mouse_position_delta = match self.prev_state {
-      Some(ref prev_state) => PhysicalDelta::new(input_state.mouse_position.x - prev_state.mouse_position.x, input_state.mouse_position.y - prev_state.mouse_position.y),
-      None => PhysicalDelta::default(),
+      Some(ref prev_state) => input_state.mouse_position - prev_state.mouse_position,
+      None => ScreenDelta::default(),
     };
 
     self.prev_state = Some(input_state.clone());
