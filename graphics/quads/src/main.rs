@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, ShaderStage, VertexAttribute, VertexBufferLayout};
 
-use app::{Frame, Gfx, Os, Tick, GuiFrame};
+use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
@@ -199,12 +199,10 @@ impl app::Application for Quads {
 
   type Input = Input;
 
-  fn process_input(&mut self, _gui_frame: &GuiFrame, input: RawInput) -> Input {
+  fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
-
-  fn simulate(&mut self, _tick: Tick, _gui_frame: &GuiFrame, _input: &Input) {}
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;

@@ -89,7 +89,6 @@ pub trait Application {
 
   fn process_input(
     &mut self,
-    gui_frame: &GuiFrame,
     input: RawInput,
   ) -> Self::Input;
 
@@ -98,7 +97,6 @@ pub trait Application {
   fn simulate(
     &mut self,
     tick: Tick,
-    gui_frame: &GuiFrame,
     input: &Self::Input,
   ) {}
 
@@ -230,27 +228,37 @@ fn run_loop<A: Application>(
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
   let mut timing_stats = TimingStats::new();
-  let mut recreate_swap_chain = false;
+  let mut resized = false;
+  let mut minimized = false;
 
   'main: loop {
     // Timing
     let frame_time = frame_timer.frame();
     timing_stats.frame(frame_time);
     tick_timer.update_lag(frame_time.delta);
+
     // Process OS events
     for os_event in os_event_rx.try_iter() {
       match os_event {
         OsEvent::TerminateRequested => break 'main,
+        OsEvent::WindowResized(_) => resized = true,
         _ => {}
       }
     }
 
     // Recreate swap chain if needed
-    if recreate_swap_chain {
-      screen_size = os.window.get_inner_size();
-      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, screen_size);
-      recreate_swap_chain = false;
-      app.screen_resize(&os, &gfx, screen_size);
+    if resized {
+      let size = os.window.get_inner_size();
+      if size.is_zero() {
+        resized = false;
+        minimized = true;
+      } else {
+        screen_size = size;
+        gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, screen_size);
+        app.screen_resize(&os, &gfx, screen_size);
+        resized = false;
+        minimized = false;
+      }
     }
 
     // Get raw input
@@ -270,26 +278,32 @@ fn run_loop<A: Application>(
     }
 
     // Create GUI frame
-    let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
-    TopPanel::top("GUI top panel").show(&gui_context, |ui| {
-      egui::menu::bar(ui, |ui| {
-        debug_gui.add_debug_menu(ui);
-      })
-    });
-    let gui_frame = GuiFrame { context: gui_context };
+    let gui_frame = if !minimized {
+      let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+      TopPanel::top("GUI top panel").show(&gui_context, |ui| {
+        egui::menu::bar(ui, |ui| {
+          debug_gui.add_debug_menu(ui);
+        })
+      });
+      Some(GuiFrame { context: gui_context })
+    } else {
+      None
+    };
 
     // Show input debugging GUI if enabled.
-    debug_gui.show_input(&gui_frame, &raw_input);
+    if let Some(ref gui_frame) = gui_frame {
+      debug_gui.show_input(&gui_frame, &raw_input);
+    }
 
     // Let the application process input.
-    let input = app.process_input(&gui_frame, raw_input);
+    let input = app.process_input(raw_input);
 
     // Simulate tick
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
         let count = tick_timer.tick_start();
         let tick = Tick { count, time_target: tick_timer.time_target() };
-        app.simulate(tick, &gui_frame, &input);
+        app.simulate(tick, &input);
         let tick_time = tick_timer.tick_end();
         timing_stats.tick(tick_time);
       }
@@ -297,16 +311,19 @@ fn run_loop<A: Application>(
     let extrapolation = tick_timer.extrapolation();
     timing_stats.tick_lag(tick_timer.accumulated_lag(), extrapolation);
 
+    // Skip rendering if minimized.
+    if minimized { continue; }
+
     // Show timing debugging GUI if enabled.
-    debug_gui.show_timing(&gui_frame, &timing_stats);
+    debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
 
     // Get frame to draw into
     let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
       Ok(frame) => frame,
       Err(e) => {
         match e {
-          SwapChainError::Outdated => recreate_swap_chain = true,
-          SwapChainError::Lost => recreate_swap_chain = true,
+          SwapChainError::Outdated => resized = true,
+          SwapChainError::Lost => resized = true,
           SwapChainError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
           _ => {}
         };
@@ -314,7 +331,7 @@ fn run_loop<A: Application>(
       }
     };
     if swap_chain_frame.suboptimal {
-      recreate_swap_chain = true;
+      resized = true;
     }
 
     // Render
@@ -326,7 +343,7 @@ fn run_loop<A: Application>(
       extrapolation,
       time: frame_time,
     };
-    let additional_command_buffers = app.render(&os, &gfx, frame, &gui_frame, &input);
+    let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
     gui.render(screen_size, &gfx.device, &gfx.queue, &mut encoder, &swap_chain_frame.output);
 
     // Submit command buffers

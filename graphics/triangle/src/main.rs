@@ -68,7 +68,7 @@ impl app::Application for Triangle {
 
   type Input = ();
 
-  fn process_input(&mut self, _gui_frame: &GuiFrame, _raw_input: RawInput) -> () {}
+  fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
   fn render<'a>(&mut self, _os: &Os, _gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut render_pass = RenderPassBuilder::new()

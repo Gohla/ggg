@@ -135,7 +135,7 @@ impl Gui {
 
       // Mouse movement
       let mouse_position = Pos2::new(input.mouse_position.physical.x as f32, input.mouse_position.physical.y as f32);
-      if !input.mouse_position_delta.is_empty() {
+      if !input.mouse_position_delta.is_zero() {
         self.input.events.push(Event::PointerMoved(mouse_position))
       }
 

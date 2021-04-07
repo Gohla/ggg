@@ -23,7 +23,7 @@ impl DebugGui {
     timing_stats: &TimingStats,
   ) {
     if !self.show_timing { return; }
-    Window::new("Timing").show(ctx, |ui| {
+    Window::new("Debug Timing").show(ctx, |ui| {
       CollapsingHeader::new("Time").default_open(true).show(ui, |ui| {
         Grid::new("Grid")
           .striped(true)
@@ -104,7 +104,7 @@ impl DebugGui {
     input: &RawInput,
   ) {
     if !self.show_input { return; }
-    Window::new("Input").show(ctx, |ui| {
+    Window::new("Debug Input").show(ctx, |ui| {
       CollapsingHeader::new("Mouse").default_open(true).show(ui, |ui| {
         Grid::new("Grid")
           .striped(true)

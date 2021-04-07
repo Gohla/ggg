@@ -10,11 +10,16 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 pub struct Scale(f64);
 
 impl Scale {
+  #[inline]
   pub fn new(scale: f64) -> Self {
     debug_assert!(scale.is_sign_positive(), "Scale {} is not positive", scale);
     debug_assert!(scale.is_normal(), "Scale {} is not normal", scale);
     Scale(scale)
   }
+
+
+  #[inline]
+  pub fn is_identity(&self) -> bool { self.0 == 1.0 }
 }
 
 impl Mul<Scale> for f64 {
@@ -111,6 +116,10 @@ impl PhysicalSize {
     let scale = scale.into();
     LogicalSize::new(self.width / scale, self.height / scale)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.width == 0 && self.height == 0 }
 }
 
 impl From<(u64, u64)> for PhysicalSize {
@@ -157,10 +166,10 @@ impl From<PhysicalSize> for [f64; 2] {
 // Logical size: size after scaling. That is, the physical size divided by the scale factor.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[non_exhaustive]
 pub struct LogicalSize {
   pub width: f64,
   pub height: f64,
-  _private: (), // Make construction private, use Self::new.
 }
 
 impl LogicalSize {
@@ -172,7 +181,7 @@ impl LogicalSize {
     debug_assert!(height.is_sign_positive(), "Height {} is not positive", height);
     debug_assert!(height.is_finite(), "Height {} is not finite", height);
     debug_assert!(!height.is_nan(), "Height is NaN");
-    Self { width, height, _private: () }
+    Self { width, height }
   }
 
   #[inline]
@@ -183,6 +192,10 @@ impl LogicalSize {
     let scale = scale.into();
     PhysicalSize::new((self.width * scale).round() as _, (self.height * scale).round() as _)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.width == 0.0 && self.height == 0.0 }
 }
 
 impl From<(f64, f64)> for LogicalSize {
@@ -272,6 +285,10 @@ impl ScreenSize {
     let logical = physical.into_logical(scale);
     Self::new(physical, scale, logical)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
 }
 
 impl From<ScreenSize> for LogicalSize {
@@ -314,6 +331,10 @@ impl PhysicalPosition {
     let scale = scale.into();
     LogicalPosition::new(self.x / scale, self.y / scale)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
 }
 
 impl Add<PhysicalPosition> for PhysicalPosition {
@@ -410,6 +431,10 @@ impl LogicalPosition {
     let scale = scale.into();
     PhysicalPosition::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
 }
 
 impl Add<LogicalPosition> for LogicalPosition {
@@ -513,6 +538,10 @@ impl ScreenPosition {
     let logical = physical.into_logical(Scale::default());
     Self::new(physical, logical)
   }
+
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
 }
 
 impl Add<ScreenPosition> for ScreenPosition {
@@ -578,10 +607,9 @@ impl PhysicalDelta {
     LogicalDelta::new(self.x / scale, self.y / scale)
   }
 
+
   #[inline]
-  pub fn is_empty(&self) -> bool {
-    return self.x == 0 && self.y == 0;
-  }
+  pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
 }
 
 impl Add<PhysicalDelta> for PhysicalDelta {
@@ -660,8 +688,9 @@ impl LogicalDelta {
     PhysicalDelta::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
 
+
   #[inline]
-  pub fn is_empty(&self) -> bool { return self.x == 0.0 && self.y == 0.0 }
+  pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
 }
 
 impl Add<LogicalDelta> for LogicalDelta {
@@ -757,8 +786,9 @@ impl ScreenDelta {
     Self::new(physical, logical)
   }
 
+
   #[inline]
-  pub fn is_empty(&self) -> bool { return self.physical.is_empty() && self.logical.is_empty(); }
+  pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
 }
 
 impl Add<ScreenDelta> for ScreenDelta {
