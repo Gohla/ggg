@@ -218,7 +218,7 @@ impl app::Application for App {
     self.camera_sys.update(&input.camera, frame.time.delta);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
 
-    let mut ui = self.gui.begin_frame(os.window.get_inner_size(), frame.time.elapsed.as_s(), frame.time.delta.as_s());
+    let mut ui = self.gui.begin_frame(frame.screen_size, frame.time.elapsed.as_s(), frame.time.delta.as_s());
     ui.heading("My egui Application");
 
     let mut encoder = gfx.device.create_default_command_encoder();

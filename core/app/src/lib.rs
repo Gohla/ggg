@@ -5,19 +5,16 @@ use dotenv;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::{
-  Adapter, BackendBit, CommandBuffer, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference,
-  PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture,
-};
+use wgpu::{Adapter, BackendBit, CommandBuffer, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture};
 
+use common::input::RawInput;
 use common::prelude::*;
 use common::timing::{Duration, FrameTime, FrameTimer, TickTimer};
 use gfx::swap_chain::GfxSwapChain;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
-use os::input_sys::{OsInputSys};
+use os::input_sys::OsInputSys;
 use os::window::{OsWindow, WindowCreateError};
-use common::input::RawInput;
 
 pub struct Os {
   pub window: OsWindow,
@@ -37,6 +34,7 @@ pub struct Tick {
 }
 
 pub struct Frame<'a> {
+  pub screen_size: ScreenSize,
   pub output_texture: &'a SwapChainTexture,
   pub extrapolation: f64,
   pub time: FrameTime,
@@ -65,7 +63,7 @@ pub trait Application {
     &mut self,
     os: &Os,
     gfx: &Gfx,
-    inner_screen_size: ScreenSize,
+    screen_size: ScreenSize,
   );
 
   fn render<'a>(
@@ -166,13 +164,14 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
     limits: options.graphics_device_limits,
     ..DeviceDescriptor::default()
   }, None).await?;
-  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, os.window.get_inner_size());
+  let screen_size = os.window.get_inner_size();
+  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
   let gfx = Gfx { instance, surface, adapter, device, queue, swap_chain };
 
   thread::Builder::new()
     .name(options.name)
     .spawn(move || {
-      run_loop::<A>(os_event_rx, os_input_sys, os, gfx);
+      run_loop::<A>(os_event_rx, os_input_sys, os, gfx, screen_size);
     })?;
   os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
   Ok(()) // Ignored, but needed to conform to the return type.
@@ -184,6 +183,7 @@ fn run_loop<A: Application>(
   mut os_input_sys: OsInputSys,
   os: Os,
   mut gfx: Gfx,
+  mut screen_size: ScreenSize,
 ) {
   let mut app = A::new(&os, &gfx);
   let mut frame_timer = FrameTimer::new();
@@ -215,10 +215,10 @@ fn run_loop<A: Application>(
     }
     // Recreate swap chain if needed
     if recreate_swap_chain {
-      let inner_screen_size = os.window.get_inner_size();
-      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, inner_screen_size);
+      screen_size = os.window.get_inner_size();
+      gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, screen_size);
       recreate_swap_chain = false;
-      app.screen_resize(&os, &gfx, inner_screen_size);
+      app.screen_resize(&os, &gfx, screen_size);
     }
     // Get frame to draw into
     let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
@@ -238,6 +238,7 @@ fn run_loop<A: Application>(
     }
     // Render
     let frame = Frame {
+      screen_size,
       output_texture: &swap_chain_frame.output,
       extrapolation: tick_timer.extrapolation(),
       time: frame_time,

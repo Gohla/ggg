@@ -29,6 +29,8 @@ impl GfxSwapChain {
     self.descriptor.format
   }
 
+  pub fn get_size(&self) -> (u32, u32) { (self.descriptor.width, self.descriptor.height) }
+
 
   pub fn resize(self, surface: &Surface, adapter: &Adapter, device: &Device, size: ScreenSize) -> GfxSwapChain {
     GfxSwapChain::new(surface, adapter, device, self.descriptor.present_mode, size)

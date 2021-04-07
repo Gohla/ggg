@@ -1,7 +1,8 @@
 use std::mem::size_of;
+use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2, Ui, Id, LayerId, Order};
+use egui::{ClippedMesh, CtxRef, Event, Id, Key, LayerId, Order, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Ui, Vec2};
 use egui::epaint::{Mesh, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
 
@@ -298,16 +299,15 @@ impl Gui {
     #[derive(Debug)]
     struct Draw {
       clip_rect: Rect,
-      index_offset: u32,
-      index_count: u32,
-      vertex_offset: u32,
+      indices: Range<u32>,
+      base_vertex: i32,
     }
     let mut draws = Vec::with_capacity(clipped_meshes.len());
-    for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes { // TODO: use texture id?
+    for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes {
       index_buffer.write_data(queue, index_buffer_offset, indices);
       vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
-      draws.push(Draw { clip_rect: *clip_rect, index_offset: index_offset as u32, index_count: indices.len() as u32, vertex_offset: vertex_offset as u32 });
-      index_offset += indices.len();
+      draws.push(Draw { clip_rect: *clip_rect, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset as i32 });
+      index_offset += indices.len() as u32;
       index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
       vertex_offset += vertices.len();
       vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
@@ -328,7 +328,7 @@ impl Gui {
       let scale_factor = scale_factor as f32;
       let physical_width = screen_size.physical.width;
       let physical_height = screen_size.physical.height;
-      for Draw { clip_rect, index_offset, index_count, vertex_offset } in draws {
+      for Draw { clip_rect, indices, base_vertex } in draws {
         // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
         // Transform clip rect to physical pixels.
         let clip_min_x = scale_factor * clip_rect.min.x;
@@ -356,13 +356,13 @@ impl Gui {
         let width = width.min(physical_width - x);
         let height = height.min(physical_height - y);
 
-        // Skip rendering with zero-sized clip areas
+        // Skip rendering with zero-sized clip areas.
         if width == 0 || height == 0 {
           continue;
         }
 
         render_pass.set_scissor_rect(x, y, width, height);
-        render_pass.draw_indexed(index_offset..index_offset + index_count, vertex_offset as i32, 0..1);
+        render_pass.draw_indexed(indices, base_vertex as i32, 0..1);
       }
       render_pass.pop_debug_group();
     }
@@ -396,7 +396,7 @@ struct Uniform {
 
 impl Uniform {
   pub fn from_screen_size(screen_size: ScreenSize) -> Self {
-    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32] }
+    Self { screen_size: [screen_size.physical.width as f32, screen_size.physical.height as f32] }
   }
 }
 

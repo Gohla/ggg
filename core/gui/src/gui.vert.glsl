@@ -1,16 +1,17 @@
 // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/shader/egui.vert
 #version 450
 
-layout(set = 0, binding = 0) uniform UniformBuffer {
-  vec2 u_screen_size;
+layout(set = 0, binding = 0) uniform Uniform {
+  vec2 uScreenSize;
 };
 
-layout(location = 0) in vec2 a_pos;
-layout(location = 1) in vec2 a_tex_coord;
-layout(location = 2) in uint a_color;
+layout(location = 0) in vec2 inPos;
+layout(location = 1) in vec2 inTex;
+layout(location = 2) in uint inCol;
 
-layout(location = 0) out vec2 v_tex_coord;
-layout(location = 1) out vec4 v_color;
+out gl_PerVertex { vec4 gl_Position; };
+layout(location = 0) out vec2 outTex;
+layout(location = 1) out vec4 outCol;
 
 vec3 linear_from_srgb(vec3 srgb) {
   bvec3 cutoff = lessThan(srgb, vec3(10.31475));
@@ -20,9 +21,9 @@ vec3 linear_from_srgb(vec3 srgb) {
 }
 
 void main() {
-  v_tex_coord = a_tex_coord;
+  gl_Position = vec4(2.0 * inPos.x / uScreenSize.x - 1.0, 1.0 - 2.0 * inPos.y / uScreenSize.y, 0.0, 1.0);
+  outTex = inTex;
   // [u8; 4] SRGB as u32 -> [r, g, b, a]
-  vec4 color = vec4(a_color & 0xFFu, (a_color >> 8) & 0xFFu, (a_color >> 16) & 0xFFu, (a_color >> 24) & 0xFFu);
-  v_color = vec4(linear_from_srgb(color.rgb), color.a / 255.0);
-  gl_Position = vec4(2.0 * a_pos.x / u_screen_size.x - 1.0, 1.0 - 2.0 * a_pos.y / u_screen_size.y, 0.0, 1.0);
+  vec4 color = vec4(inCol & 0xFFu, (inCol >> 8) & 0xFFu, (inCol >> 16) & 0xFFu, (inCol >> 24) & 0xFFu);
+  outCol = vec4(linear_from_srgb(color.rgb), color.a / 255.0);
 }
