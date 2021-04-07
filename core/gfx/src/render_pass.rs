@@ -1,4 +1,4 @@
-use wgpu::{CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, SwapChainTexture, TextureView};
+use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, SwapChainTexture, TextureView};
 
 pub struct RenderPassBuilder<'a, 'b> {
   pub label: Option<&'b str>,
@@ -55,17 +55,32 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   }
 
   /// Ignores the previously set `color_attachments`.
-  pub fn begin_render_pass_for_swap_chain(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
+  pub fn begin_render_pass_for_swap_chain(
+    self,
+    encoder: &'a mut CommandEncoder,
+    swap_chain_texture: &'a SwapChainTexture,
+    ops: Operations<Color>,
+  ) -> RenderPass<'a> {
     encoder.begin_render_pass(&RenderPassDescriptor {
       label: self.label,
       color_attachments: &[
         RenderPassColorAttachmentDescriptor {
           attachment: &swap_chain_texture.view,
           resolve_target: None,
-          ops: Default::default(),
+          ops,
         }
       ],
       depth_stencil_attachment: self.depth_stencil_attachment,
     })
+  }
+
+  /// Ignores the previously set `color_attachments`.
+  pub fn begin_render_pass_for_swap_chain_with_clear(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
+    self.begin_render_pass_for_swap_chain(encoder, swap_chain_texture, Operations::default())
+  }
+
+  /// Ignores the previously set `color_attachments`.
+  pub fn begin_render_pass_for_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
+    self.begin_render_pass_for_swap_chain(encoder, swap_chain_texture, Operations { load: LoadOp::Load, store: true })
   }
 }

@@ -225,7 +225,7 @@ impl app::Application for App {
     {
       let mut render_pass = RenderPassBuilder::new()
         .with_depth_texture(&self.depth_texture.view)
-        .begin_render_pass_for_swap_chain(&mut encoder, &frame.output_texture);
+        .begin_render_pass_for_swap_chain_with_clear(&mut encoder, &frame.output_texture);
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
       render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);

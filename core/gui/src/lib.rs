@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2, Ui};
+use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2, Ui, Id, LayerId, Order};
 use egui::epaint::{Mesh, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
 
@@ -214,7 +214,8 @@ impl Gui {
     elapsed_seconds: f64,
     delta_seconds: f64,
   ) -> egui::Ui {
-    self.input.screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32)));
+    let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
+    self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
     self.input.pixels_per_point = Some(pixels_per_point as f32);
 
@@ -223,7 +224,9 @@ impl Gui {
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
-    Ui::__test()
+    let id = Id::new("GUI");
+    let layer_id = LayerId::new(Order::Middle, id);
+    Ui::new(self.context.clone(), layer_id, id, screen_rect, screen_rect)
     // let wants_keyboard_input = self.context.wants_keyboard_input();
     // let wants_pointer_input = self.context.wants_pointer_input();
   }
@@ -292,6 +295,7 @@ impl Gui {
     let mut index_buffer_offset = 0;
     let mut vertex_offset = 0;
     let mut vertex_buffer_offset = 0;
+    #[derive(Debug)]
     struct Draw {
       clip_rect: Rect,
       index_offset: u32,
@@ -301,19 +305,19 @@ impl Gui {
     let mut draws = Vec::with_capacity(clipped_meshes.len());
     for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes { // TODO: use texture id?
       index_buffer.write_data(queue, index_buffer_offset, indices);
+      vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
+      draws.push(Draw { clip_rect: *clip_rect, index_offset: index_offset as u32, index_count: indices.len() as u32, vertex_offset: vertex_offset as u32 });
       index_offset += indices.len();
       index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
-      vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
       vertex_offset += vertices.len();
       vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
-      draws.push(Draw { clip_rect: *clip_rect, index_offset: index_offset as u32, index_count: indices.len() as u32, vertex_offset: vertex_offset as u32 })
     }
 
     // Render
     {
       let mut render_pass = RenderPassBuilder::new()
         .with_label("GUI render pass")
-        .begin_render_pass_for_swap_chain(encoder, swap_chain_texture);
+        .begin_render_pass_for_swap_chain_with_load(encoder, swap_chain_texture);
       render_pass.push_debug_group("GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
