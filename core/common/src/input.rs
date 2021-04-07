@@ -76,6 +76,8 @@ impl RawInput {
   }
 
   pub fn clear_deltas(&mut self) {
+    self.mouse_buttons_pressed.clear();
+    self.mouse_buttons_released.clear();
     self.mouse_position_delta = PhysicalDelta::default();
     self.mouse_wheel_pixel_delta = MouseWheelDelta::default();
     self.mouse_wheel_line_delta = MouseWheelDelta::default();

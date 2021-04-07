@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedMesh, CtxRef, Event, Id, Key, LayerId, Order, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Ui, Vec2};
+use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2};
 use egui::epaint::{Mesh, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
 
@@ -209,12 +209,16 @@ impl Gui {
     }
   }
 
+  pub fn wants_keyboard_input(&self) -> bool { self.context.wants_keyboard_input() }
+
+  pub fn wants_mouse_input(&self) -> bool { self.context.wants_pointer_input() }
+
   pub fn begin_frame(
     &mut self,
     screen_size: ScreenSize,
     elapsed_seconds: f64,
     delta_seconds: f64,
-  ) -> egui::Ui {
+  ) -> CtxRef {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
     self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
@@ -225,11 +229,7 @@ impl Gui {
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
-    let id = Id::new("GUI");
-    let layer_id = LayerId::new(Order::Middle, id);
-    Ui::new(self.context.clone(), layer_id, id, screen_rect, screen_rect)
-    // let wants_keyboard_input = self.context.wants_keyboard_input();
-    // let wants_pointer_input = self.context.wants_pointer_input();
+    self.context.clone()
   }
 
   pub fn render(
@@ -271,25 +271,33 @@ impl Gui {
     }
 
     // Get vertices to draw.
-    let (_output, shapes) = self.context.end_frame(); // TODO: handle output.
+    let (_output, shapes) = self.context.end_frame();
     let clipped_meshes: Vec<ClippedMesh> = self.context.tessellate(shapes);
 
     // Upload buffers.
     self.uniform_buffer.write_whole_data(queue, &[Uniform::from_screen_size(screen_size)]);
-    let num_indices: usize = clipped_meshes.iter().map(|cm| cm.1.indices.len()).sum();
-    let required_index_buffer_size = (num_indices * size_of::<u32>()) as BufferAddress;
-    let mut index_buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(required_index_buffer_size, device));
-    if index_buffer.size < required_index_buffer_size {
-      index_buffer.destroy();
-      index_buffer = create_index_buffer(required_index_buffer_size, device);
-    }
-    let num_vertices: usize = clipped_meshes.iter().map(|cm| cm.1.vertices.len()).sum();
-    let required_vertex_buffer_size = (num_vertices * size_of::<Vertex>()) as BufferAddress;
-    let mut vertex_buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(required_vertex_buffer_size, device));
-    if vertex_buffer.size < required_vertex_buffer_size {
-      vertex_buffer.destroy();
-      vertex_buffer = create_vertex_buffer(required_index_buffer_size, device);
-    }
+    let index_buffer = {
+      let count: usize = clipped_meshes.iter().map(|cm| cm.1.indices.len()).sum();
+      let size = (count * size_of::<u32>()) as BufferAddress;
+      let mut buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(size, device));
+      if buffer.size < size {
+        buffer.destroy();
+        // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
+        buffer = create_index_buffer(buffer.size.saturating_mul(2).max(size), device);
+      }
+      buffer
+    };
+    let vertex_buffer = {
+      let count: usize = clipped_meshes.iter().map(|cm| cm.1.vertices.len()).sum();
+      let size = (count * size_of::<Vertex>()) as BufferAddress;
+      let mut buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(size, device));
+      if buffer.size < size {
+        buffer.destroy();
+        // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
+        buffer = create_vertex_buffer(buffer.size.saturating_mul(2).max(size), device);
+      }
+      buffer
+    };
 
     // Draw
     let mut index_offset = 0;
