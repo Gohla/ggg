@@ -9,7 +9,6 @@ publish = false
 common = { path = "../../core/common" }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
-gui = { path = "../../core/gui" }
 app = { path = "../../core/app" }
 wgpu = "0.7"
 egui = "0.11"

@@ -3,6 +3,10 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 #[allow(deprecated)]
 use time::precise_time_ns;
 
+use crate::sampler::{EventSampler, ValueSampler};
+
+// Instant
+
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Default, Hash, Debug)]
 pub struct Instant(u64);
 
@@ -18,6 +22,7 @@ impl Instant {
   }
 }
 
+// Duration
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Default, Hash, Debug)]
 pub struct Duration(i64);
@@ -84,6 +89,7 @@ impl Div<isize> for Duration {
   fn div(self, rhs: isize) -> Self::Output { Duration(self.0 / rhs as i64) }
 }
 
+// Timer
 
 pub struct Timer {
   start: Instant,
@@ -111,6 +117,7 @@ impl Timer {
   }
 }
 
+// Frame timer
 
 pub struct FrameTimer {
   timer: Timer,
@@ -135,18 +142,27 @@ impl FrameTimer {
   }
 }
 
+// Tick timer
 
 pub struct TickTimer {
-  tick: u64,
   start: Instant,
   time_target: Duration,
   accumulated_lag: Duration,
+  count: u64,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TickTime {
+  pub time_target: Duration,
+  pub accumulated_lag: Duration,
+  pub delta: Duration,
+  pub count: u64,
 }
 
 impl TickTimer {
   pub fn new(tick_time_target: Duration) -> TickTimer {
     TickTimer {
-      tick: 0,
+      count: 0,
       start: Instant::now(),
       time_target: tick_time_target,
       accumulated_lag: Duration::zero(),
@@ -169,13 +185,19 @@ impl TickTimer {
 
   pub fn tick_start(&mut self) -> u64 {
     self.start = Instant::now();
-    self.tick
+    self.count
   }
 
-  pub fn tick_end(&mut self) -> Duration {
-    self.tick += 1;
+  pub fn tick_end(&mut self) -> TickTime {
     self.accumulated_lag -= self.time_target;
-    self.start.to(Instant::now())
+    let tick_time = TickTime {
+      time_target: self.time_target,
+      accumulated_lag: self.accumulated_lag,
+      delta: self.start.to(Instant::now()),
+      count: self.count
+    };
+    self.count += 1;
+    tick_time
   }
 
 
@@ -191,5 +213,46 @@ impl TickTimer {
     let lag_ns = self.accumulated_lag.as_ns();
     let target_ns = self.time_target.as_ns();
     lag_ns as f64 / target_ns as f64
+  }
+}
+
+// Timing statistic
+
+#[derive(Default)]
+pub struct TimingStats {
+  // Time
+  pub elapsed_time: Duration,
+  // Frame
+  pub frame_count: u64,
+  pub frame_time: ValueSampler<Duration>,
+  // Tick
+  pub tick_count: u64,
+  pub tick_time_target: Duration,
+  pub tick_time: ValueSampler<Duration>,
+  pub tick_rate: EventSampler,
+  pub accumulated_lag: Duration,
+  // Render
+  pub render_extrapolation: f64,
+}
+
+impl TimingStats {
+  pub fn new() -> TimingStats { TimingStats::default() }
+
+  pub fn frame(&mut self, frame_time: FrameTime) {
+    self.elapsed_time = frame_time.elapsed;
+    self.frame_count = frame_time.count;
+    self.frame_time.add(frame_time.delta);
+  }
+
+  pub fn tick(&mut self, tick_time: TickTime) {
+    self.tick_count = tick_time.count;
+    self.tick_time_target = tick_time.time_target;
+    self.tick_time.add(tick_time.delta);
+    self.tick_rate.add(Instant::now())
+  }
+
+  pub fn tick_lag(&mut self, accumulated_lag: Duration, gfx_extrapolation: f64) {
+    self.accumulated_lag = accumulated_lag;
+    self.render_extrapolation = gfx_extrapolation;
   }
 }

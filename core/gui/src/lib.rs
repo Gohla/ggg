@@ -221,11 +221,7 @@ impl Gui {
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
 }
 
-// Creating a GUI frame to build the GUI.
-
-pub struct GuiFrame {
-  pub context: CtxRef,
-}
+// Begin GUI frame, returning the context to start building the GUI.
 
 impl Gui {
   pub fn begin_frame(
@@ -233,7 +229,7 @@ impl Gui {
     screen_size: ScreenSize,
     elapsed_seconds: f64,
     delta_seconds: f64,
-  ) -> GuiFrame {
+  ) -> CtxRef {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
     self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
@@ -244,31 +240,21 @@ impl Gui {
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
-    GuiFrame { context: self.context.clone() }
+    self.context.clone()
   }
 }
 
-impl std::ops::Deref for GuiFrame {
-  type Target = CtxRef;
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.context }
-}
-
-// Rendering
+// Rendering the built GUI.
 
 impl Gui {
   pub fn render(
     &mut self,
-    gui_frame: GuiFrame,
     screen_size: ScreenSize,
     device: &Device,
     queue: &Queue,
     encoder: &mut CommandEncoder,
     swap_chain_texture: &SwapChainTexture,
   ) {
-    // Take ownership of the GUI frame and just drop it to prevent further GUI building this frame.
-    drop(gui_frame);
-
     // Update texture if no texture was created yet, or if the texture has changed.
     let texture = self.context.texture();
     if self.texture_bind_group.is_none() || texture.version != self.previous_texture_version {

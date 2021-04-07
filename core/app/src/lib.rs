@@ -2,22 +2,26 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use dotenv;
+use egui::{CtxRef, TopPanel};
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
 use wgpu::{Adapter, BackendBit, CommandBuffer, CommandEncoder, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture};
 
 use common::input::RawInput;
-use common::timing::{Duration, FrameTime, FrameTimer, TickTimer};
+use common::screen::{LogicalSize, ScreenSize};
+use common::timing::{Duration, FrameTime, FrameTimer, TickTimer, TimingStats};
 use gfx::prelude::*;
 use gfx::swap_chain::GfxSwapChain;
 use gui::Gui;
-pub use gui::GuiFrame;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::OsInputSys;
 use os::window::{OsWindow, WindowCreateError};
-use common::screen::{ScreenSize, LogicalSize};
+
+use crate::debug_gui::DebugGui;
+
+mod debug_gui;
 
 #[derive(Debug)]
 pub struct Os {
@@ -36,7 +40,8 @@ pub struct Gfx {
 
 #[derive(Debug)]
 pub struct Tick {
-  pub fixed_time_step: Duration
+  pub time_target: Duration,
+  pub count: u64,
 }
 
 #[derive(Debug)]
@@ -46,6 +51,16 @@ pub struct Frame<'a> {
   pub encoder: &'a mut CommandEncoder,
   pub extrapolation: f64,
   pub time: FrameTime,
+}
+
+pub struct GuiFrame {
+  pub context: CtxRef,
+}
+
+impl std::ops::Deref for GuiFrame {
+  type Target = CtxRef;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.context }
 }
 
 pub trait Application {
@@ -211,13 +226,16 @@ fn run_loop<A: Application>(
   mut screen_size: ScreenSize,
 ) {
   let mut app = A::new(&os, &gfx);
+  let mut debug_gui = DebugGui::default();
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
+  let mut timing_stats = TimingStats::new();
   let mut recreate_swap_chain = false;
 
   'main: loop {
     // Timing
     let frame_time = frame_timer.frame();
+    timing_stats.frame(frame_time);
     tick_timer.update_lag(frame_time.delta);
     // Process OS events
     for os_event in os_event_rx.try_iter() {
@@ -252,7 +270,13 @@ fn run_loop<A: Application>(
     }
 
     // Create GUI frame
-    let gui_frame = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+    let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+    TopPanel::top("GUI top panel").show(&gui_context, |ui| {
+      egui::menu::bar(ui, |ui| {
+        debug_gui.add_debug_menu(ui);
+      })
+    });
+    let gui_frame = GuiFrame { context: gui_context };
 
     // Let the application process input.
     let input = app.process_input(&gui_frame, raw_input);
@@ -260,12 +284,18 @@ fn run_loop<A: Application>(
     // Simulate tick
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
-        tick_timer.tick_start();
-        let tick = Tick { fixed_time_step: tick_timer.time_target() };
+        let count = tick_timer.tick_start();
+        let tick = Tick { count, time_target: tick_timer.time_target() };
         app.simulate(tick, &gui_frame, &input);
-        tick_timer.tick_end();
+        let tick_time = tick_timer.tick_end();
+        timing_stats.tick(tick_time);
       }
     }
+    let extrapolation = tick_timer.extrapolation();
+    timing_stats.tick_lag(tick_timer.accumulated_lag(), extrapolation);
+
+    // Show timing debugging GUI if enabled.
+    debug_gui.show_timing(&gui_frame, &timing_stats);
 
     // Get frame to draw into
     let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
@@ -290,11 +320,11 @@ fn run_loop<A: Application>(
       screen_size,
       output_texture: &swap_chain_frame.output,
       encoder: &mut encoder,
-      extrapolation: tick_timer.extrapolation(),
+      extrapolation,
       time: frame_time,
     };
     let additional_command_buffers = app.render(&os, &gfx, frame, &gui_frame, &input);
-    gui.render(gui_frame, screen_size, &gfx.device, &gfx.queue, &mut encoder, &swap_chain_frame.output);
+    gui.render(screen_size, &gfx.device, &gfx.queue, &mut encoder, &swap_chain_frame.output);
 
     // Submit command buffers
     let command_buffer = encoder.finish();

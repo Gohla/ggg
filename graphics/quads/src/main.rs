@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, ShaderStage, VertexAttribute, VertexBufferLayout};
 
-use app::{Frame, Gfx, Os, Tick};
+use app::{Frame, Gfx, Os, Tick, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
@@ -15,7 +15,6 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use gui::GuiFrame;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

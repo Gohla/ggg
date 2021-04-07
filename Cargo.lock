@@ -65,6 +65,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "dotenv",
+ "egui",
  "futures",
  "gfx",
  "gui",
@@ -1619,7 +1620,6 @@ dependencies = [
  "egui",
  "gfx",
  "gfxc",
- "gui",
  "image",
  "os",
  "tracing",
