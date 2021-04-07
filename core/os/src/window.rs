@@ -9,6 +9,7 @@ use common::screen::{LogicalSize, ScreenSize};
 use crate::context::OsContext;
 use crate::screen_ext::*;
 
+#[derive(Debug)]
 pub struct OsWindow {
   window: Window,
 }

@@ -114,39 +114,42 @@ impl OsEventSys {
           }
           WindowEvent::ModifiersChanged(modifiers) => {
             let pressed = modifiers - self.modifiers;
+            let state = ElementState::Pressed;
             if pressed.contains(ModifiersState::SHIFT) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state: ElementState::Pressed })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if pressed.contains(ModifiersState::CTRL) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state: ElementState::Pressed })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if pressed.contains(ModifiersState::ALT) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state: ElementState::Pressed })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if pressed.contains(ModifiersState::LOGO) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state: ElementState::Pressed })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             let released = self.modifiers - modifiers;
+            let state = ElementState::Released;
             if released.contains(ModifiersState::SHIFT) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state: ElementState::Released })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if released.contains(ModifiersState::CTRL) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state: ElementState::Released })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if released.contains(ModifiersState::ALT) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state: ElementState::Released })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
             if released.contains(ModifiersState::LOGO) {
-              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state: ElementState::Released })
+              self.input_event_tx.send(OsInputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
             }
+            self.modifiers = modifiers;
           }
           WindowEvent::ReceivedCharacter(c) => {
             self.input_event_tx.send(OsInputEvent::CharacterInput(c))

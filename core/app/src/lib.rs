@@ -5,21 +5,26 @@ use dotenv;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::{Adapter, BackendBit, CommandBuffer, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture};
+use wgpu::{Adapter, BackendBit, CommandBuffer, CommandEncoder, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture};
 
 use common::input::RawInput;
-use common::prelude::*;
 use common::timing::{Duration, FrameTime, FrameTimer, TickTimer};
+use gfx::prelude::*;
 use gfx::swap_chain::GfxSwapChain;
+use gui::Gui;
+pub use gui::GuiFrame;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::OsInputSys;
 use os::window::{OsWindow, WindowCreateError};
+use common::screen::{ScreenSize, LogicalSize};
 
+#[derive(Debug)]
 pub struct Os {
   pub window: OsWindow,
 }
 
+#[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
   pub surface: Surface,
@@ -29,13 +34,16 @@ pub struct Gfx {
   pub swap_chain: GfxSwapChain,
 }
 
+#[derive(Debug)]
 pub struct Tick {
   pub fixed_time_step: Duration
 }
 
+#[derive(Debug)]
 pub struct Frame<'a> {
   pub screen_size: ScreenSize,
   pub output_texture: &'a SwapChainTexture,
+  pub encoder: &'a mut CommandEncoder,
   pub extrapolation: f64,
   pub time: FrameTime,
 }
@@ -46,33 +54,47 @@ pub trait Application {
     gfx: &Gfx,
   ) -> Self;
 
-  type Input;
 
-  fn process_input(
-    &mut self,
-    input: RawInput,
-  ) -> Self::Input;
-
-  fn simulate(
-    &mut self,
-    tick: Tick,
-    input: &Self::Input,
-  );
-
+  #[allow(unused_variables)]
   fn screen_resize(
     &mut self,
     os: &Os,
     gfx: &Gfx,
     screen_size: ScreenSize,
-  );
+  ) {}
+
+
+  /// Return true to prevent the GUI from receiving keyboard events.
+  fn is_capturing_keyboard(&self) -> bool { return false; }
+
+  /// Return true to prevent the GUI from receiving mouse events.
+  fn is_capturing_mouse(&self) -> bool { return false; }
+
+  type Input;
+
+  fn process_input(
+    &mut self,
+    gui_frame: &GuiFrame,
+    input: RawInput,
+  ) -> Self::Input;
+
+
+  #[allow(unused_variables)]
+  fn simulate(
+    &mut self,
+    tick: Tick,
+    gui_frame: &GuiFrame,
+    input: &Self::Input,
+  ) {}
 
   fn render<'a>(
     &mut self,
     os: &Os,
     gfx: &Gfx,
     frame: Frame<'a>,
+    gui_frame: &GuiFrame,
     input: &Self::Input,
-  ) -> Box<dyn Iterator<Item=CommandBuffer>>;
+  ) -> Box<dyn Iterator<Item=CommandBuffer>>; // Can return additional command buffers.
 }
 
 
@@ -166,12 +188,13 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
   }, None).await?;
   let screen_size = os.window.get_inner_size();
   let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
+  let gui = Gui::new(&device, swap_chain.get_texture_format());
   let gfx = Gfx { instance, surface, adapter, device, queue, swap_chain };
 
   thread::Builder::new()
     .name(options.name)
     .spawn(move || {
-      run_loop::<A>(os_event_rx, os_input_sys, os, gfx, screen_size);
+      run_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size);
     })?;
   os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
   Ok(()) // Ignored, but needed to conform to the return type.
@@ -183,6 +206,7 @@ fn run_loop<A: Application>(
   mut os_input_sys: OsInputSys,
   os: Os,
   mut gfx: Gfx,
+  mut gui: Gui,
   mut screen_size: ScreenSize,
 ) {
   let mut app = A::new(&os, &gfx);
@@ -201,18 +225,7 @@ fn run_loop<A: Application>(
         _ => {}
       }
     }
-    // Process input
-    let raw_input = os_input_sys.update();
-    let input = app.process_input(raw_input);
-    // Simulate tick
-    if tick_timer.should_tick() {
-      while tick_timer.should_tick() { // Run simulation.
-        tick_timer.tick_start();
-        let tick = Tick { fixed_time_step: tick_timer.time_target() };
-        app.simulate(tick, &input);
-        tick_timer.tick_end();
-      }
-    }
+
     // Recreate swap chain if needed
     if recreate_swap_chain {
       screen_size = os.window.get_inner_size();
@@ -220,6 +233,39 @@ fn run_loop<A: Application>(
       recreate_swap_chain = false;
       app.screen_resize(&os, &gfx, screen_size);
     }
+
+    // Get raw input
+    let mut raw_input = os_input_sys.update();
+
+    // Let the GUI process input, letting the application prevent processing keyboard or mouse events if captured.
+    let gui_process_keyboard_events = !app.is_capturing_keyboard();
+    let gui_process_mouse_events = !app.is_capturing_mouse();
+    gui.process_input(&raw_input, gui_process_keyboard_events, gui_process_mouse_events);
+
+    // Then let the GUI prevent the application from processing keyboard or mouse events if captured.
+    if gui_process_keyboard_events && gui.is_capturing_keyboard() {
+      raw_input.remove_keyboard_input();
+    }
+    if gui_process_mouse_events && gui.is_capturing_mouse() {
+      raw_input.remove_mouse_input();
+    }
+
+    // Create GUI frame
+    let gui_frame = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+
+    // Let the application process input.
+    let input = app.process_input(&gui_frame, raw_input);
+
+    // Simulate tick
+    if tick_timer.should_tick() {
+      while tick_timer.should_tick() { // Run simulation.
+        tick_timer.tick_start();
+        let tick = Tick { fixed_time_step: tick_timer.time_target() };
+        app.simulate(tick, &gui_frame, &input);
+        tick_timer.tick_end();
+      }
+    }
+
     // Get frame to draw into
     let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
       Ok(frame) => frame,
@@ -236,15 +282,21 @@ fn run_loop<A: Application>(
     if swap_chain_frame.suboptimal {
       recreate_swap_chain = true;
     }
+
     // Render
+    let mut encoder = gfx.device.create_default_command_encoder();
     let frame = Frame {
       screen_size,
       output_texture: &swap_chain_frame.output,
+      encoder: &mut encoder,
       extrapolation: tick_timer.extrapolation(),
       time: frame_time,
     };
-    let command_buffers = app.render(&os, &gfx, frame, &input);
+    let additional_command_buffers = app.render(&os, &gfx, frame, &gui_frame, &input);
+    gui.render(gui_frame, screen_size, &gfx.device, &gfx.queue, &mut encoder, &swap_chain_frame.output);
+
     // Submit command buffers
-    gfx.queue.submit(command_buffers);
+    let command_buffer = encoder.finish();
+    gfx.queue.submit(std::iter::once(command_buffer).chain(additional_command_buffers));
   }
 }

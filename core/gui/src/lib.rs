@@ -32,6 +32,8 @@ pub struct Gui {
   render_pipeline: RenderPipeline,
 }
 
+// Creation
+
 impl Gui {
   pub fn new(device: &Device, swap_chain_texture_format: TextureFormat) -> Self {
     let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.vert.spv"));
@@ -101,124 +103,137 @@ impl Gui {
       render_pipeline,
     }
   }
+}
 
-  pub fn process_input(&mut self, input: &RawInput) {
-    // Mouse wheel delta
-    self.input.scroll_delta = Vec2::new( // TODO: properly handle line to pixel conversion?
-                                         (input.mouse_wheel_pixel_delta.horizontal + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
-                                         (input.mouse_wheel_pixel_delta.vertical + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
-    );
+// Input processing.
 
-    // Keyboard modifiers
-    if input.is_keyboard_modifier_down(KeyboardModifier::Shift) {
-      self.input.modifiers.shift = true;
-    }
-    if input.is_keyboard_modifier_down(KeyboardModifier::Control) {
-      self.input.modifiers.ctrl = true;
-      #[cfg(not(target_os = "macos"))] { self.input.modifiers.command = true; }
-    }
-    if input.is_keyboard_modifier_down(KeyboardModifier::Alternate) {
-      self.input.modifiers.alt = true;
-    }
-    #[cfg(target_os = "macos")]
-    if input.is_keyboard_modifier_down(KeyboardModifier::Meta) {
-      self.input.modifiers.mac_cmd = true;
-      self.input.modifiers.command = true;
+impl Gui {
+  pub fn process_input(&mut self, input: &RawInput, process_keyboard_input: bool, process_mouse_input: bool) {
+    if process_keyboard_input {
+      // Keyboard modifiers
+      self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
+      let is_control_down = input.is_keyboard_modifier_down(KeyboardModifier::Control);
+      self.input.modifiers.ctrl = is_control_down;
+      #[cfg(not(target_os = "macos"))] {
+        self.input.modifiers.command = is_control_down;
+      }
+      self.input.modifiers.alt = input.is_keyboard_modifier_down(KeyboardModifier::Alternate);
+      #[cfg(target_os = "macos")] {
+        let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Meta);
+        self.input.modifiers.mac_cmd = is_meta_down;
+        self.input.modifiers.command = is_meta_down;
+      }
     }
     let modifiers = self.input.modifiers;
 
-    // Mouse movement
-    let mouse_position = Pos2::new(input.mouse_position.x as f32, input.mouse_position.y as f32);
-    if !input.mouse_position_delta.is_empty() {
-      self.input.events.push(Event::PointerMoved(mouse_position))
-    }
+    if process_mouse_input {
+      // Mouse wheel delta // TODO: properly handle line to pixel conversion?
+      self.input.scroll_delta = Vec2::new(
+        (input.mouse_wheel_pixel_delta.horizontal + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
+        (input.mouse_wheel_pixel_delta.vertical + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
+      );
 
-    // Mouse buttons
-    fn convert_mouse_button(mouse_button: MouseButton) -> Option<PointerButton> {
-      match mouse_button {
-        MouseButton::Left => Some(PointerButton::Primary),
-        MouseButton::Right => Some(PointerButton::Secondary),
-        MouseButton::Middle => Some(PointerButton::Middle),
-        MouseButton::Other(_) => None
+      // Mouse movement
+      let mouse_position = Pos2::new(input.mouse_position.x as f32, input.mouse_position.y as f32);
+      if !input.mouse_position_delta.is_empty() {
+        self.input.events.push(Event::PointerMoved(mouse_position))
       }
-    }
-    for button in &input.mouse_buttons_pressed {
-      if let Some(button) = convert_mouse_button(*button) {
-        self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: true, modifiers })
-      }
-    }
-    for button in &input.mouse_buttons_released {
-      if let Some(button) = convert_mouse_button(*button) {
-        self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: false, modifiers })
-      }
-    }
 
-    // Keyboard buttons
-    // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L262-L292
-    fn convert_keyboard_button(button: KeyboardButton) -> Option<Key> {
-      use KeyboardButton::*;
-      Some(match button {
-        Escape => Key::Escape,
-        Insert => Key::Insert,
-        Home => Key::Home,
-        Delete => Key::Delete,
-        End => Key::End,
-        PageDown => Key::PageDown,
-        PageUp => Key::PageUp,
-        Left => Key::ArrowLeft,
-        Up => Key::ArrowUp,
-        Right => Key::ArrowRight,
-        Down => Key::ArrowDown,
-        Back => Key::Backspace,
-        Return => Key::Enter,
-        Tab => Key::Tab,
-        Space => Key::Space,
-
-        A => Key::A,
-        K => Key::K,
-        U => Key::U,
-        W => Key::W,
-        Z => Key::Z,
-
-        _ => {
-          return None;
+      // Mouse buttons
+      fn convert_mouse_button(mouse_button: MouseButton) -> Option<PointerButton> {
+        match mouse_button {
+          MouseButton::Left => Some(PointerButton::Primary),
+          MouseButton::Right => Some(PointerButton::Secondary),
+          MouseButton::Middle => Some(PointerButton::Middle),
+          MouseButton::Other(_) => None
         }
-      })
-    }
-    for button in &input.keyboard_buttons_pressed {
-      if let Some(key) = convert_keyboard_button(*button) {
-        self.input.events.push(Event::Key { key, pressed: true, modifiers })
       }
-    }
-    for button in &input.keyboard_buttons_released {
-      if let Some(key) = convert_keyboard_button(*button) {
-        self.input.events.push(Event::Key { key, pressed: false, modifiers })
+      for button in &input.mouse_buttons_pressed {
+        if let Some(button) = convert_mouse_button(*button) {
+          self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: true, modifiers })
+        }
+      }
+      for button in &input.mouse_buttons_released {
+        if let Some(button) = convert_mouse_button(*button) {
+          self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: false, modifiers })
+        }
       }
     }
 
-    // Characters
-    for character in &input.characters_pressed {
-      let character = *character;
-      // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L312-L320
-      let is_in_private_use_area = '\u{e000}' <= character && character <= '\u{f8ff}'
-        || '\u{f0000}' <= character && character <= '\u{ffffd}'
-        || '\u{100000}' <= character && character <= '\u{10fffd}';
-      if !is_in_private_use_area && !character.is_ascii_control() {
-        self.input.events.push(Event::Text(character.to_string()))
+    if process_keyboard_input {
+      // Keyboard buttons
+      // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L262-L292
+      fn convert_keyboard_button(button: KeyboardButton) -> Option<Key> {
+        use KeyboardButton::*;
+        Some(match button {
+          Escape => Key::Escape,
+          Insert => Key::Insert,
+          Home => Key::Home,
+          Delete => Key::Delete,
+          End => Key::End,
+          PageDown => Key::PageDown,
+          PageUp => Key::PageUp,
+          Left => Key::ArrowLeft,
+          Up => Key::ArrowUp,
+          Right => Key::ArrowRight,
+          Down => Key::ArrowDown,
+          Back => Key::Backspace,
+          Return => Key::Enter,
+          Tab => Key::Tab,
+          Space => Key::Space,
+
+          A => Key::A,
+          K => Key::K,
+          U => Key::U,
+          W => Key::W,
+          Z => Key::Z,
+
+          _ => { return None; }
+        })
+      }
+      for button in &input.keyboard_buttons_pressed {
+        if let Some(key) = convert_keyboard_button(*button) {
+          self.input.events.push(Event::Key { key, pressed: true, modifiers })
+        }
+      }
+      for button in &input.keyboard_buttons_released {
+        if let Some(key) = convert_keyboard_button(*button) {
+          self.input.events.push(Event::Key { key, pressed: false, modifiers })
+        }
+      }
+
+      // Characters
+      for character in &input.characters_pressed {
+        let character = *character;
+        // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L312-L320
+        let is_in_private_use_area = '\u{e000}' <= character && character <= '\u{f8ff}'
+          || '\u{f0000}' <= character && character <= '\u{ffffd}'
+          || '\u{100000}' <= character && character <= '\u{10fffd}';
+        if !is_in_private_use_area && !character.is_ascii_control() {
+          self.input.events.push(Event::Text(character.to_string()))
+        }
       }
     }
   }
 
-  pub fn wants_keyboard_input(&self) -> bool { self.context.wants_keyboard_input() }
+  pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
 
-  pub fn wants_mouse_input(&self) -> bool { self.context.wants_pointer_input() }
+  pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
+}
 
+// Creating a GUI frame to build the GUI.
+
+pub struct GuiFrame {
+  pub context: CtxRef,
+}
+
+impl Gui {
   pub fn begin_frame(
     &mut self,
     screen_size: ScreenSize,
     elapsed_seconds: f64,
     delta_seconds: f64,
-  ) -> CtxRef {
+  ) -> GuiFrame {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
     self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
@@ -229,17 +244,31 @@ impl Gui {
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
-    self.context.clone()
+    GuiFrame { context: self.context.clone() }
   }
+}
 
+impl std::ops::Deref for GuiFrame {
+  type Target = CtxRef;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.context }
+}
+
+// Rendering
+
+impl Gui {
   pub fn render(
     &mut self,
+    gui_frame: GuiFrame,
     screen_size: ScreenSize,
     device: &Device,
     queue: &Queue,
     encoder: &mut CommandEncoder,
     swap_chain_texture: &SwapChainTexture,
   ) {
+    // Take ownership of the GUI frame and just drop it to prevent further GUI building this frame.
+    drop(gui_frame);
+
     // Update texture if no texture was created yet, or if the texture has changed.
     let texture = self.context.texture();
     if self.texture_bind_group.is_none() || texture.version != self.previous_texture_version {
@@ -259,8 +288,7 @@ impl Gui {
         .with_sampled_usage()
         .with_texture_label("GUI texture")
         .with_texture_view_label("GUI texture view")
-        .build(device)
-        ;
+        .build(device);
       texture.write_rgba_texture_data(queue, pixels.as_slice());
       // Create texture bind group.
       let texture_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
@@ -274,8 +302,7 @@ impl Gui {
     let (_output, shapes) = self.context.end_frame();
     let clipped_meshes: Vec<ClippedMesh> = self.context.tessellate(shapes);
 
-    // Upload buffers.
-    self.uniform_buffer.write_whole_data(queue, &[Uniform::from_screen_size(screen_size)]);
+    // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
     let index_buffer = {
       let count: usize = clipped_meshes.iter().map(|cm| cm.1.indices.len()).sum();
       let size = (count * size_of::<u32>()) as BufferAddress;
@@ -299,17 +326,14 @@ impl Gui {
       buffer
     };
 
-    // Draw
+    // Write to buffers and create draw list.
+    self.uniform_buffer.write_whole_data(queue, &[Uniform::from_screen_size(screen_size)]);
     let mut index_offset = 0;
     let mut index_buffer_offset = 0;
     let mut vertex_offset = 0;
     let mut vertex_buffer_offset = 0;
     #[derive(Debug)]
-    struct Draw {
-      clip_rect: Rect,
-      indices: Range<u32>,
-      base_vertex: i32,
-    }
+    struct Draw { clip_rect: Rect, indices: Range<u32>, base_vertex: i32 }
     let mut draws = Vec::with_capacity(clipped_meshes.len());
     for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes {
       index_buffer.write_data(queue, index_buffer_offset, indices);
@@ -375,11 +399,15 @@ impl Gui {
       render_pass.pop_debug_group();
     }
 
+    // Store index and vertex buffers (outside of render pass because it held a reference to these buffers).
     self.index_buffer = Some(index_buffer);
     self.vertex_buffer = Some(vertex_buffer);
   }
 }
 
+// Utilities
+
+#[inline]
 fn create_index_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
   BufferBuilder::new()
     .with_index_usage()
@@ -388,6 +416,7 @@ fn create_index_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
     .build(device)
 }
 
+#[inline]
 fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
   BufferBuilder::new()
     .with_vertex_usage()
@@ -403,12 +432,14 @@ struct Uniform {
 }
 
 impl Uniform {
+  #[inline]
   pub fn from_screen_size(screen_size: ScreenSize) -> Self {
     Self { screen_size: [screen_size.physical.width as f32, screen_size.physical.height as f32] }
   }
 }
 
 // Needed since we can't use bytemuck for external types.
+#[inline]
 fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
   let len = slice.len() * std::mem::size_of::<T>();
   let ptr = slice.as_ptr() as *const u8;

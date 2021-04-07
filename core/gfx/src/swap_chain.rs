@@ -2,6 +2,7 @@ use wgpu::{Adapter, Device, PresentMode, Surface, SwapChain, SwapChainDescriptor
 
 use common::screen::ScreenSize;
 
+#[derive(Debug)]
 pub struct GfxSwapChain {
   inner: SwapChain,
   descriptor: SwapChainDescriptor,

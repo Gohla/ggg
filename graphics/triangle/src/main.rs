@@ -4,11 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
 use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, VertexAttribute, VertexBufferLayout};
 
-use app::{Frame, Gfx, Os, Tick};
+use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
-use common::prelude::ScreenSize;
 use gfx::buffer::BufferBuilder;
-use gfx::command::DeviceCommandEncoderEx;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 
@@ -70,23 +68,16 @@ impl app::Application for App {
 
   type Input = ();
 
-  fn process_input(&mut self, _raw_input: RawInput) -> () {}
+  fn process_input(&mut self, _gui_frame: &GuiFrame, _raw_input: RawInput) -> () {}
 
-  fn simulate(&mut self, _tick: Tick, _input: &()) {}
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, _inner_screen_size: ScreenSize) {}
-
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    let mut encoder = gfx.device.create_default_command_encoder();
-    {
-      let mut render_pass = RenderPassBuilder::new()
-        .with_label("Triangle render pass")
-        .begin_render_pass_for_swap_chain_with_clear(&mut encoder, &frame.output_texture);
-      render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-      render_pass.draw(0..VERTICES.len() as u32, 0..1);
-    }
-    Box::new(std::iter::once(encoder.finish()))
+  fn render<'a>(&mut self, _os: &Os, _gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    let mut render_pass = RenderPassBuilder::new()
+      .with_label("Triangle render pass")
+      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+    render_pass.set_pipeline(&self.render_pipeline);
+    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    render_pass.draw(0..VERTICES.len() as u32, 0..1);
+    Box::new(std::iter::empty())
   }
 }
 

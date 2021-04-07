@@ -6,7 +6,7 @@ use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, Index
 
 use app::{Frame, Gfx, Os, Tick};
 use common::input::RawInput;
-use common::prelude::ScreenSize;
+use common::screen::ScreenSize;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
@@ -15,7 +15,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use gui::Gui;
+use gui::GuiFrame;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -94,8 +94,6 @@ pub struct App {
   vertex_buffer: Buffer,
   index_buffer: Buffer,
   instance_buffer: Buffer,
-
-  gui: Gui,
 }
 
 pub struct Input {
@@ -172,8 +170,6 @@ impl app::Application for App {
       .buffer
       ;
 
-    let gui = Gui::new(&gfx.device, gfx.swap_chain.get_texture_format());
-
     Self {
       camera_sys,
 
@@ -193,52 +189,43 @@ impl app::Application for App {
       vertex_buffer,
       index_buffer,
       instance_buffer,
-
-      gui,
     }
   }
 
   type Input = Input;
 
-  fn process_input(&mut self, input: RawInput) -> Input {
+  fn process_input(&mut self, _gui_frame: &GuiFrame, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
-    self.gui.process_input(&input);
     Input { camera }
   }
 
-  fn simulate(&mut self, _tick: Tick, _input: &Input) {}
+  fn simulate(&mut self, _tick: Tick, _gui_frame: &GuiFrame, _input: &Input) {}
 
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, inner_screen_size: ScreenSize) {
-    let viewport = inner_screen_size.physical;
+  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
+    let viewport = screen_size.physical;
     self.camera_sys.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
-  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, frame: Frame<'a>, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
 
-    let gui_ctx = self.gui.begin_frame(frame.screen_size, frame.time.elapsed.as_s(), frame.time.delta.as_s());
-    egui::Window::new("Quads").show(&gui_ctx, |ui| {
+    egui::Window::new("Quads").show(&gui_frame, |ui| {
       ui.label("Hello, world!");
     });
 
-    let mut encoder = gfx.device.create_default_command_encoder();
-    {
-      let mut render_pass = RenderPassBuilder::new()
-        .with_depth_texture(&self.depth_texture.view)
-        .begin_render_pass_for_swap_chain_with_clear(&mut encoder, &frame.output_texture);
-      render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-      render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
-      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
-      render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-      render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-      render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
-    }
-    self.gui.render(os.window.get_inner_size(), &gfx.device, &gfx.queue, &mut encoder, &frame.output_texture);
-
-    Box::new(std::iter::once(encoder.finish()))
+    let mut render_pass = RenderPassBuilder::new()
+      .with_depth_texture(&self.depth_texture.view)
+      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+    render_pass.set_pipeline(&self.render_pipeline);
+    render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+    render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
+    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+    render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
+    Box::new(std::iter::empty())
   }
 }
 

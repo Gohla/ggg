@@ -67,6 +67,7 @@ dependencies = [
  "dotenv",
  "futures",
  "gfx",
+ "gui",
  "os",
  "raw-window-handle",
  "thiserror",
