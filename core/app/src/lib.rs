@@ -2,7 +2,7 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use dotenv;
-use egui::{CtxRef, TopPanel};
+use egui::{CtxRef, TopPanel, Ui};
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
@@ -63,20 +63,12 @@ impl std::ops::Deref for GuiFrame {
   fn deref(&self) -> &Self::Target { &self.context }
 }
 
+#[allow(unused_variables)]
 pub trait Application {
-  fn new(
-    os: &Os,
-    gfx: &Gfx,
-  ) -> Self;
+  fn new(os: &Os, gfx: &Gfx) -> Self;
 
 
-  #[allow(unused_variables)]
-  fn screen_resize(
-    &mut self,
-    os: &Os,
-    gfx: &Gfx,
-    screen_size: ScreenSize,
-  ) {}
+  fn screen_resize(&mut self, os: &Os, gfx: &Gfx, screen_size: ScreenSize) {}
 
 
   /// Return true to prevent the GUI from receiving keyboard events.
@@ -87,27 +79,17 @@ pub trait Application {
 
   type Input;
 
-  fn process_input(
-    &mut self,
-    input: RawInput,
-  ) -> Self::Input;
+  fn process_input(&mut self, input: RawInput) -> Self::Input;
 
 
-  #[allow(unused_variables)]
-  fn simulate(
-    &mut self,
-    tick: Tick,
-    input: &Self::Input,
-  ) {}
+  fn add_to_debug_menu(&mut self, ui: &mut Ui) {}
+  fn add_to_menu(&mut self, ui: &mut Ui) {}
 
-  fn render<'a>(
-    &mut self,
-    os: &Os,
-    gfx: &Gfx,
-    frame: Frame<'a>,
-    gui_frame: &GuiFrame,
-    input: &Self::Input,
-  ) -> Box<dyn Iterator<Item=CommandBuffer>>; // Can return additional command buffers.
+
+  fn simulate(&mut self, tick: Tick, input: &Self::Input) {}
+
+  /// Can return additional command buffers.
+  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
 
@@ -281,8 +263,9 @@ fn run_loop<A: Application>(
     let gui_frame = if !minimized {
       let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
       TopPanel::top("GUI top panel").show(&gui_context, |ui| {
+        app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
-          debug_gui.add_debug_menu(ui);
+          debug_gui.add_debug_menu(ui, |ui| app.add_to_debug_menu(ui));
         })
       });
       Some(GuiFrame { context: gui_context })

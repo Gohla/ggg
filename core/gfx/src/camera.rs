@@ -1,9 +1,11 @@
+use egui::{CollapsingHeader, CtxRef, Grid};
 use ultraviolet::{Mat4, Vec2, Vec3};
 use ultraviolet::projection;
 
 use common::input::{KeyboardButton, RawInput};
 use common::screen::PhysicalSize;
 use common::timing::Duration;
+use gui_widget::*;
 
 #[derive(Debug)]
 pub struct CameraSys {
@@ -11,6 +13,7 @@ pub struct CameraSys {
   pub projection: Projection,
   pub viewport: PhysicalSize,
   pub panning_speed: f32,
+  pub show_debug_gui: bool,
 
   view_projection: Mat4,
   view_projection_inverse: Mat4,
@@ -45,6 +48,7 @@ impl CameraSys {
       projection,
       viewport,
       panning_speed,
+      show_debug_gui: false,
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
       last_mouse_pos: None,
@@ -87,6 +91,7 @@ impl CameraSys {
     &mut self,
     input: &CameraInput,
     frame_delta: Duration,
+    gui_context: &CtxRef,
   ) {
     let panning_speed = self.panning_speed * frame_delta.as_s() as f32;
     if input.move_up { self.position.y += panning_speed };
@@ -102,11 +107,10 @@ impl CameraSys {
     let height = height as f32;
 
     // View matrix.
-    let view = Mat4::look_at_lh(
-      Vec3::new(self.position.x, self.position.y, self.position.z),
-      Vec3::new(self.position.x, self.position.y, self.position.z - 1.0),
-      Vec3::unit_y(),
-    );
+    let eye = Vec3::new(self.position.x, self.position.y, self.position.z);
+    let at = Vec3::new(self.position.x, self.position.y, self.position.z - 1.0);
+    let up = Vec3::unit_y();
+    let view = Mat4::look_at_lh(eye, at, up);
 
     // Projection matrix
     let aspect_ratio = width / height;
@@ -126,6 +130,48 @@ impl CameraSys {
     let view_projection = projection * view;
     self.view_projection = view_projection;
     self.view_projection_inverse = view_projection.inversed();
+
+    if !self.show_debug_gui { return; }
+
+    gui_context.window("Debug Camera", |ui| {
+      ui.collapsing_open("Position", |ui| {
+        ui.grid("Grid", |ui| {
+          ui.label("Movement");
+          ui.horizontal(|ui| {
+            if input.move_up { ui.label("Up"); }
+            if input.move_right { ui.label("Right"); }
+            if input.move_down { ui.label("Down"); }
+            if input.move_left { ui.label("Left"); }
+          });
+          ui.end_row();
+          ui.label("Panning Speed");
+          ui.show_f32(panning_speed);
+          ui.end_row();
+          ui.label("Position");
+          ui.drag_vec3(0.1, &mut self.position);
+          ui.end_row();
+        });
+      });
+      CollapsingHeader::new("View").default_open(true).show(ui, |ui| {
+        Grid::new("Grid")
+          .striped(true)
+          .spacing([10.0, 4.0])
+          .show(ui, |ui| {
+            ui.label("Eye");
+            ui.show_vec3(&eye);
+            ui.end_row();
+            ui.label("At");
+            ui.show_vec3(&at);
+            ui.end_row();
+            ui.label("Up");
+            ui.show_vec3(&up);
+            ui.end_row();
+            ui.label("View matrix");
+            ui.show_mat4(&view);
+            ui.end_row();
+          });
+      });
+    });
   }
 }
 
@@ -160,3 +206,4 @@ impl From<&RawInput> for CameraInput {
     }
   }
 }
+

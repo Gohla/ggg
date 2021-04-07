@@ -15,6 +15,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use egui::Ui;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -197,12 +198,6 @@ impl app::Application for Quads {
     }
   }
 
-  type Input = Input;
-
-  fn process_input(&mut self, input: RawInput) -> Input {
-    let camera = CameraInput::from(&input);
-    Input { camera }
-  }
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
@@ -210,8 +205,21 @@ impl app::Application for Quads {
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
+
+  type Input = Input;
+
+  fn process_input(&mut self, input: RawInput) -> Input {
+    let camera = CameraInput::from(&input);
+    Input { camera }
+  }
+
+
+  fn add_to_debug_menu(&mut self, ui: &mut Ui) {
+    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+  }
+
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta);
+    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
 
     egui::Window::new("Quads").show(&gui_frame, |ui| {

@@ -724,6 +724,8 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "common",
+ "egui",
+ "gui_widget",
  "image",
  "raw-window-handle",
  "thiserror",
@@ -959,6 +961,15 @@ dependencies = [
  "os",
  "thiserror",
  "wgpu",
+]
+
+[[package]]
+name = "gui_widget"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "egui",
+ "ultraviolet",
 ]
 
 [[package]]
