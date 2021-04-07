@@ -184,6 +184,7 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
   let (device, queue) = adapter.request_device(&DeviceDescriptor {
     features: options.graphics_device_features,
     limits: options.graphics_device_limits,
+    label: Some("Device"),
     ..DeviceDescriptor::default()
   }, None).await?;
   let screen_size = os.window.get_inner_size();

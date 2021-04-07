@@ -1,10 +1,8 @@
 use std::ops::Deref;
 
 use bytemuck::Pod;
-use wgpu::{BindGroup, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferUsage, Device, Queue, ShaderStage};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferUsage, Device, Queue, ShaderStage};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-
-use crate::bind_group::CombinedBindGroupLayoutBuilder;
 
 // Buffer builder
 
@@ -140,15 +138,6 @@ impl<'a> GfxBuffer {
       resource: self.buffer.as_entire_binding(),
     };
     (layout, bind)
-  }
-
-  #[inline]
-  pub fn create_uniform_singleton_binding(&self, device: &Device, shader_visibility: ShaderStage) -> (BindGroupLayout, BindGroup) {
-    let (layout_entry, bind_entry) = self.create_uniform_binding_entries(0, shader_visibility);
-    CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[layout_entry])
-      .with_entries(&[bind_entry])
-      .build(device)
   }
 }
 

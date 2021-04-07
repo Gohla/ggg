@@ -350,7 +350,7 @@ impl Gui {
       let mut render_pass = RenderPassBuilder::new()
         .with_label("GUI render pass")
         .begin_render_pass_for_swap_chain_with_load(encoder, swap_chain_texture);
-      render_pass.push_debug_group("GUI");
+      render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
       render_pass.set_bind_group(1, self.texture_bind_group.as_ref().unwrap(), &[]);

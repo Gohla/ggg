@@ -34,7 +34,7 @@ const VERTICES: &[Vertex] = &[
   Vertex { pos: Vec3::new(0.5, -0.5, 0.0), col: Vec3::new(0.0, 0.0, 1.0) },
 ];
 
-pub struct App {
+pub struct Triangle {
   _vertex_shader_module: ShaderModule,
   _fragment_shader_module: ShaderModule,
   _pipeline_layout: PipelineLayout,
@@ -42,7 +42,7 @@ pub struct App {
   vertex_buffer: Buffer,
 }
 
-impl app::Application for App {
+impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.vert.spv"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.frag.spv"));
@@ -54,7 +54,7 @@ impl app::Application for App {
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
-      .with_label("Static vertex buffer")
+      .with_label("Triangle static vertex buffer")
       .build_with_data(&gfx.device, VERTICES)
       .buffer;
     Self {
@@ -74,11 +74,13 @@ impl app::Application for App {
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Triangle render pass")
       .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+    render_pass.push_debug_group("Draw triangle");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     render_pass.draw(0..VERTICES.len() as u32, 0..1);
+    render_pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }
 
-fn main() { app::run_with_defaults::<App>("Triangle").unwrap(); }
+fn main() { app::run_with_defaults::<Triangle>("Triangle").unwrap(); }
