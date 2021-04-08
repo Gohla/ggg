@@ -103,7 +103,7 @@ pub struct Input {
 impl app::Application for Quads {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let camera_sys = CameraSys::with_defaults_orthographic(viewport);
+    let camera_sys = CameraSys::with_defaults_perspective(viewport);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap().into_rgba8();
