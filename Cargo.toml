@@ -10,7 +10,8 @@ members = [
   "core/gui_widget",
   "core/app",
   "graphics/triangle",
-  "graphics/quads"
+  "graphics/quads",
+  "graphics/cubes"
 ]
 
 # Development profile: full debug information, some optimisations.
@@ -50,6 +51,8 @@ opt-level = 2
 [profile.fastdev.package."triangle"]
 opt-level = 2
 [profile.fastdev.package."quads"]
+opt-level = 2
+[profile.fastdev.package."cubes"]
 opt-level = 2
 
 [profile.test]

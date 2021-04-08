@@ -48,6 +48,10 @@ impl<'a> BufferBuilder<'a> {
   pub fn with_static_uniform_usage(self) -> Self { self.with_usage(BufferUsage::UNIFORM) }
   #[inline]
   pub fn with_uniform_usage(self) -> Self { self.with_usage(BufferUsage::UNIFORM | BufferUsage::COPY_DST) }
+  #[inline]
+  pub fn with_static_storage_usage(self) -> Self { self.with_usage(BufferUsage::STORAGE) }
+  #[inline]
+  pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsage::STORAGE | BufferUsage::COPY_DST) }
 
   #[inline]
   pub fn with_mapped_at_creation(mut self, mapped_at_creation: bool) -> Self {
@@ -131,6 +135,21 @@ impl<'a> GfxBuffer {
       binding: binding_index,
       visibility: shader_visibility,
       ty: BindingType::Buffer { ty: BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+      count: None,
+    };
+    let bind = BindGroupEntry {
+      binding: binding_index,
+      resource: self.buffer.as_entire_binding(),
+    };
+    (layout, bind)
+  }
+
+  #[inline]
+  pub fn create_storage_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStage, read_only: bool) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+    let layout = BindGroupLayoutEntry {
+      binding: binding_index,
+      visibility: shader_visibility,
+      ty: BindingType::Buffer { ty: BufferBindingType::Storage { read_only }, has_dynamic_offset: false, min_binding_size: None },
       count: None,
     };
     let bind = BindGroupEntry {

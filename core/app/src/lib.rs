@@ -94,16 +94,16 @@ pub trait Application {
 
 
 pub struct Options {
-  name: String,
+  pub name: String,
 
-  window_inner_size: LogicalSize,
-  window_min_inner_size: LogicalSize,
+  pub window_inner_size: LogicalSize,
+  pub window_min_inner_size: LogicalSize,
 
-  graphics_backends: BackendBit,
-  graphics_adapter_power_preference: PowerPreference,
-  graphics_device_features: Features,
-  graphics_device_limits: Limits,
-  graphics_swap_chain_present_mode: PresentMode,
+  pub graphics_backends: BackendBit,
+  pub graphics_adapter_power_preference: PowerPreference,
+  pub graphics_device_features: Features,
+  pub graphics_device_limits: Limits,
+  pub graphics_swap_chain_present_mode: PresentMode,
 }
 
 impl Default for Options {

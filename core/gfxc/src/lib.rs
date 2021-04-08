@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 pub use shaderc::{Compiler, ShaderKind};
 use walkdir::WalkDir;
+use shaderc::{CompileOptions, OptimizationLevel};
 
 pub fn compile_shaders() {
   let mut compiler = Compiler::new()
@@ -55,12 +56,17 @@ impl CompilerEx for Compiler {
       println!("cargo:rerun-if-changed={}", src_path.display());
       string
     };
+    let compile_options = {
+      let mut options = CompileOptions::new().unwrap();
+      options.set_optimization_level(OptimizationLevel::Performance);
+      options
+    };
     let result = self.compile_into_spirv(
       &source_text,
       kind,
       src_path.file_name().map(|p| p.to_str().unwrap_or_default()).unwrap_or_default(),
       "main",
-      None,
+      Some(&compile_options),
     ).unwrap_or_else(|e| panic!("Failed to compile shader file '{}': {:?}", src_path.display(), e));
     fs::create_dir_all(dst_path.parent().unwrap())
       .unwrap_or_else(|e| panic!("Failed to create destination directory '{}': {:}", dst_path.display(), e));
