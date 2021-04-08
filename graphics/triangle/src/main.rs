@@ -44,8 +44,8 @@ pub struct Triangle {
 
 impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.vert.spv"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/triangle.frag.spv"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/triangle.vert.spv")));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/triangle.frag.spv")));
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])

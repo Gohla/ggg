@@ -7,3 +7,4 @@ publish = false
 
 [dependencies]
 shaderc = "0.7"
+walkdir = "2.3"

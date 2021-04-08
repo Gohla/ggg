@@ -137,8 +137,8 @@ impl app::Application for Quads {
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.vert.spv"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!("../../../target/shader/quad.frag.spv"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/quad.vert.spv")));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/quad.frag.spv")));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 

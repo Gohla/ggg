@@ -10,6 +10,7 @@ layout(location = 5) in vec4 inModel4;
 out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec2 outTex;
 
+
 layout(set = 1, binding = 0)
 uniform Uniform {
   mat4 uniViewProj;

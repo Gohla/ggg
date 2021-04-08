@@ -36,8 +36,8 @@ pub struct Gui {
 
 impl Gui {
   pub fn new(device: &Device, swap_chain_texture_format: TextureFormat) -> Self {
-    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.vert.spv"));
-    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!("../../../target/shader/gui.frag.spv"));
+    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
+    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("GUI uniform buffer")
