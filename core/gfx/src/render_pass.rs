@@ -39,7 +39,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
     self.with_depth_stencil_attachment(RenderPassDepthStencilAttachmentDescriptor {
       attachment: depth_texture_view,
       depth_ops: Some(Operations {
-        load: LoadOp::Clear(0.0),
+        load: LoadOp::Clear(1.0),
         store: true,
       }),
       stencil_ops: None,

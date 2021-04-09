@@ -132,7 +132,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.with_depth_stencil(DepthStencilState {
       format,
       depth_write_enabled: true,
-      depth_compare: CompareFunction::Greater,
+      depth_compare: CompareFunction::Less,
       stencil: Default::default(),
       bias: Default::default(),
       clamp_depth: false,

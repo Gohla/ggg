@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BackendBit, BindGroup, CommandBuffer, CullMode, include_spirv, IndexFormat, PipelineLayout, PowerPreference, RenderPipeline, ShaderModule, ShaderStage};
 
@@ -13,6 +13,7 @@ use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use rand::rngs::SmallRng;
 
 const NUM_CUBE_INDICES: usize = 3 * 6 * 2;
 const NUM_CUBE_VERTICES: usize = 8;
@@ -25,8 +26,9 @@ const CUBE_INDICES: [u32; NUM_CUBE_INDICES] = [
   7, 1, 3, 7, 5, 1,
 ];
 
-const MAX_INSTANCES: usize = 10_000_000;
+const MAX_INSTANCES: usize = 000_500_000;
 const MAX_INDICES: usize = MAX_INSTANCES * NUM_CUBE_INDICES;
+const CUBE_RANGE: f32 = 1000.0;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -79,9 +81,9 @@ impl app::Application for Cubes {
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
 
     let instance_buffer = {
-      let mut rng = rand::thread_rng();
+      let mut rng = SmallRng::seed_from_u64(101702198783735);
       let data: Vec<_> = (0..MAX_INSTANCES).map(|_| {
-        Instance::from_position(Vec3::new(rng.gen_range(-5000.0..5000.0), rng.gen_range(-5000.0..5000.0), rng.gen_range(-5000.0..5000.0)))
+        Instance::from_position(Vec3::new(rng.gen_range(-CUBE_RANGE..CUBE_RANGE), rng.gen_range(-CUBE_RANGE..CUBE_RANGE), rng.gen_range(-CUBE_RANGE..CUBE_RANGE)))
       }).collect();
       BufferBuilder::new()
         .with_storage_usage()

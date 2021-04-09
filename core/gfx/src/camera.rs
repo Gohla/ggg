@@ -101,7 +101,7 @@ impl CameraSys {
       PerspectiveProjection::default(),
       OrthographicProjection::default(),
       0.01,
-      1000.0,
+      5000.0,
     )
   }
 
@@ -298,49 +298,51 @@ impl From<&RawInput> for CameraInput {
   }
 }
 
-// Copied from library, because the one in the library is wrong.
 #[inline]
-pub fn look_at_lh(position: Vec3, target: Vec3, up: Vec3) -> Mat4 {
+pub fn look_at_lh(
+  position: Vec3,
+  target: Vec3,
+  up: Vec3,
+) -> Mat4 {
   // From: https://docs.microsoft.com/en-us/previous-versions/windows/desktop/bb281710(v=vs.85)
   let z_axis = (target - position).normalized();
   let x_axis = up.cross(z_axis).normalized();
   let y_axis = z_axis.cross(x_axis);
-  Mat4::new(
-    Vec4::new(x_axis.x, y_axis.x, z_axis.x, 0.0),
-    Vec4::new(x_axis.y, y_axis.y, z_axis.y, 0.0),
-    Vec4::new(x_axis.z, y_axis.z, z_axis.z, 1.0),
+  Mat4::new( // @formatter:off
+    Vec4::new(x_axis.x                   , y_axis.x                   , z_axis.x                   , 0.0),
+    Vec4::new(x_axis.y                   , y_axis.y                   , z_axis.y                   , 0.0),
+    Vec4::new(x_axis.z                   , y_axis.z                   , z_axis.z                   , 0.0),
     Vec4::new(-x_axis.dot(position), -y_axis.dot(position), -z_axis.dot(position), 1.0),
-  )
+  ) // @formatter:on
 }
 
-// Copied from library, because the one in the library is wrong.
 #[inline]
-pub fn perspective_lh_yup_wgpu_dx(vertical_fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Mat4 {
+pub fn perspective_lh_yup_wgpu_dx(
+  vertical_fov: f32,
+  aspect_ratio: f32,
+  near: f32,
+  far: f32,
+) -> Mat4 {
   // From: https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
   let t = (vertical_fov / 2.0).tan();
   let sy = 1.0 / t;
   let sx = sy / aspect_ratio;
   let fmn = far - near;
-  Mat4::new(
-    Vec4::new(sx, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, sy, 0.0, 0.0),
-    Vec4::new(0.0, 0.0, far / fmn, 1.0),
+  Mat4::new( // @formatter:off
+    Vec4::new(sx , 0.0, 0.0              , 0.0),
+    Vec4::new(0.0, sy , 0.0              , 0.0),
+    Vec4::new(0.0, 0.0, far / fmn        , 1.0),
     Vec4::new(0.0, 0.0, -near * far / fmn, 0.0),
-  )
+  ) // @formatter:on
 }
 
-// Copied from library, because the one in the library is wrong.
 #[inline]
 pub fn orthographic_lh_yup_wgpu_dx(
-  left: f32,
-  right: f32,
-  bottom: f32,
-  top: f32,
-  near: f32,
-  far: f32,
+  left: f32, right: f32,
+  bottom: f32, top: f32,
+  near: f32, far: f32,
 ) -> Mat4 {
   // From: https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixorthooffcenterlh
-  // TODO: does not work correctly
   let rml = right - left;
   let lmr = left - right;
   let lpr = left + right;
@@ -348,10 +350,10 @@ pub fn orthographic_lh_yup_wgpu_dx(
   let bmt = bottom - top;
   let tpb = top + bottom;
   let fmn = far - near;
-  Mat4::new(
-    Vec4::new(2.0 / rml, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, 2.0 / tmb, 0.0, 0.0),
-    Vec4::new(0.0, 0.0, 1.0 / fmn, 0.0),
+  Mat4::new( // @formatter:off
+    Vec4::new(2.0 / rml, 0.0      , 0.0       , 0.0),
+    Vec4::new(0.0      , 2.0 / tmb, 0.0       , 0.0),
+    Vec4::new(0.0      , 0.0      , 1.0 / fmn , 0.0),
     Vec4::new(lpr / lmr, tpb / bmt, near / fmn, 1.0),
-  )
+  ) // @formatter:on
 }

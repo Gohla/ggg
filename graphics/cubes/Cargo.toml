@@ -13,7 +13,7 @@ app = { path = "../../core/app" }
 wgpu = "0.7"
 egui = "0.11"
 ultraviolet = { version = "0.8", features = ["bytemuck"] }
-rand = "0.8"
+rand = { version = "0.8", features = ["small_rng"] }
 bytemuck = { version = "1.5", features = ["derive"] }
 tracing = "0.1"
 
