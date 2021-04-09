@@ -1,3 +1,5 @@
+///! Rendering a lot of generic cubes. Based on https://twitter.com/SebAaltonen/status/1315982782439591938.
+
 use std::mem::size_of;
 use std::ops::Range;
 
@@ -207,6 +209,7 @@ impl app::Application for Cubes {
         ui.end_row();
       });
       if ui.button("Regenerate").clicked() {
+        // OPTO: get mutable slice to buffer to prevent copy, but that requires use of the weird map_async API...
         let instances: Vec<_> = (0..self.num_cubes_to_generate)
           .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
           .collect();
