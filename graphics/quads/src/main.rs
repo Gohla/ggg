@@ -1,8 +1,11 @@
+///! Render a couple of quads. Mostly made by following: https://sotrh.github.io/learn-wgpu/beginner/tutorial8-depth/.
+
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
+use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, ShaderStage, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
@@ -15,7 +18,6 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use egui::Ui;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -83,10 +85,6 @@ pub struct Quads {
   uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
 
-  _vertex_shader_module: ShaderModule,
-  _fragment_shader_module: ShaderModule,
-
-  _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
 
   depth_texture: GfxTexture,
@@ -142,7 +140,7 @@ impl app::Application for Quads {
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
@@ -184,10 +182,6 @@ impl app::Application for Quads {
       uniform_buffer,
       uniform_bind_group,
 
-      _vertex_shader_module: vertex_shader_module,
-      _fragment_shader_module: fragment_shader_module,
-
-      _pipeline_layout: pipeline_layout,
       render_pipeline,
 
       depth_texture,

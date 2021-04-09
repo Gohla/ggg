@@ -1,8 +1,10 @@
+///! Render a single triangle. Mostly made by following: https://sotrh.github.io/learn-wgpu/beginner/tutorial3-pipeline/.
+
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, PipelineLayout, RenderPipeline, ShaderModule, VertexAttribute, VertexBufferLayout};
+use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
@@ -35,9 +37,6 @@ const VERTICES: &[Vertex] = &[
 ];
 
 pub struct Triangle {
-  _vertex_shader_module: ShaderModule,
-  _fragment_shader_module: ShaderModule,
-  _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
   vertex_buffer: Buffer,
 }
@@ -46,7 +45,7 @@ impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/triangle.vert.spv")));
     let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/triangle.frag.spv")));
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_layout_label("Triangle pipeline layout")
@@ -58,9 +57,6 @@ impl app::Application for Triangle {
       .build_with_data(&gfx.device, VERTICES)
       .buffer;
     Self {
-      _vertex_shader_module: vertex_shader_module,
-      _fragment_shader_module: fragment_shader_module,
-      _pipeline_layout: pipeline_layout,
       render_pipeline,
       vertex_buffer,
     }
