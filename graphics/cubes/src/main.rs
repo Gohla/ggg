@@ -225,7 +225,7 @@ impl app::Application for Cubes {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);
     render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-    let num_indices = (self.num_cubes * NUM_CUBE_INDICES as u32);
+    let num_indices = self.num_cubes * NUM_CUBE_INDICES as u32;
     render_pass.draw_indexed(0..num_indices, 0, 0..1);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
