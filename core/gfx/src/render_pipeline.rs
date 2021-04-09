@@ -1,4 +1,4 @@
-use wgpu::{BindGroupLayout, ColorTargetState, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState, CompareFunction};
+use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
 
 use crate::swap_chain::GfxSwapChain;
 
@@ -30,7 +30,10 @@ impl<'a> RenderPipelineBuilder<'a> {
         entry_point: "main",
         buffers: &[],
       },
-      primitive: PrimitiveState { front_face: FrontFace::Cw, ..PrimitiveState::default() },
+      primitive: PrimitiveState {
+        front_face: FrontFace::Cw,
+        ..PrimitiveState::default()
+      },
       depth_stencil: None,
       multisample: MultisampleState::default(),
       fragment: None,

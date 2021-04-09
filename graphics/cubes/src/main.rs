@@ -6,7 +6,7 @@ use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, CullMode, include_spirv, IndexFormat, PipelineLayout, PowerPreference, RenderPipeline, ShaderModule, ShaderStage};
+use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, include_spirv, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -19,24 +19,31 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 
-const NUM_CUBE_INDICES: usize = 3 * 6 * 2;
+const NUM_CUBE_INDICES: usize = 3 * 3 * 2;
 const NUM_CUBE_VERTICES: usize = 8;
 const CUBE_INDICES: [u32; NUM_CUBE_INDICES] = [
   0, 2, 1, 2, 3, 1,
   5, 4, 1, 1, 4, 0,
   0, 4, 6, 0, 6, 2,
-  6, 5, 7, 6, 4, 5,
-  2, 6, 3, 6, 7, 3,
-  7, 1, 3, 7, 5, 1,
 ];
 
-const MAX_INSTANCES: usize = 10_000_000;
+const MAX_INSTANCES: usize = 25_000_000;
 const MAX_INDICES: usize = MAX_INSTANCES * NUM_CUBE_INDICES;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
+  camera_position: Vec4,
   view_projection: Mat4,
+}
+
+impl Uniform {
+  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
+    Self {
+      camera_position: camera_sys.position.into_homogeneous_point(),
+      view_projection: camera_sys.get_view_projection_matrix(),
+    }
+  }
 }
 
 #[repr(C)]
@@ -60,10 +67,6 @@ pub struct Cubes {
   instance_buffer: GfxBuffer,
   static_bind_group: BindGroup,
 
-  _vertex_shader_module: ShaderModule,
-  _fragment_shader_module: ShaderModule,
-
-  _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
 
   depth_texture: GfxTexture,
@@ -94,7 +97,7 @@ impl app::Application for Cubes {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
 
     let instance_buffer = {
@@ -129,9 +132,8 @@ impl app::Application for Cubes {
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
-      .with_cull_mode(CullMode::None)
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Cubes pipeline layout")
@@ -157,10 +159,6 @@ impl app::Application for Cubes {
       instance_buffer,
       static_bind_group,
 
-      _vertex_shader_module: vertex_shader_module,
-      _fragment_shader_module: fragment_shader_module,
-
-      _pipeline_layout: pipeline_layout,
       render_pipeline,
 
       depth_texture,
@@ -197,7 +195,7 @@ impl app::Application for Cubes {
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera_sys)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {
       ui.grid("Grid", |ui| {
