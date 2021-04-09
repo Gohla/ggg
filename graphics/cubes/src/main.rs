@@ -1,8 +1,12 @@
+use std::mem::size_of;
+use std::ops::Range;
+
 use bytemuck::{Pod, Zeroable};
-use egui::Ui;
+use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BackendBit, BindGroup, CommandBuffer, CullMode, include_spirv, IndexFormat, PipelineLayout, PowerPreference, RenderPipeline, ShaderModule, ShaderStage};
+use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, CullMode, include_spirv, IndexFormat, PipelineLayout, PowerPreference, RenderPipeline, ShaderModule, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -13,7 +17,7 @@ use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use rand::rngs::SmallRng;
+use gui_widget::UiWidgetsExt;
 
 const NUM_CUBE_INDICES: usize = 3 * 6 * 2;
 const NUM_CUBE_VERTICES: usize = 8;
@@ -26,9 +30,8 @@ const CUBE_INDICES: [u32; NUM_CUBE_INDICES] = [
   7, 1, 3, 7, 5, 1,
 ];
 
-const MAX_INSTANCES: usize = 000_500_000;
+const MAX_INSTANCES: usize = 10_000_000;
 const MAX_INDICES: usize = MAX_INSTANCES * NUM_CUBE_INDICES;
-const CUBE_RANGE: f32 = 1000.0;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -44,13 +47,17 @@ struct Instance {
 
 impl Instance {
   fn from_position(position: Vec3) -> Self { Self { position: position.into_homogeneous_point() } }
+
+  fn from_random_range(rng: &mut impl Rng, range: Range<f32>) -> Self {
+    Self::from_position(Vec3::new(rng.gen_range(range.clone()), rng.gen_range(range.clone()), rng.gen_range(range)))
+  }
 }
 
 pub struct Cubes {
   camera_sys: CameraSys,
 
   uniform_buffer: GfxBuffer,
-  _instance_buffer: GfxBuffer,
+  instance_buffer: GfxBuffer,
   static_bind_group: BindGroup,
 
   _vertex_shader_module: ShaderModule,
@@ -62,6 +69,12 @@ pub struct Cubes {
   depth_texture: GfxTexture,
 
   index_buffer: GfxBuffer,
+
+  num_cubes_to_generate: u32,
+  cube_position_range: f32,
+  rng: SmallRng,
+
+  num_cubes: u32,
 }
 
 pub struct Input {
@@ -74,6 +87,10 @@ impl app::Application for Cubes {
     let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
     camera_sys.panning_speed = 100.0;
 
+    let num_cubes_to_generate = 100_000;
+    let cube_position_range = 1000.0;
+    let mut rng = SmallRng::seed_from_u64(101702198783735);
+
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
@@ -81,14 +98,22 @@ impl app::Application for Cubes {
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
 
     let instance_buffer = {
-      let mut rng = SmallRng::seed_from_u64(101702198783735);
-      let data: Vec<_> = (0..MAX_INSTANCES).map(|_| {
-        Instance::from_position(Vec3::new(rng.gen_range(-CUBE_RANGE..CUBE_RANGE), rng.gen_range(-CUBE_RANGE..CUBE_RANGE), rng.gen_range(-CUBE_RANGE..CUBE_RANGE)))
-      }).collect();
-      BufferBuilder::new()
+      let buffer = BufferBuilder::new()
+        .with_size((MAX_INSTANCES * size_of::<Instance>()) as BufferAddress)
         .with_storage_usage()
+        .with_mapped_at_creation(true)
         .with_label("Cubes instance storage buffer")
-        .build_with_data(&gfx.device, &data)
+        .build(&gfx.device);
+      {
+        let mut view = buffer.slice(..).get_mapped_range_mut();
+        let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
+        (0..num_cubes_to_generate)
+          .map(|_| Instance::from_random_range(&mut rng, -cube_position_range..cube_position_range))
+          .zip(instance_slice)
+          .for_each(|(instance, place)| *place = instance);
+      }
+      buffer.unmap();
+      buffer
     };
     let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStage::VERTEX, true);
 
@@ -129,7 +154,7 @@ impl app::Application for Cubes {
       camera_sys,
 
       uniform_buffer,
-      _instance_buffer: instance_buffer,
+      instance_buffer,
       static_bind_group,
 
       _vertex_shader_module: vertex_shader_module,
@@ -141,6 +166,12 @@ impl app::Application for Cubes {
       depth_texture,
 
       index_buffer,
+
+      num_cubes_to_generate,
+      cube_position_range,
+      rng,
+
+      num_cubes: num_cubes_to_generate,
     }
   }
 
@@ -168,6 +199,24 @@ impl app::Application for Cubes {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
 
+    egui::Window::new("Cubes").show(&gui_frame, |ui| {
+      ui.grid("Grid", |ui| {
+        ui.label("Cube instances");
+        ui.add(DragValue::new(&mut self.num_cubes_to_generate).prefix("# ").speed(1000).clamp_range(0..=MAX_INSTANCES));
+        ui.end_row();
+        ui.label("Position range");
+        ui.add(DragValue::new(&mut self.cube_position_range).speed(10).clamp_range(100..=1_000_000));
+        ui.end_row();
+      });
+      if ui.button("Regenerate").clicked() {
+        let instances: Vec<_> = (0..self.num_cubes_to_generate)
+          .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
+          .collect();
+        self.instance_buffer.write_whole_data(&gfx.queue, &instances);
+        self.num_cubes = self.num_cubes_to_generate
+      }
+    });
+
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
       .with_label("Cubes render pass")
@@ -176,7 +225,8 @@ impl app::Application for Cubes {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);
     render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-    render_pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
+    let num_indices = (self.num_cubes * NUM_CUBE_INDICES as u32);
+    render_pass.draw_indexed(0..num_indices, 0, 0..1);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
   }

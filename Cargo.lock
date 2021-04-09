@@ -430,6 +430,7 @@ dependencies = [
  "egui",
  "gfx",
  "gfxc",
+ "gui_widget",
  "os",
  "rand",
  "tracing",

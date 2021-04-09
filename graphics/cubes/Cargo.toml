@@ -10,6 +10,7 @@ common = { path = "../../core/common" }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
 app = { path = "../../core/app" }
+gui_widget = { path = "../../core/gui_widget" }
 wgpu = "0.7"
 egui = "0.11"
 ultraviolet = { version = "0.8", features = ["bytemuck"] }
