@@ -3,7 +3,7 @@
 struct Ray {
   vec3 origin;
   vec3 direction;
-  float t;
+  float t;// Time
 };
 
 Ray ray(vec3 origin, vec3 direction, float t) {
@@ -31,7 +31,7 @@ struct Camera {
   vec3 vertical;
 };
 
-Camera camera(vec2 resolution) {
+Camera camera(vec2 resolution, vec3 origin) {
   float image_width = resolution.x;
   float image_height = resolution.y;
   float aspect_ratio = image_width / image_height;
@@ -41,7 +41,7 @@ Camera camera(vec2 resolution) {
   float focal_length = 1.0;
 
   Camera cam;
-  cam.origin = vec3(0.0, 0.0, 0.0);
+  cam.origin = origin;
   cam.horizontal = vec3(viewport_width, 0.0, 0.0);
   cam.vertical = vec3(0.0, viewport_height, 0.0);
   cam.lower_left_corner = cam.origin - cam.horizontal / 2.0 - cam.vertical / 2.0 - vec3(0.0, 0.0, focal_length);
@@ -49,16 +49,16 @@ Camera camera(vec2 resolution) {
 }
 
 Ray get_ray(Camera cam, vec2 uv) {
-  return ray(cam.origin, cam.lower_left_corner + uv.x * cam.horizontal + uv.y * cam.vertical - cam.origin);
+  return ray(cam.origin, normalize(cam.lower_left_corner + uv.x * cam.horizontal + uv.y * cam.vertical - cam.origin));
 }
 
 
 // Hit
 
 struct HitRecord {
-  vec3 p;
+  vec3 p;// Hit point
   vec3 normal;
-  float t;
+  float t;// Ray time when hit
   bool front_face;
 };
 
@@ -149,7 +149,8 @@ vec3 random_in_unit_vector(inout float seed) {
 
 vec3 random_in_hemisphere(inout float seed, vec3 normal) {
   vec3 in_unit_sphere = random_in_unit_sphere(seed);
-  if (dot(in_unit_sphere, normal) > 0.0) return in_unit_sphere;// In the same hemisphere as the normal
+  // In the same hemisphere as the normal
+  if (dot(in_unit_sphere, normal) > 0.0) return in_unit_sphere;
   else return -in_unit_sphere;
 }
 

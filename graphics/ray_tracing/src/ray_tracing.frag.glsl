@@ -9,6 +9,7 @@ in vec4 gl_FragCoord;
 layout(set = 0, binding = 0) uniform Uniform {
   vec2 resolution;
   float elapsed;
+  vec3 camera_origin;
 };
 
 layout(location = 0) out vec4 color;
@@ -16,23 +17,27 @@ layout(location = 0) out vec4 color;
 bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
   rec.t = t_max;
   bool hit = false;
-  hit = hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0), r, t_min, rec.t, rec) || hit;
+  hit = hit || hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5), r, t_min, rec.t, rec);
+  hit = hit || hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0), r, t_min, rec.t, rec);
   return hit;
 }
 
 vec3 ray_color(Ray r, inout float seed) {
   HitRecord rec;
   vec3 col = vec3(1.0);
-  for(int i = 0; i < MAX_RECURSION; ++i) {
+  for (int i = 0; i < MAX_RECURSION; ++i) {
     if (hit_world(r, 0.001, infinity, rec)) {
+      // Next ray: diffuse bounce ray.
       vec3 target = rec.p + rec.normal + random_in_hemisphere(seed, rec.normal);
       r = ray(rec.p, target - rec.p);
+      // Absorb half of the light.
       col *= 0.5;
     } else {
+      // No hit, use the sky color.
       vec3 unit_direction = normalize(r.direction);
       float t = 0.5 * (unit_direction.y + 1.0);
       col *= (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+      // Break out of loop early, no bounces possible.
       return col;
     }
   }
@@ -40,7 +45,7 @@ vec3 ray_color(Ray r, inout float seed) {
 }
 
 void main() {
-  Camera cam = camera(resolution);
+  Camera cam = camera(resolution, camera_origin);
 
   // Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
   vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
