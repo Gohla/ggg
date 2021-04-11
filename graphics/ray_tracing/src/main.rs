@@ -17,12 +17,14 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
   viewport: Vec2,
+  elapsed: f32,
 }
 
 impl Uniform {
-  pub fn from_screen_size(screen_size: ScreenSize) -> Self {
+  pub fn new(screen_size: ScreenSize, elapsed: f32) -> Self {
     Self {
-      viewport: Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32)
+      viewport: Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32),
+      elapsed,
     }
   }
 }
@@ -42,7 +44,7 @@ impl app::Application for RayTracing {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_screen_size(os.window.get_inner_size())]);
+      .build_with_data(&gfx.device, &[Uniform::new(os.window.get_inner_size(), 0.0)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
@@ -89,7 +91,7 @@ impl app::Application for RayTracing {
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_screen_size(frame.screen_size)]);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32)]);
 
     let render_pass_builder = RenderPassBuilder::new()
       .with_label("Ray tracing render pass");

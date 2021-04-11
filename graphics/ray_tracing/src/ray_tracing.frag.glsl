@@ -8,6 +8,7 @@
 in vec4 gl_FragCoord;
 layout(set = 0, binding = 0) uniform Uniform {
   vec2 resolution;
+  float elapsed;
 };
 
 layout(location = 0) out vec4 color;
@@ -44,7 +45,8 @@ void main() {
   // Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
   vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
 
-  float seed = float(base_hash(floatBitsToUint(uv)))/float(0xffffffffU);
+  // Initialise seed.
+  float seed = float(base_hash(floatBitsToUint(uv)))/float(0xffffffffU)+elapsed;
 
   // Anti aliasing with box filter, from: http://roar11.com/2019/10/gpu-ray-tracing-in-an-afternoon/
   vec2 rcpRes = vec2(1.0) / resolution;
