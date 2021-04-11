@@ -113,7 +113,7 @@ impl app::Application for Quads {
       let sampler = SamplerBuilder::new()
         .with_label("Cobblestone diffuse sampler")
         .build(&gfx.device);
-      let (view_layout_entry, view_bind_entry) = texture.create_bind_group_entries(0, ShaderStage::FRAGMENT);
+      let (view_layout_entry, view_bind_entry) = texture.create_default_float_2d_bind_group_entries(0, ShaderStage::FRAGMENT);
       let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
       CombinedBindGroupLayoutBuilder::new()
         .with_layout_entries(&[view_layout_entry, sampler_layout_entry])

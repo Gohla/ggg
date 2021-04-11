@@ -19,8 +19,8 @@ bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
 
 vec3 ray_color(Ray r) {
   HitRecord rec;
-  float infinity = 1.0/0.0;
-  if(hit_world(r, 0.0, infinity, rec)) {
+  float infinity = 1.0/0.0;// Division by zero creates a value respresenting infinity.
+  if (hit_world(r, 0.0, infinity, rec)) {
     return 0.5 * (rec.normal + vec3(1.0, 1.0, 1.0));
   }
   vec3 unit_direction = normalize(r.direction);
@@ -29,22 +29,24 @@ vec3 ray_color(Ray r) {
 }
 
 void main() {
-  float image_width = resolution.x;
-  float image_height = resolution.y;
-  float aspect_ratio = image_width / image_height;
+  Camera cam = camera(resolution);
 
-  float viewport_height = 2.0;
-  float viewport_width = aspect_ratio * viewport_height;
-  float focal_length = 1.0;
+  // Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
+  vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
 
-  vec3 origin = vec3(0.0, 0.0, 0.0);
-  vec3 horizontal = vec3(viewport_width, 0.0, 0.0);
-  vec3 vertical = vec3(0.0, viewport_height, 0.0);
-  vec3 lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - vec3(0.0, 0.0, focal_length);
+  // Anti aliasing with box filter, from: http://roar11.com/2019/10/gpu-ray-tracing-in-an-afternoon/
+  vec2 rcpRes = vec2(1.0) / resolution;
+  vec3 col = vec3(0.0);
+  int numSamples = 4;
+  float rcpNumSamples = 1.0 / float(numSamples);
+  for (int x = 0; x < numSamples; ++x)  {
+    for (int y = 0; y < numSamples; ++y)    {
+      vec2 adj = vec2(float(x), float(y));
+      vec2 uv = (uv + adj * rcpNumSamples) * rcpRes;
+      col += ray_color(get_ray(cam, uv));
+    }
+  }
+  col /= float(numSamples * numSamples);
 
-  vec2 coord = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);// Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
-  float u = coord.x / (image_width - 1);
-  float v = coord.y / (image_height - 1);
-  Ray r = ray(origin, normalize(lower_left_corner + u * horizontal + v * vertical - origin));
-  color = vec4(ray_color(r), 1.0);
+  color = vec4(col, 1.0);
 }

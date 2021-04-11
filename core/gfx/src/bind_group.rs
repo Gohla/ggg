@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBindingType, BufferSize, Device, ShaderStage, TextureSampleType, TextureViewDimension, Sampler, TextureView};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBindingType, BufferSize, Device, Sampler, ShaderStage, TextureSampleType, TextureView, TextureViewDimension};
 
 // Bind group layout entry creation
 
@@ -54,8 +54,13 @@ impl BindGroupLayoutEntryBuilder {
   }
 
   #[inline]
-  pub fn new_float_2d_texture() -> Self {
-    Self::new_texture(TextureSampleType::Float { filterable: true }, TextureViewDimension::D2, false)
+  pub fn new_float_2d_texture(filterable: bool, multisampled: bool) -> Self {
+    Self::new_texture(TextureSampleType::Float { filterable }, TextureViewDimension::D2, multisampled)
+  }
+
+  #[inline]
+  pub fn new_default_float_2d_texture() -> Self {
+    Self::new_float_2d_texture(true, false)
   }
 
 

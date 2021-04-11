@@ -57,7 +57,7 @@ impl Gui {
       .with_label("GUI static bind group")
       .build(device);
     let texture_bind_group_layout = BindGroupLayoutBuilder::new()
-      .with_entries(&[BindGroupLayoutEntryBuilder::new_float_2d_texture()
+      .with_entries(&[BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
         .with_binding(0)
         .with_fragment_shader_visibility()
         .build()

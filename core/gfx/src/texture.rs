@@ -4,6 +4,7 @@ use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, Extent3d, Origin3d, Que
 use common::screen::PhysicalSize;
 
 use crate::bind_group::{BindGroupEntryBuilder, BindGroupLayoutEntryBuilder};
+use crate::swap_chain::GfxSwapChain;
 
 // Texture builder creation and modification
 
@@ -46,10 +47,32 @@ impl<'a> TextureBuilder<'a> {
       .with_render_attachment_usage()
   }
 
+  #[inline]
+  pub fn new_multisampled_framebuffer(swap_chain: &GfxSwapChain, sample_count: u32) -> Self {
+    let (width, height) = swap_chain.get_size();
+    Self::new()
+      .with_2d_size(width, height)
+      .with_sample_count(sample_count)
+      .with_format(swap_chain.get_texture_format())
+      .with_render_attachment_usage()
+  }
+
 
   #[inline]
   pub fn with_size(mut self, size: Extent3d) -> Self {
     self.texture_descriptor.size = size;
+    self
+  }
+
+  #[inline]
+  pub fn with_mip_level_count(mut self, mip_level_count: u32) -> Self {
+    self.texture_descriptor.mip_level_count = mip_level_count;
+    self
+  }
+
+  #[inline]
+  pub fn with_sample_count(mut self, sample_count: u32) -> Self {
+    self.texture_descriptor.sample_count = sample_count;
     self
   }
 
@@ -170,8 +193,8 @@ impl<'a> GfxTexture {
 
 impl<'a> GfxTexture {
   #[inline]
-  pub fn create_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStage) -> BindGroupLayoutEntry {
-    BindGroupLayoutEntryBuilder::new_float_2d_texture()
+  pub fn create_default_float_2d_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStage) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
       .with_binding(binding_index)
       .with_shader_visibility(shader_visibility)
       .build()
@@ -185,12 +208,12 @@ impl<'a> GfxTexture {
   }
 
   #[inline]
-  pub fn create_bind_group_entries(
+  pub fn create_default_float_2d_bind_group_entries(
     &'a self,
     binding_index: u32,
     shader_visibility: ShaderStage,
   ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
-    let bind_group_layout = self.create_bind_group_layout_entry(binding_index, shader_visibility);
+    let bind_group_layout = self.create_default_float_2d_bind_group_layout_entry(binding_index, shader_visibility);
     let bind_group = self.create_bind_group_entry(binding_index);
     (bind_group_layout, bind_group)
   }

@@ -166,6 +166,20 @@ impl<'a> RenderPipelineBuilder<'a> {
   }
 
 
+  #[inline]
+  pub fn with_multisample(mut self, multisample: MultisampleState) -> Self {
+    self.multisample = multisample;
+    self
+  }
+
+  #[inline]
+  pub fn with_multisample_count(mut self, count: u32) -> Self {
+    self.multisample.count = count;
+    self
+  }
+
+
+
   pub fn build(self, device: &Device) -> (PipelineLayout, RenderPipeline) {
     let layout = device.create_pipeline_layout(&self.layout);
     let mut fragment = self.fragment;
