@@ -1,3 +1,10 @@
+#include "random.glsl"
+
+// Division by zero creates a value respresenting infinity.
+
+float infinity = 1.0/0.0;
+
+
 // Ray
 
 struct Ray {
@@ -21,6 +28,7 @@ Ray ray(vec3 origin, vec3 direction) {
 vec3 ray_at(Ray ray, float t) {
   return ray.origin + ray.direction * t;
 }
+
 
 // Camera
 
@@ -53,11 +61,39 @@ Ray get_ray(Camera cam, vec2 uv) {
 }
 
 
+  // Materials
+
+  #define MT_DIFFUSE 0
+  #define MT_METAL 1
+
+struct Material {
+  int type;
+  vec3 albedo;
+  float roughness; // controls roughness for metals
+};
+
+Material diffuse_material(vec3 albedo) {
+  Material m;
+  m.type = MT_DIFFUSE;
+  m.albedo = albedo;
+  return m;
+}
+
+Material metal_material(vec3 albedo, float roughness) {
+  Material m;
+  m.type = MT_METAL;
+  m.albedo = albedo;
+  m.roughness = roughness;
+  return m;
+}
+
+
 // Hit
 
 struct HitRecord {
   vec3 p;// Hit point
   vec3 normal;
+  Material material;
   float t;// Ray time when hit
   bool front_face;
 };
@@ -68,17 +104,39 @@ void set_face_normal(inout HitRecord rec, Ray r, vec3 outward_normal) {
 }
 
 
+// Scatter
+
+bool scatter(Ray r_in, HitRecord rec, out vec3 attenuation, out Ray scattered, inout float seed) {
+  if (rec.material.type == MT_DIFFUSE) {
+    vec3 scatter_direction = rec.p + rec.normal + random_in_hemisphere(seed, rec.normal);
+    // TODO: Catch degenerate scatter direction ?
+    scattered = ray(rec.p, scatter_direction);
+    attenuation = rec.material.albedo;
+    return true;
+  }
+  if(rec.material.type == MT_METAL) {
+    vec3 reflected = reflect(normalize(r_in.direction), rec.normal);
+    scattered = ray(rec.p, reflected + rec.material.roughness * random_in_unit_sphere(seed));
+    attenuation = rec.material.albedo;
+    return (dot(scattered.direction, rec.normal) > 0.0);
+  }
+  return false;
+}
+
+
 // Sphere ray tracing
 
 struct Sphere {
   vec3 center;
   float radius;
+  Material material;
 };
 
-Sphere sphere(vec3 center, float radius) {
+Sphere sphere(vec3 center, float radius, Material material) {
   Sphere s;
   s.center = center;
   s.radius = radius;
+  s.material = material;
   return s;
 }
 
@@ -103,56 +161,7 @@ bool hit_sphere(Sphere s, Ray r, float t_min, float t_max, inout HitRecord rec) 
   rec.p = ray_at(r, rec.t);
   vec3 outward_normal = (rec.p - s.center) / s.radius;
   set_face_normal(rec, r, outward_normal);
+  rec.material = s.material;
 
   return true;
 }
-
-
-//
-// Hash functions by Nimitz:
-// https://www.shadertoy.com/view/Xt3cDn
-//
-
-uint base_hash(uvec2 p) {
-  p = 1103515245U*((p >> 1U)^(p.yx));
-  uint h32 = 1103515245U*((p.x)^(p.y>>3U));
-  return h32^(h32 >> 16);
-}
-
-vec2 hash2(inout float seed) {
-  uint n = base_hash(floatBitsToUint(vec2(seed+=.1, seed+=.1)));
-  uvec2 rz = uvec2(n, n*48271U);
-  return vec2(rz.xy & uvec2(0x7fffffffU))/float(0x7fffffff);
-}
-
-vec3 hash3(inout float seed) {
-  uint n = base_hash(floatBitsToUint(vec2(seed+=.1, seed+=.1)));
-  uvec3 rz = uvec3(n, n*16807U, n*48271U);
-  return vec3(rz & uvec3(0x7fffffffU))/float(0x7fffffff);
-}
-
-//
-// Random functions by Reinder Nijhoff:
-// https://www.shadertoy.com/view/llVcDz
-//
-
-vec3 random_in_unit_sphere(inout float seed) {
-  vec3 h = hash3(seed) * vec3(2., 6.28318530718, 1.)-vec3(1, 0, 0);
-  float phi = h.y;
-  float r = pow(h.z, 1./3.);
-  return r * vec3(sqrt(1.-h.x*h.x)*vec2(sin(phi), cos(phi)), h.x);
-}
-
-vec3 random_in_unit_vector(inout float seed) {
-  return normalize(random_in_unit_sphere(seed));
-}
-
-vec3 random_in_hemisphere(inout float seed, vec3 normal) {
-  vec3 in_unit_sphere = random_in_unit_sphere(seed);
-  // In the same hemisphere as the normal
-  if (dot(in_unit_sphere, normal) > 0.0) return in_unit_sphere;
-  else return -in_unit_sphere;
-}
-
-// Division by zero creates a value respresenting infinity.
-float infinity = 1.0/0.0;

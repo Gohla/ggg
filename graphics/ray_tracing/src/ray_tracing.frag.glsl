@@ -17,8 +17,14 @@ layout(location = 0) out vec4 color;
 bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
   rec.t = t_max;
   bool hit = false;
-  hit = hit || hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5), r, t_min, rec.t, rec);
-  hit = hit || hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0), r, t_min, rec.t, rec);
+  Material ground = diffuse_material(vec3(0.8, 0.8, 0.0));
+  Material center = diffuse_material(vec3(0.7, 0.3, 0.3));
+  Material left = metal_material(vec3(0.8, 0.8, 0.8), 0.0);
+  Material right = metal_material(vec3(0.8, 0.6, 0.2), 0.75);
+  hit = hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0, ground), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5, center), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(-1.0, 0.0, -1.0), 0.5, left), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(1.0, 0.0, -1.0), 0.5, right), r, t_min, rec.t, rec) || hit;
   return hit;
 }
 
@@ -27,11 +33,17 @@ vec3 ray_color(Ray r, inout float seed) {
   vec3 col = vec3(1.0);
   for (int i = 0; i < MAX_RECURSION; ++i) {
     if (hit_world(r, 0.001, infinity, rec)) {
-      // Next ray: diffuse bounce ray.
-      vec3 target = rec.p + rec.normal + random_in_hemisphere(seed, rec.normal);
-      r = ray(rec.p, target - rec.p);
-      // Absorb half of the light.
-      col *= 0.5;
+      Ray scattered;
+      vec3 attenuation;
+      if(scatter(r, rec, attenuation, scattered, seed)) {
+        // Absorb some of the light
+        col *= attenuation;
+        // Next ray: the scattered ray
+        r = scattered;
+      } else {
+        // All light was absorbed.
+        return vec3(0.0);
+      }
     } else {
       // No hit, use the sky color.
       vec3 unit_direction = normalize(r.direction);
