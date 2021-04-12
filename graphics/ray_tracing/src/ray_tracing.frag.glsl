@@ -19,15 +19,13 @@ bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
   bool hit = false;
   Material ground = diffuse_material(vec3(0.8, 0.8, 0.0));
   Material center = diffuse_material(vec3(0.7, 0.3, 0.3));
-  //Material left = metal_material(vec3(0.8, 0.8, 0.8), 0.0);
   Material left = dielectric_material(1.5);
   Material right = metal_material(vec3(0.8, 0.6, 0.2), 0.75);
-  //Material up = dielectric_material(-1.5);
   hit = hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0, ground), r, t_min, rec.t, rec) || hit;
   hit = hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5, center), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(-1.0, 0.0, -1.0), 0.5, left), r, t_min, rec.t, rec) || hit;
   hit = hit_sphere(sphere(vec3(-1.0, 0.0, -1.0), -0.4, left), r, t_min, rec.t, rec) || hit;
   hit = hit_sphere(sphere(vec3(1.0, 0.0, -1.0), 0.5, right), r, t_min, rec.t, rec) || hit;
-  //hit = hit_sphere(sphere(vec3(0.0, 1.0, -1.0), -0.5, up), r, t_min, rec.t, rec) || hit;
   return hit;
 }
 
@@ -38,7 +36,7 @@ vec3 ray_color(Ray r, inout float seed) {
     if (hit_world(r, 0.001, infinity, rec)) {
       Ray scattered;
       vec3 attenuation;
-      if(scatter(r, rec, attenuation, scattered, seed)) {
+      if (scatter(r, rec, attenuation, scattered, seed)) {
         // Attenuate (absorb) some of the light
         col *= attenuation;
         // Next ray: the scattered ray
