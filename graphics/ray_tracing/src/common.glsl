@@ -31,34 +31,43 @@ struct Camera {
   vec3 lower_left_corner;
   vec3 horizontal;
   vec3 vertical;
+  vec3 u;
+  vec3 v;
+  vec3 w;
+  float lens_radius;
 };
 
 Camera camera(
-  vec3 lookfrom,
-  vec3 lookat,
-  vec3   vup,
-  float vfov,
-  float aspect_ratio
+vec3 lookfrom,
+vec3 lookat,
+vec3   vup,
+float vfov,
+float aspect_ratio,
+float aperture,
+float focus_dist
 ) {
   float theta = radians(vfov);
   float h = tan(theta/2.0);
   float viewport_height = 2.0 * h;
   float viewport_width = aspect_ratio * viewport_height;
 
-  vec3 w = normalize(lookfrom - lookat);
-  vec3 u = normalize(cross(vup, w));
-  vec3 v = normalize(cross(w, u));
-
   Camera cam;
+
+  cam.w = normalize(lookfrom - lookat);
+  cam.u = normalize(cross(vup, cam.w));
+  cam.v = cross(cam.w, cam.u);
   cam.origin = lookfrom;
-  cam.horizontal = viewport_width * u;
-  cam.vertical = viewport_height * v;
-  cam.lower_left_corner = cam.origin - cam.horizontal/2.0 - cam.vertical/2.0 - w;
+  cam.horizontal = focus_dist *  viewport_width * cam.u;
+  cam.vertical = focus_dist * viewport_height * cam.v;
+  cam.lower_left_corner = cam.origin - cam.horizontal / 2.0 - cam.vertical / 2.0 - focus_dist * cam.w;
+  cam.lens_radius = aperture / 2.0;
   return cam;
 }
 
-Ray get_ray(Camera cam, float s, float t) {
-  return ray(cam.origin, cam.lower_left_corner + s * cam.horizontal + t * cam.vertical - cam.origin);
+Ray get_ray(Camera cam, float s, float t, inout float seed) {
+  vec2 rd = cam.lens_radius * random_in_unit_disk(seed);
+  vec3 offset = cam.u * rd.x + cam.v * rd.y;
+  return ray(cam.origin + offset, cam.lower_left_corner + s * cam.horizontal + t * cam.vertical - cam.origin - offset);
 }
 
 

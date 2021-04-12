@@ -1,11 +1,11 @@
 use bytemuck::{Pod, Zeroable};
-use ultraviolet::{Vec2, Vec3, Vec4};
+use ultraviolet::{Vec3, Vec4};
 ///! GPU ray tracing in one weekend: https://raytracing.github.io/books/RayTracingInOneWeekend.html + http://roar11.com/2019/10/gpu-ray-tracing-in-an-afternoon/
 
 use wgpu::{BindGroup, CommandBuffer, include_spirv, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
-use common::input::{KeyboardButton, RawInput};
+use common::input::{KeyboardButton, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -16,14 +16,14 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
-  viewport_and_elapsed: Vec4,
+  viewport_and_elapsed_and_aperture: Vec4,
   camera_origin_and_v_fov: Vec4,
 }
 
 impl Uniform {
-  pub fn new(screen_size: ScreenSize, elapsed: f32, camera_origin: Vec3, v_fov: f32) -> Self {
+  pub fn new(screen_size: ScreenSize, elapsed: f32, camera_aperture: f32, camera_origin: Vec3, v_fov: f32) -> Self {
     Self {
-      viewport_and_elapsed: Vec4::new(screen_size.physical.width as f32, screen_size.physical.height as f32, elapsed, 0.0),
+      viewport_and_elapsed_and_aperture: Vec4::new(screen_size.physical.width as f32, screen_size.physical.height as f32, elapsed, camera_aperture),
       camera_origin_and_v_fov: Vec4::new(camera_origin.x, camera_origin.y, camera_origin.z, v_fov),
     }
   }
@@ -37,7 +37,8 @@ pub struct Input {
   down: bool,
   left: bool,
   right: bool,
-  zoom: f32,
+  v_fov_delta: f32,
+  aperture_delta: f32,
 }
 
 pub struct RayTracing {
@@ -47,6 +48,7 @@ pub struct RayTracing {
   render_pipeline: RenderPipeline,
   multisampled_framebuffer: GfxTexture,
 
+  camera_aperture: f32,
   camera_origin: Vec3,
   v_fov: f32,
 }
@@ -55,12 +57,13 @@ const SAMPLE_COUNT: u32 = 1;
 
 impl app::Application for RayTracing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
-    let camera_origin = Vec3::zero();
-    let v_fov = 90.0;
+    let camera_aperture = 0.1;
+    let camera_origin = Vec3::new(0.0, 1.0, 3.0);
+    let v_fov = 45.0;
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::new(os.window.get_inner_size(), 0.0, camera_origin, v_fov)]);
+      .build_with_data(&gfx.device, &[Uniform::new(os.window.get_inner_size(), 0.0, camera_aperture, camera_origin, v_fov)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
@@ -93,6 +96,7 @@ impl app::Application for RayTracing {
 
       multisampled_framebuffer,
 
+      camera_aperture,
       camera_origin,
       v_fov,
     }
@@ -126,21 +130,26 @@ impl app::Application for RayTracing {
     if raw_input.is_keyboard_button_down(KeyboardButton::C) {
       input.down = true;
     }
-    input.zoom = raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.vertical as f32;
+    if raw_input.is_keyboard_modifier_down(KeyboardModifier::Control) {
+      input.aperture_delta = (raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.vertical as f32) * 0.1;
+    } else {
+      input.v_fov_delta = raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.vertical as f32;
+    }
     input
   }
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let delta = frame.time.delta.as_s() as f32;
-    if input.forward { self.camera_origin.z += 1.0 * delta; }
-    if input.backward { self.camera_origin.z -= 1.0 * delta; }
+    if input.forward { self.camera_origin.z -= 1.0 * delta; }
+    if input.backward { self.camera_origin.z += 1.0 * delta; }
     if input.left { self.camera_origin.x += 1.0 * delta; }
     if input.right { self.camera_origin.x -= 1.0 * delta; }
     if input.up { self.camera_origin.y += 1.0 * delta; }
     if input.down { self.camera_origin.y -= 1.0 * delta; }
-    self.v_fov += input.zoom;
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_origin, self.v_fov)]);
+    self.v_fov += input.v_fov_delta;
+    self.camera_aperture += input.aperture_delta;
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
     let render_pass_builder = RenderPassBuilder::new()
       .with_label("Ray tracing render pass");
