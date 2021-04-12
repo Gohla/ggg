@@ -108,7 +108,7 @@ pub struct Options {
 
 impl Default for Options {
   fn default() -> Self {
-    let size = LogicalSize::new(1920f64, 1080f64);
+    let size = LogicalSize::new(1280.0, 720.0);
     Options {
       name: "GGG application".to_string(),
 

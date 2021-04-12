@@ -129,12 +129,12 @@ impl Gui {
     if process_mouse_input {
       // Mouse wheel delta // TODO: properly handle line to pixel conversion?
       self.input.scroll_delta = Vec2::new(
-        (input.mouse_wheel_pixel_delta.physical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
-        (input.mouse_wheel_pixel_delta.physical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
+        (input.mouse_wheel_pixel_delta.logical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
+        (input.mouse_wheel_pixel_delta.logical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
       );
 
       // Mouse movement
-      let mouse_position = Pos2::new(input.mouse_position.physical.x as f32, input.mouse_position.physical.y as f32);
+      let mouse_position = Pos2::new(input.mouse_position.logical.x as f32, input.mouse_position.logical.y as f32);
       if !input.mouse_position_delta.is_zero() {
         self.input.events.push(Event::PointerMoved(mouse_position))
       }
@@ -420,7 +420,7 @@ struct Uniform {
 impl Uniform {
   #[inline]
   pub fn from_screen_size(screen_size: ScreenSize) -> Self {
-    Self { screen_size: [screen_size.physical.width as f32, screen_size.physical.height as f32] }
+    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32] }
   }
 }
 
