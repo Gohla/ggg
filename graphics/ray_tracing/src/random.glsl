@@ -7,7 +7,7 @@ uint base_hash(uvec2 p) {
 }
 
 float hash1(inout float seed) {
-  uint n = base_hash(floatBitsToUint(vec2(seed+=.1,seed+=.1)));
+  uint n = base_hash(floatBitsToUint(vec2(seed+=.1, seed+=.1)));
   return float(n)*(1.0/float(0xffffffffU));
 }
 
@@ -31,6 +31,13 @@ vec3 random_in_unit_sphere(inout float seed) {
   float phi = h.y;
   float r = pow(h.z, 1./3.);
   return r * vec3(sqrt(1.-h.x*h.x)*vec2(sin(phi), cos(phi)), h.x);
+}
+
+vec2 random_in_unit_disk(inout float seed) {
+  vec2 h = hash2(seed) * vec2(1., 6.28318530718);
+  float phi = h.y;
+  float r = sqrt(h.x);
+  return r * vec2(sin(phi), cos(phi));
 }
 
 

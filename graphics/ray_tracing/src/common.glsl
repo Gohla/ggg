@@ -33,25 +33,32 @@ struct Camera {
   vec3 vertical;
 };
 
-Camera camera(vec2 resolution, vec3 origin) {
-  float image_width = resolution.x;
-  float image_height = resolution.y;
-  float aspect_ratio = image_width / image_height;
-
-  float viewport_height = 2.0;
+Camera camera(
+  vec3 lookfrom,
+  vec3 lookat,
+  vec3   vup,
+  float vfov,
+  float aspect_ratio
+) {
+  float theta = radians(vfov);
+  float h = tan(theta/2.0);
+  float viewport_height = 2.0 * h;
   float viewport_width = aspect_ratio * viewport_height;
-  float focal_length = 1.0;
+
+  vec3 w = normalize(lookfrom - lookat);
+  vec3 u = normalize(cross(vup, w));
+  vec3 v = normalize(cross(w, u));
 
   Camera cam;
-  cam.origin = origin;
-  cam.horizontal = vec3(viewport_width, 0.0, 0.0);
-  cam.vertical = vec3(0.0, viewport_height, 0.0);
-  cam.lower_left_corner = cam.origin - cam.horizontal / 2.0 - cam.vertical / 2.0 - vec3(0.0, 0.0, focal_length);
+  cam.origin = lookfrom;
+  cam.horizontal = viewport_width * u;
+  cam.vertical = viewport_height * v;
+  cam.lower_left_corner = cam.origin - cam.horizontal/2.0 - cam.vertical/2.0 - w;
   return cam;
 }
 
-Ray get_ray(Camera cam, vec2 uv) {
-  return ray(cam.origin, cam.lower_left_corner + uv.x * cam.horizontal + uv.y * cam.vertical - cam.origin);
+Ray get_ray(Camera cam, float s, float t) {
+  return ray(cam.origin, cam.lower_left_corner + s * cam.horizontal + t * cam.vertical - cam.origin);
 }
 
 

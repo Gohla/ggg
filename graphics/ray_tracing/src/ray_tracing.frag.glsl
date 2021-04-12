@@ -7,9 +7,8 @@
 
 in vec4 gl_FragCoord;
 layout(set = 0, binding = 0) uniform Uniform {
-  vec2 resolution;
-  float elapsed;
-  vec3 camera_origin;
+  vec4 resolution_and_elapsed;
+  vec4 camera_origin_and_vfov;
 };
 
 layout(location = 0) out vec4 color;
@@ -58,23 +57,23 @@ vec3 ray_color(Ray r, inout float seed) {
 }
 
 void main() {
-  Camera cam = camera(resolution, camera_origin);
+  Camera cam = camera(camera_origin_and_vfov.xyz, vec3(0, 0, -1), vec3(0, 1, 0), camera_origin_and_vfov.w, resolution_and_elapsed.x / resolution_and_elapsed.y);
 
   // Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
-  vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
+  vec2 uv = vec2(gl_FragCoord.x, resolution_and_elapsed.y - gl_FragCoord.y);
 
   // Initialise seed.
-  float seed = float(base_hash(floatBitsToUint(uv)))/float(0xffffffffU)+elapsed;
+  float seed = float(base_hash(floatBitsToUint(uv)))/float(0xffffffffU)+resolution_and_elapsed.z;
 
   // Anti aliasing with box filter, from: http://roar11.com/2019/10/gpu-ray-tracing-in-an-afternoon/
-  vec2 rcpRes = vec2(1.0) / resolution;
+  vec2 rcpRes = vec2(1.0) / resolution_and_elapsed.xy;
   vec3 col = vec3(0.0);
   float rcpNumSamples = 1.0 / float(NUM_SAMPLES);
   for (int x = 0; x < NUM_SAMPLES; ++x)  {
     for (int y = 0; y < NUM_SAMPLES; ++y)    {
       vec2 adj = vec2(float(x), float(y));
       vec2 uv = (uv + adj * rcpNumSamples) * rcpRes;
-      col += ray_color(get_ray(cam, uv), seed);
+      col += ray_color(get_ray(cam, uv.x, uv.y), seed);
     }
   }
   col /= float(NUM_SAMPLES * NUM_SAMPLES);
