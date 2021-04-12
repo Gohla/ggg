@@ -6,6 +6,11 @@ uint base_hash(uvec2 p) {
   return h32^(h32 >> 16);
 }
 
+float hash1(inout float seed) {
+  uint n = base_hash(floatBitsToUint(vec2(seed+=.1,seed+=.1)));
+  return float(n)*(1.0/float(0xffffffffU));
+}
+
 vec2 hash2(inout float seed) {
   uint n = base_hash(floatBitsToUint(vec2(seed+=.1, seed+=.1)));
   uvec2 rz = uvec2(n, n*48271U);
@@ -19,7 +24,7 @@ vec3 hash3(inout float seed) {
 }
 
 
-// Random functions by Reinder Nijhoff: https://www.shadertoy.com/view/llVcDz
+// Random function by Reinder Nijhoff: https://www.shadertoy.com/view/llVcDz
 
 vec3 random_in_unit_sphere(inout float seed) {
   vec3 h = hash3(seed) * vec3(2., 6.28318530718, 1.)-vec3(1, 0, 0);
@@ -28,13 +33,16 @@ vec3 random_in_unit_sphere(inout float seed) {
   return r * vec3(sqrt(1.-h.x*h.x)*vec2(sin(phi), cos(phi)), h.x);
 }
 
+
+// Adapted random functions from RTIOW.
+
 vec3 random_in_unit_vector(inout float seed) {
   return normalize(random_in_unit_sphere(seed));
 }
 
 vec3 random_in_hemisphere(inout float seed, vec3 normal) {
   vec3 in_unit_sphere = random_in_unit_sphere(seed);
-  // In the same hemisphere as the normal
+  // In the same hemisphere as the normal.
   if (dot(in_unit_sphere, normal) > 0.0) return in_unit_sphere;
   else return -in_unit_sphere;
 }

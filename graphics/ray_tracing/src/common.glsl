@@ -10,19 +10,13 @@ float infinity = 1.0/0.0;
 struct Ray {
   vec3 origin;
   vec3 direction;
-  float t;// Time
 };
 
-Ray ray(vec3 origin, vec3 direction, float t) {
+Ray ray(vec3 origin, vec3 direction) {
   Ray r;
   r.origin = origin;
   r.direction = direction;
-  r.t = t;
   return r;
-}
-
-Ray ray(vec3 origin, vec3 direction) {
-  return ray(origin, direction, 0.0);
 }
 
 vec3 ray_at(Ray ray, float t) {
@@ -57,7 +51,7 @@ Camera camera(vec2 resolution, vec3 origin) {
 }
 
 Ray get_ray(Camera cam, vec2 uv) {
-  return ray(cam.origin, normalize(cam.lower_left_corner + uv.x * cam.horizontal + uv.y * cam.vertical - cam.origin));
+  return ray(cam.origin, cam.lower_left_corner + uv.x * cam.horizontal + uv.y * cam.vertical - cam.origin);
 }
 
 
@@ -65,11 +59,12 @@ Ray get_ray(Camera cam, vec2 uv) {
 
   #define MT_DIFFUSE 0
   #define MT_METAL 1
+  #define MT_DIELECTRIC 2
 
 struct Material {
   int type;
   vec3 albedo;
-  float roughness; // controls roughness for metals
+  float v;
 };
 
 Material diffuse_material(vec3 albedo) {
@@ -83,7 +78,14 @@ Material metal_material(vec3 albedo, float roughness) {
   Material m;
   m.type = MT_METAL;
   m.albedo = albedo;
-  m.roughness = roughness;
+  m.v = roughness;
+  return m;
+}
+
+Material dielectric_material(float index_of_refraction) {
+  Material m;
+  m.type = MT_DIELECTRIC;
+  m.v = index_of_refraction;
   return m;
 }
 
@@ -106,6 +108,24 @@ void set_face_normal(inout HitRecord rec, Ray r, vec3 outward_normal) {
 
 // Scatter
 
+vec3 modified_reflect(vec3 v, vec3 n) {
+  return v - 2.0*dot(v, n)*n;
+}
+
+vec3 modified_refract(vec3 uv, vec3 n, float etai_over_etat) {
+  float cos_theta = min(dot(-uv, n), 1.0);
+  vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
+  vec3 r_out_parallel = -sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))) * n;
+  return r_out_perp + r_out_parallel;
+}
+
+float reflectance(float cosine, float ref_idx) {
+  // Use Schlick's approximation for reflectance.
+  float r0 = (1.0-ref_idx) / (1.0+ref_idx);
+  r0 = r0*r0;
+  return r0 + (1.0-r0)*pow((1.0 - cosine), 5.0);
+}
+
 bool scatter(Ray r_in, HitRecord rec, out vec3 attenuation, out Ray scattered, inout float seed) {
   if (rec.material.type == MT_DIFFUSE) {
     vec3 scatter_direction = rec.p + rec.normal + random_in_hemisphere(seed, rec.normal);
@@ -114,11 +134,28 @@ bool scatter(Ray r_in, HitRecord rec, out vec3 attenuation, out Ray scattered, i
     attenuation = rec.material.albedo;
     return true;
   }
-  if(rec.material.type == MT_METAL) {
-    vec3 reflected = reflect(normalize(r_in.direction), rec.normal);
-    scattered = ray(rec.p, reflected + rec.material.roughness * random_in_unit_sphere(seed));
+  if (rec.material.type == MT_METAL) {
+    vec3 reflected = modified_reflect(normalize(r_in.direction), rec.normal);
+    scattered = ray(rec.p, reflected + rec.material.v * random_in_unit_sphere(seed));
     attenuation = rec.material.albedo;
-    return (dot(scattered.direction, rec.normal) > 0.0);
+    return dot(scattered.direction, rec.normal) > 0.0;
+  }
+  if (rec.material.type == MT_DIELECTRIC) {
+    attenuation = vec3(1.0);
+    float index_of_refraction = rec.material.v;
+    float refraction_ratio = rec.front_face ? (1.0/index_of_refraction) : index_of_refraction;
+    vec3 unit_direction = normalize(r_in.direction);
+    float cos_theta = min(dot(-unit_direction, rec.normal), 1.0);
+    float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+    bool cannot_refract = refraction_ratio * sin_theta > 1.0;
+    vec3 direction;
+    if (cannot_refract || reflectance(cos_theta, refraction_ratio) > hash1(seed)) {
+      direction = modified_reflect(unit_direction, rec.normal);
+    } else {
+      direction = modified_refract(unit_direction, rec.normal, refraction_ratio);
+    }
+    scattered = ray(rec.p, direction);
+    return true;
   }
   return false;
 }

@@ -19,12 +19,15 @@ bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
   bool hit = false;
   Material ground = diffuse_material(vec3(0.8, 0.8, 0.0));
   Material center = diffuse_material(vec3(0.7, 0.3, 0.3));
-  Material left = metal_material(vec3(0.8, 0.8, 0.8), 0.0);
+  //Material left = metal_material(vec3(0.8, 0.8, 0.8), 0.0);
+  Material left = dielectric_material(1.5);
   Material right = metal_material(vec3(0.8, 0.6, 0.2), 0.75);
+  //Material up = dielectric_material(-1.5);
   hit = hit_sphere(sphere(vec3(0.0, -100.5, -1.0), 100.0, ground), r, t_min, rec.t, rec) || hit;
   hit = hit_sphere(sphere(vec3(0.0, 0.0, -1.0), 0.5, center), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(-1.0, 0.0, -1.0), 0.5, left), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(-1.0, 0.0, -1.0), -0.4, left), r, t_min, rec.t, rec) || hit;
   hit = hit_sphere(sphere(vec3(1.0, 0.0, -1.0), 0.5, right), r, t_min, rec.t, rec) || hit;
+  //hit = hit_sphere(sphere(vec3(0.0, 1.0, -1.0), -0.5, up), r, t_min, rec.t, rec) || hit;
   return hit;
 }
 
@@ -36,12 +39,12 @@ vec3 ray_color(Ray r, inout float seed) {
       Ray scattered;
       vec3 attenuation;
       if(scatter(r, rec, attenuation, scattered, seed)) {
-        // Absorb some of the light
+        // Attenuate (absorb) some of the light
         col *= attenuation;
         // Next ray: the scattered ray
         r = scattered;
       } else {
-        // All light was absorbed.
+        // All light was attenuated (absorbed).
         return vec3(0.0);
       }
     } else {
@@ -49,7 +52,7 @@ vec3 ray_color(Ray r, inout float seed) {
       vec3 unit_direction = normalize(r.direction);
       float t = 0.5 * (unit_direction.y + 1.0);
       col *= (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
-      // Break out of loop early, no bounces possible.
+      // Break out of loop early, no more scattering possible.
       return col;
     }
   }
