@@ -1,7 +1,7 @@
-use bytemuck::{Pod, Zeroable};
-use ultraviolet::{Vec3, Vec4};
 ///! GPU ray tracing in one weekend: https://raytracing.github.io/books/RayTracingInOneWeekend.html + http://roar11.com/2019/10/gpu-ray-tracing-in-an-afternoon/
 
+use bytemuck::{Pod, Zeroable};
+use ultraviolet::{Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, include_spirv, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};

@@ -1728,6 +1728,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ray_box"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "bytemuck",
+ "common",
+ "gfx",
+ "gfxc",
+ "os",
+ "tracing",
+ "ultraviolet",
+ "wgpu",
+]
+
+[[package]]
 name = "ray_tracing"
 version = "0.1.0"
 dependencies = [

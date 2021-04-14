@@ -3,7 +3,7 @@
 #include "common.glsl"
 
 #define MAX_RECURSION 10
-#define NUM_SAMPLES 4
+#define NUM_SAMPLES 1
 
 in vec4 gl_FragCoord;
 layout(set = 0, binding = 0) uniform Uniform {

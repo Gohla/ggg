@@ -52,7 +52,6 @@ float focus_dist
   float viewport_width = aspect_ratio * viewport_height;
 
   Camera cam;
-
   cam.w = normalize(lookfrom - lookat);
   cam.u = normalize(cross(vup, cam.w));
   cam.v = cross(cam.w, cam.u);
@@ -124,10 +123,6 @@ void set_face_normal(inout HitRecord rec, Ray r, vec3 outward_normal) {
 
 // Scatter
 
-vec3 modified_reflect(vec3 v, vec3 n) {
-  return v - 2.0*dot(v, n)*n;
-}
-
 vec3 modified_refract(vec3 uv, vec3 n, float etai_over_etat) {
   float cos_theta = min(dot(-uv, n), 1.0);
   vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
@@ -136,7 +131,6 @@ vec3 modified_refract(vec3 uv, vec3 n, float etai_over_etat) {
 }
 
 float reflectance(float cosine, float ref_idx) {
-  // Use Schlick's approximation for reflectance.
   float r0 = (1.0-ref_idx) / (1.0+ref_idx);
   r0 = r0*r0;
   return r0 + (1.0-r0)*pow((1.0 - cosine), 5.0);
@@ -145,13 +139,12 @@ float reflectance(float cosine, float ref_idx) {
 bool scatter(Ray r_in, HitRecord rec, out vec3 attenuation, out Ray scattered, inout float seed) {
   if (rec.material.type == MT_DIFFUSE) {
     vec3 scatter_direction = rec.p + rec.normal + random_in_hemisphere(seed, rec.normal);
-    // TODO: Catch degenerate scatter direction ?
     scattered = ray(rec.p, scatter_direction);
     attenuation = rec.material.albedo;
     return true;
   }
   if (rec.material.type == MT_METAL) {
-    vec3 reflected = modified_reflect(normalize(r_in.direction), rec.normal);
+    vec3 reflected = reflect(normalize(r_in.direction), rec.normal);
     scattered = ray(rec.p, reflected + rec.material.v * random_in_unit_sphere(seed));
     attenuation = rec.material.albedo;
     return dot(scattered.direction, rec.normal) > 0.0;
@@ -166,7 +159,7 @@ bool scatter(Ray r_in, HitRecord rec, out vec3 attenuation, out Ray scattered, i
     bool cannot_refract = refraction_ratio * sin_theta > 1.0;
     vec3 direction;
     if (cannot_refract || reflectance(cos_theta, refraction_ratio) > hash1(seed)) {
-      direction = modified_reflect(unit_direction, rec.normal);
+      direction = reflect(unit_direction, rec.normal);
     } else {
       direction = modified_refract(unit_direction, rec.normal, refraction_ratio);
     }
