@@ -129,8 +129,8 @@ impl app::Application for Cubes {
       .with_label("Cubes static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/cube.vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/cube.frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/cubes/vert.spv")));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/cubes/frag.spv")));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 

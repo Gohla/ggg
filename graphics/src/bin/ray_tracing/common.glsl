@@ -1,4 +1,4 @@
-#include "random.glsl"
+#include "bin/ray_tracing/random.glsl"
 
 // Division by zero creates a value respresenting infinity.
 

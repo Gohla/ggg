@@ -104,7 +104,7 @@ impl app::Application for Quads {
     let camera_sys = CameraSys::with_defaults_perspective(viewport);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
-      let image = image::load_from_memory(include_bytes!("../../../assets/cobble_stone.bmp")).unwrap().into_rgba8();
+      let image = image::load_from_memory(include_bytes!("../../../../assets/cobble_stone.bmp")).unwrap().into_rgba8();
       let texture = TextureBuilder::new_from_2d_rgba_image(&image)
         .with_texture_label("Cobblestone diffuse texture")
         .with_texture_view_label("Cobblestone diffuse texture view")
@@ -135,8 +135,8 @@ impl app::Application for Quads {
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/quad.vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/quad.frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/quads/vert.spv")));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/quads/frag.spv")));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 

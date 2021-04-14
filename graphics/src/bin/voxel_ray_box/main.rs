@@ -16,8 +16,8 @@ pub struct RayTracing {
 
 impl app::Application for RayTracing {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/ray_box.vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/ray_box.frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/voxel_ray_box/vert.spv")));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/voxel_ray_box/frag.spv")));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)

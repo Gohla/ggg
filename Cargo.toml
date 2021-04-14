@@ -9,11 +9,7 @@ members = [
   "core/gui",
   "core/gui_widget",
   "core/app",
-  "graphics/triangle",
-  "graphics/quads",
-  "graphics/cubes",
-  "graphics/ray_tracing",
-  "graphics/ray_box"
+  "graphics"
 ]
 
 # Development profile: full debug information, some optimisations.
@@ -50,15 +46,7 @@ opt-level = 2
 opt-level = 2
 [profile.fastdev.package."app"]
 opt-level = 2
-[profile.fastdev.package."triangle"]
-opt-level = 2
-[profile.fastdev.package."quads"]
-opt-level = 2
-[profile.fastdev.package."cubes"]
-opt-level = 2
-[profile.fastdev.package."ray_tracing"]
-opt-level = 2
-[profile.fastdev.package."ray_box"]
+[profile.fastdev.package."graphics"]
 opt-level = 2
 
 [profile.test]

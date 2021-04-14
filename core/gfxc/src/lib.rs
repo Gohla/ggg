@@ -49,12 +49,12 @@ pub fn compile_shaders() {
       .expect("Failed to get parent path")
       .strip_prefix(&root_input_dir)
       .expect("Failed to get relative path");
-    if file_name.ends_with(".vert.glsl") {
-      let name = file_name.replace(".vert.glsl", "");
-      compiler.compile_shader(ShaderKind::Vertex, entry.path(), root_output_dir.join(relative_path).join(format!("{}.vert.spv", name)), Some(&compile_options));
-    } else if file_name.ends_with(".frag.glsl") {
-      let name = file_name.replace(".frag.glsl", "");
-      compiler.compile_shader(ShaderKind::Fragment, entry.path(), root_output_dir.join(relative_path).join(format!("{}.frag.spv", name)), Some(&compile_options));
+    if file_name.ends_with("vert.glsl") {
+      let name = file_name.replace("vert.glsl", "");
+      compiler.compile_shader(ShaderKind::Vertex, entry.path(), root_output_dir.join(relative_path).join(format!("{}vert.spv", name)), Some(&compile_options));
+    } else if file_name.ends_with("frag.glsl") {
+      let name = file_name.replace("frag.glsl", "");
+      compiler.compile_shader(ShaderKind::Fragment, entry.path(), root_output_dir.join(relative_path).join(format!("{}frag.spv", name)), Some(&compile_options));
     }
   }
 }

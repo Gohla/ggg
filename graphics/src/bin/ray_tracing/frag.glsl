@@ -1,6 +1,6 @@
 #version 450
 
-#include "common.glsl"
+#include "bin/ray_tracing/common.glsl"
 
 #define MAX_RECURSION 10
 #define NUM_SAMPLES 1
