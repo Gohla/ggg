@@ -13,18 +13,19 @@ layout(set = 0, binding = 0) uniform Uniform {
 
 layout(location = 0) out vec4 color;
 
-bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec) {
+bool hit_world(Ray r, float t_min, float t_max, out HitRecord rec, inout float seed) {
   rec.t = t_max;
   bool hit = false;
-  Material ground = diffuse_material(vec3(0.5, 0.5, 0.5));
-  Material center = diffuse_material(vec3(0.7, 0.3, 0.3));
-  Material left = dielectric_material(1.5);
-  Material right = metal_material(vec3(0.8, 0.6, 0.2), 0.75);
-  hit = hit_sphere(sphere(vec3(0.0, -100.5, 0.0), 100.0, ground), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(0.0, 0.0, 0.0), 0.5, center), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(-1.0, 0.0, 0.0), 0.5, left), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(-1.0, 0.0, 0.0), -0.4, left), r, t_min, rec.t, rec) || hit;
-  hit = hit_sphere(sphere(vec3(1.0, 0.0, 0.0), 0.5, right), r, t_min, rec.t, rec) || hit;
+  Material ground_mat = diffuse_material(vec3(0.5, 0.5, 0.5));
+  Material center_mat = diffuse_material(vec3(0.7, 0.3, 0.3));
+  Material left_mat = dielectric_material(1.5);
+  Material right_mat = metal_material(vec3(0.8, 0.6, 0.2), 0.75);
+  hit = hit_sphere(sphere(vec3(0.0, -100.5, 0.0), 100.0, ground_mat), r, t_min, rec.t, rec) || hit;
+  vec3 center = vec3(0.0, 0.0, 0.0);
+  hit = hit_moving_sphere(moving_sphere(center, center + vec3(0.0, hash1(seed) / 2.0, 0.0), 0.0, 1.0, 0.5, center_mat), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(-1.0, 0.0, 0.0), 0.5, left_mat), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(-1.0, 0.0, 0.0), -0.4, left_mat), r, t_min, rec.t, rec) || hit;
+  hit = hit_sphere(sphere(vec3(1.0, 0.0, 0.0), 0.5, right_mat), r, t_min, rec.t, rec) || hit;
   return hit;
 }
 
@@ -32,7 +33,7 @@ vec3 ray_color(Ray r, inout float seed) {
   HitRecord rec;
   vec3 col = vec3(1.0);
   for (int i = 0; i < MAX_RECURSION; ++i) {
-    if (hit_world(r, 0.001, infinity, rec)) {
+    if (hit_world(r, 0.001, infinity, rec, seed)) {
       Ray scattered;
       vec3 attenuation;
       if (scatter(r, rec, attenuation, scattered, seed)) {
@@ -68,7 +69,7 @@ void main() {
   float aperture = resolution_and_elapsed_and_aperture.w;
   float dist_to_focus = length(lookfrom-lookat);
 
-  Camera cam = camera(lookfrom, lookat, vup, v_fov, aspect_ratio, aperture, dist_to_focus);
+  Camera cam = camera(lookfrom, lookat, vup, v_fov, aspect_ratio, aperture, dist_to_focus, 0.0, 1.0);
 
   // Flip y so that Y goes from top to bottom, as this differs from the RTIOW/OpenGL coordinate systems.
   vec2 uv = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
