@@ -2,7 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, include_spirv, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{BindGroup, CommandBuffer, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::{KeyboardButton, KeyboardModifier, RawInput};
@@ -12,6 +12,7 @@ use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use graphics::include_shader;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -73,8 +74,8 @@ impl app::Application for RayTracing {
       .with_label("Ray tracing static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/ray_tracing/vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/ray_tracing/frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)

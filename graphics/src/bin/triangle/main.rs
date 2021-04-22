@@ -4,13 +4,14 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, include_spirv, InputStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
+use wgpu::{Buffer, BufferAddress, CommandBuffer, InputStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
 use gfx::buffer::BufferBuilder;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
+use graphics::include_shader;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -43,8 +44,8 @@ pub struct Triangle {
 
 impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/triangle/vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/triangle/frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])

@@ -8,7 +8,7 @@ use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, include_spirv, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -19,6 +19,7 @@ use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
 const NUM_CUBE_INDICES: usize = 3 * 3 * 2;
@@ -129,8 +130,8 @@ impl app::Application for Cubes {
       .with_label("Cubes static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/cubes/vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/cubes/frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 

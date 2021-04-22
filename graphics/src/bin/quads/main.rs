@@ -5,7 +5,7 @@ use std::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, include_spirv, IndexFormat, InputStepMode, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, InputStepMode, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
@@ -18,6 +18,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use graphics::include_shader;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -135,8 +136,8 @@ impl app::Application for Quads {
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/quads/vert.spv")));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_spirv!(concat!(env!("OUT_DIR"), "/shader/bin/quads/frag.spv")));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
