@@ -1,5 +1,7 @@
+use std::num::NonZeroU32;
+
 use image::RgbaImage;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureUsage, TextureView, TextureViewDescriptor};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureUsage, TextureView, TextureViewDescriptor, TextureViewDimension};
 
 use common::screen::PhysicalSize;
 
@@ -87,6 +89,16 @@ impl<'a> TextureBuilder<'a> {
     self
       .with_size(Extent3d { width, height, depth: 1 })
       .with_dimension(TextureDimension::D2)
+  }
+
+  #[inline]
+  pub fn with_2d_array_size(mut self, width: u32, height: u32, layer_count: NonZeroU32) -> Self {
+    self
+      .with_size(Extent3d { width, height, depth: layer_count.get() })
+      .with_dimension(TextureDimension::D2);
+    self.texture_view_descriptor.array_layer_count = Some(layer_count);
+    self.texture_view_descriptor.dimension = Some(TextureViewDimension::D2Array);
+    self
   }
 
   #[inline]

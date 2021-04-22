@@ -1,3 +1,4 @@
+pub mod prelude;
 pub mod swap_chain;
 pub mod render_pipeline;
 pub mod buffer;
@@ -7,4 +8,4 @@ pub mod texture;
 pub mod sampler;
 pub mod bind_group;
 pub mod camera;
-pub mod prelude;
+pub mod texture_def;
