@@ -275,7 +275,7 @@ impl Gui {
         .with_texture_label("GUI texture")
         .with_texture_view_label("GUI texture view")
         .build(device);
-      texture.write_rgba_texture_data(queue, pixels.as_slice());
+      texture.write_2d_rgba_texture_data(queue, pixels.as_slice());
       // Create texture bind group.
       let texture_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
         .with_entries(&[texture.create_bind_group_entry(0)])

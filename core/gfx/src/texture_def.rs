@@ -1,23 +1,26 @@
+use std::num::NonZeroU32;
+
 use image::{DynamicImage, GenericImageView};
 use thiserror::Error;
-use wgpu::{Device, Texture, TextureFormat, Queue};
+use wgpu::{BindGroup, BindGroupLayout, Device, Extent3d, Queue, Sampler, ShaderStage};
 
 use common::idx_assigner;
 use common::idx_assigner::IdxAssigner;
 
-use crate::texture::TextureBuilder;
-use std::num::NonZeroU32;
+use crate::bind_group::CombinedBindGroupLayoutBuilder;
+use crate::sampler::{SamplerBuilder, SamplerBuilderSamplerEx};
+use crate::texture::{GfxTexture, TextureBuilder};
 
 // Creation
 
-pub struct TextureArrayDefBuilder {
+pub struct ArrayTextureDefBuilder {
   width: u32,
   height: u32,
   assigner: IdxAssigner<TextureIdx, u16>,
   data: Vec<DynamicImage>,
 }
 
-impl TextureArrayDefBuilder {
+impl ArrayTextureDefBuilder {
   pub fn new(width: u32, height: u32) -> Self {
     Self { width, height, assigner: IdxAssigner::new(), data: Vec::new() }
   }
@@ -34,7 +37,7 @@ pub enum AddTextureError {
   IncorrectDimensionsFail { width: u32, height: u32, max_width: u32, max_height: u32 },
 }
 
-impl TextureArrayDefBuilder {
+impl ArrayTextureDefBuilder {
   pub fn add_texture(&mut self, data: DynamicImage) -> Result<TextureIdx, AddTextureError> {
     let (width, height) = data.dimensions();
     if self.width < width || self.height < height {
@@ -54,46 +57,47 @@ pub enum BuildTextureArrayError {
   NoTexturesFail,
 }
 
-impl TextureArrayDefBuilder {
-  pub fn build(self, device: &Device, queue: &Queue) -> Result<TextureDef, BuildTextureArrayError> {
+impl ArrayTextureDefBuilder {
+  pub fn build<'a>(self, device: &Device, queue: &Queue, texture_label: &'a str, texture_view_label: &'a str, sampler_label: &'a str, bind_group_layout_label: &'a str, bind_group_label: &'a str) -> Result<ArrayTextureDef, BuildTextureArrayError> {
     let layer_count = NonZeroU32::new(self.data.len() as u32).ok_or(BuildTextureArrayError::NoTexturesFail)?;
-    let texture_array = TextureBuilder::new()
+    let texture = TextureBuilder::new()
       .with_2d_array_size(self.width, self.height, layer_count)
       .with_rgba8_unorm_srgb_format()
+      .with_texture_label(texture_label)
+      .with_texture_view_label(texture_view_label)
       .build(device);
-    texture_array.write_2d_rgba_image()
+    let (texture_layout_entry, texture_bind_group_entry) = texture.create_default_float_2d_array_bind_group_entries(0, ShaderStage::FRAGMENT);
+    for data in self.data {
+      let data = data.into_rgba8();
+      let (width, height) = data.dimensions();
+      texture.write_texture_data(queue, data.as_raw(), 0, width * 4, 0, Extent3d { width, height, depth: 1 });
+    }
+    let sampler = SamplerBuilder::new()
+      .with_label(sampler_label)
+      .build(device);
+    let (sampler_layout_entry, sampler_bind_group_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
+    let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
+      .with_layout_entries(&[texture_layout_entry, sampler_layout_entry])
+      .with_entries(&[texture_bind_group_entry, sampler_bind_group_entry])
+      .with_layout_label(bind_group_layout_label)
+      .with_label(bind_group_label)
+      .build(device);
+    Ok(ArrayTextureDef {
+      texture,
+      sampler,
+      bind_group_layout,
+      bind_group,
+    })
   }
 }
 
 // Texture definition
 
-pub struct TextureDef {
-  pub texture_array: Texture,
-  pub descriptor_set_layout: DescriptorSetLayout,
-  pub descriptor_pool: DescriptorPool,
-  pub descriptor_set: DescriptorSet,
-}
-
-impl TextureDef {
-  fn new(
-    texture_array: Texture,
-    descriptor_set_layout: DescriptorSetLayout,
-    descriptor_pool: DescriptorPool,
-    descriptor_set: DescriptorSet,
-  ) -> Self {
-    Self {
-      texture_array,
-      descriptor_set_layout,
-      descriptor_pool,
-      descriptor_set,
-    }
-  }
-
-  // pub unsafe fn destroy(&self, device: &Device) {
-  //   device.destroy_descriptor_pool(self.descriptor_pool);
-  //   device.destroy_descriptor_set_layout(self.descriptor_set_layout);
-  //   self.texture_array.destroy(device, allocator);
-  // }
+pub struct ArrayTextureDef {
+  pub texture: GfxTexture,
+  pub sampler: Sampler,
+  pub bind_group_layout: BindGroupLayout,
+  pub bind_group: BindGroup,
 }
 
 // Implementations

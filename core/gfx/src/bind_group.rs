@@ -63,6 +63,16 @@ impl BindGroupLayoutEntryBuilder {
     Self::new_float_2d_texture(true, false)
   }
 
+  #[inline]
+  pub fn new_float_2d_array_texture(filterable: bool, multisampled: bool) -> Self {
+    Self::new_texture(TextureSampleType::Float { filterable }, TextureViewDimension::D2Array, multisampled)
+  }
+
+  #[inline]
+  pub fn new_default_float_2d_array_texture() -> Self {
+    Self::new_float_2d_array_texture(true, false)
+  }
+
 
   #[inline]
   pub fn with_binding(mut self, binding: u32) -> Self {

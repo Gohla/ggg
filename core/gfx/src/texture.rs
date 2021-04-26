@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use image::RgbaImage;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureUsage, TextureView, TextureViewDescriptor, TextureViewDimension};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BufferAddress, Device, Extent3d, Origin3d, Queue, ShaderStage, Texture, TextureCopyView, TextureDataLayout, TextureDescriptor, TextureDimension, TextureFormat, TextureUsage, TextureView, TextureViewDescriptor, TextureViewDimension};
 
 use common::screen::PhysicalSize;
 
@@ -92,13 +92,12 @@ impl<'a> TextureBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_2d_array_size(mut self, width: u32, height: u32, layer_count: NonZeroU32) -> Self {
+  pub fn with_2d_array_size(self, width: u32, height: u32, layer_count: NonZeroU32) -> Self {
     self
       .with_size(Extent3d { width, height, depth: layer_count.get() })
-      .with_dimension(TextureDimension::D2);
-    self.texture_view_descriptor.array_layer_count = Some(layer_count);
-    self.texture_view_descriptor.dimension = Some(TextureViewDimension::D2Array);
-    self
+      .with_dimension(TextureDimension::D2)
+      .with_view_dimension(TextureViewDimension::D2Array)
+      .with_view_array_layer_count(layer_count)
   }
 
   #[inline]
@@ -144,6 +143,19 @@ impl<'a> TextureBuilder<'a> {
     self
   }
 
+
+  #[inline]
+  pub fn with_view_dimension(mut self, dimension: TextureViewDimension) -> Self {
+    self.texture_view_descriptor.dimension = Some(dimension);
+    self
+  }
+
+  #[inline]
+  pub fn with_view_array_layer_count(mut self, array_layer_count: NonZeroU32) -> Self {
+    self.texture_view_descriptor.array_layer_count = Some(array_layer_count);
+    self
+  }
+
   #[inline]
   pub fn with_texture_view_label(mut self, label: &'a str) -> Self {
     self.texture_view_descriptor.label = Some(label);
@@ -173,7 +185,7 @@ impl<'a> TextureBuilder<'a> {
 
 impl<'a> GfxTexture {
   #[inline]
-  pub fn write_texture_data(&self, queue: &Queue, data: &[u8], bytes_per_row: u32, rows_per_image: u32) {
+  pub fn write_texture_data(&self, queue: &Queue, data: &[u8], offset: BufferAddress, bytes_per_row: u32, rows_per_image: u32, size: Extent3d) {
     queue.write_texture(
       TextureCopyView {
         texture: &self.texture,
@@ -182,22 +194,27 @@ impl<'a> GfxTexture {
       },
       data,
       TextureDataLayout {
-        offset: 0,
+        offset,
         bytes_per_row,
         rows_per_image,
       },
-      self.size,
+      size,
     );
   }
 
   #[inline]
-  pub fn write_rgba_texture_data(&self, queue: &Queue, data: &[u8]) {
-    self.write_texture_data(queue, data, 4 * self.size.width, self.size.height);
+  pub fn write_whole_texture_data(&self, queue: &Queue, data: &[u8], bytes_per_row: u32, rows_per_image: u32) {
+    self.write_texture_data(queue, data, 0, bytes_per_row, rows_per_image, self.size);
+  }
+
+  #[inline]
+  pub fn write_2d_rgba_texture_data(&self, queue: &Queue, data: &[u8]) {
+    self.write_whole_texture_data(queue, data, 4 * self.size.width, 0);
   }
 
   #[inline]
   pub fn write_2d_rgba_image(&self, queue: &Queue, image: RgbaImage) {
-    self.write_rgba_texture_data(queue, image.as_raw());
+    self.write_2d_rgba_texture_data(queue, image.as_raw());
   }
 }
 
@@ -207,6 +224,14 @@ impl<'a> GfxTexture {
   #[inline]
   pub fn create_default_float_2d_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStage) -> BindGroupLayoutEntry {
     BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
+      .with_binding(binding_index)
+      .with_shader_visibility(shader_visibility)
+      .build()
+  }
+
+  #[inline]
+  pub fn create_default_float_2d_array_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStage) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntryBuilder::new_default_float_2d_array_texture()
       .with_binding(binding_index)
       .with_shader_visibility(shader_visibility)
       .build()
@@ -226,6 +251,17 @@ impl<'a> GfxTexture {
     shader_visibility: ShaderStage,
   ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let bind_group_layout = self.create_default_float_2d_bind_group_layout_entry(binding_index, shader_visibility);
+    let bind_group = self.create_bind_group_entry(binding_index);
+    (bind_group_layout, bind_group)
+  }
+
+  #[inline]
+  pub fn create_default_float_2d_array_bind_group_entries(
+    &'a self,
+    binding_index: u32,
+    shader_visibility: ShaderStage,
+  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+    let bind_group_layout = self.create_default_float_2d_array_bind_group_layout_entry(binding_index, shader_visibility);
     let bind_group = self.create_bind_group_entry(binding_index);
     (bind_group_layout, bind_group)
   }

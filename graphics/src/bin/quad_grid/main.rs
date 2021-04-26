@@ -7,16 +7,30 @@ use common::input::RawInput;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use graphics::include_shader;
+use gfx::texture_def::ArrayTextureDefBuilder;
 
 #[derive(Default)]
 pub struct Input {}
 
 pub struct QuadGrid {
+
   render_pipeline: RenderPipeline,
 }
 
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
+    let mut texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
+    let texture_1 = texture_def_builder.add_texture(image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap()).unwrap();
+    let texture_2 = texture_def_builder.add_texture(image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/concrete_1_1.png")).unwrap()).unwrap();
+    let texture_def = texture_def_builder.build(
+      &gfx.device,
+      &gfx.queue,
+      "Quad grid array texture",
+      "Quad grid array texture view",
+      "Quad grid array texture sampler",
+      "Quad grid array texture bind group layout",
+      "Quad grid array texture bind group",
+    );
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
