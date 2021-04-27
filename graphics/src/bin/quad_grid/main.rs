@@ -1,20 +1,33 @@
 use std::mem::size_of;
+use std::ops::Range;
 
 ///! Quad grids
 
 use bytemuck::{Pod, Zeroable};
+use rand::prelude::*;
 use ultraviolet::Mat4;
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
+use common::idx_assigner::Item;
 use common::input::RawInput;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::CameraSys;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder, TextureIdx};
+use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
 use graphics::include_shader;
+
+const NUM_QUAD_INDICES: usize = 6;
+const NUM_QUAD_VERTICES: usize = 4;
+const QUAD_INDICES: [u32; NUM_QUAD_INDICES] = [
+  0, 2, 1,
+  2, 3, 1,
+];
+
+const MAX_INSTANCES: usize = 64;
+const MAX_INDICES: usize = MAX_INSTANCES * NUM_QUAD_INDICES;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -36,58 +49,47 @@ struct Instance {
   texture_indexes: [u32; 4],
 }
 
+impl Instance {
+  fn from_random_range(rng: &mut impl Rng, range: Range<u32>) -> Self {
+    Instance {
+      texture_indexes: [
+        rng.gen_range(range.clone()),
+        rng.gen_range(range.clone()),
+        rng.gen_range(range.clone()),
+        rng.gen_range(range.clone()),
+      ]
+    }
+  }
+}
+
+
 #[derive(Default)]
 pub struct Input {}
 
 pub struct QuadGrid {
   camera_sys: CameraSys,
 
-  uniform_buffer: GfxBuffer,
-  instance_buffer: GfxBuffer,
+  _uniform_buffer: GfxBuffer,
+  _instance_buffer: GfxBuffer,
   bind_group: BindGroup,
 
   array_texture_def: ArrayTextureDef,
 
   render_pipeline: RenderPipeline,
+
+  index_buffer: GfxBuffer,
 }
 
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let viewport = gfx.swap_chain.get_size().physical;
-    let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let camera_sys = CameraSys::with_defaults_perspective(viewport);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Quad grid uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
-
-    let instance_buffer = {
-      let buffer = BufferBuilder::new()
-        .with_size((1 * size_of::<Instance>()) as BufferAddress)
-        .with_storage_usage()
-        .with_mapped_at_creation(true)
-        .with_label("Quad grid instance storage buffer")
-        .build(&gfx.device);
-      // {
-      //   let mut view = buffer.slice(..).get_mapped_range_mut();
-      //   let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
-      //   (0..num_cubes_to_generate)
-      //     .map(|_| Instance::from_random_range(&mut rng, -cube_position_range..cube_position_range))
-      //     .zip(instance_slice)
-      //     .for_each(|(instance, place)| *place = instance);
-      // }
-      buffer.unmap();
-      buffer
-    };
-    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStage::VERTEX, true);
-
-    let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry, instance_bind_group_entry])
-      .with_layout_label("Quad grid bind group layout")
-      .with_label("Quad grid bind group")
-      .build(&gfx.device);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
     let texture_1 = array_texture_def_builder.add_texture(image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap()).unwrap();
@@ -102,6 +104,34 @@ impl app::Application for QuadGrid {
       "Quad grid array texture bind group",
     ).unwrap();
 
+    let mut rng = SmallRng::seed_from_u64(101702198783735);
+    let instance_buffer = {
+      let buffer = BufferBuilder::new()
+        .with_size((1 * size_of::<Instance>()) as BufferAddress)
+        .with_storage_usage()
+        .with_mapped_at_creation(true)
+        .with_label("Quad grid instance storage buffer")
+        .build(&gfx.device);
+      {
+        let mut view = buffer.slice(..).get_mapped_range_mut();
+        let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
+        (0..MAX_INSTANCES)
+          .map(|_| Instance::from_random_range(&mut rng, texture_1.into_idx() as u32..texture_2.into_idx() as u32))
+          .zip(instance_slice)
+          .for_each(|(instance, place)| *place = instance);
+      }
+      buffer.unmap();
+      buffer
+    };
+    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStage::VERTEX, true);
+
+    let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
+      .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
+      .with_entries(&[uniform_bind_group_entry, instance_bind_group_entry])
+      .with_layout_label("Quad grid bind group layout")
+      .with_label("Quad grid bind group")
+      .build(&gfx.device);
+
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
@@ -111,13 +141,26 @@ impl app::Application for QuadGrid {
       .with_label("Quad grid render pipeline")
       .build(&gfx.device);
 
+    let index_buffer = {
+      let data: Vec<_> = (0..MAX_INDICES).map(|i| {
+        let quad = i / NUM_QUAD_INDICES;
+        let quad_local = i % NUM_QUAD_INDICES;
+        QUAD_INDICES[quad_local] + quad as u32 * NUM_QUAD_VERTICES as u32
+      }).collect();
+      BufferBuilder::new()
+        .with_static_index_usage()
+        .with_label("Quad grid static index buffer")
+        .build_with_data(&gfx.device, &data)
+    };
+
     Self {
       camera_sys,
-      uniform_buffer,
-      instance_buffer,
+      _uniform_buffer: uniform_buffer,
+      _instance_buffer: instance_buffer,
       bind_group,
       array_texture_def,
       render_pipeline,
+      index_buffer,
     }
   }
 
@@ -138,7 +181,8 @@ impl app::Application for QuadGrid {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.bind_group, &[]);
     render_pass.set_bind_group(1, &self.array_texture_def.bind_group, &[]);
-    render_pass.draw(0..0, 0..1);
+    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
+    render_pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
