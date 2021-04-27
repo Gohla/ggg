@@ -6,6 +6,7 @@ use common::screen::ScreenSize;
 pub struct GfxSwapChain {
   inner: SwapChain,
   descriptor: SwapChainDescriptor,
+  size: ScreenSize,
 }
 
 impl GfxSwapChain {
@@ -18,7 +19,7 @@ impl GfxSwapChain {
       present_mode,
     };
     let swap_chain = device.create_swap_chain(&surface, &descriptor);
-    GfxSwapChain { inner: swap_chain, descriptor }
+    GfxSwapChain { inner: swap_chain, descriptor, size }
   }
 
   pub fn new_with_defaults(surface: &Surface, adapter: &Adapter, device: &Device, size: ScreenSize) -> GfxSwapChain {
@@ -30,7 +31,7 @@ impl GfxSwapChain {
     self.descriptor.format
   }
 
-  pub fn get_size(&self) -> (u32, u32) { (self.descriptor.width, self.descriptor.height) }
+  pub fn get_size(&self) -> ScreenSize { self.size }
 
 
   pub fn resize(self, surface: &Surface, adapter: &Adapter, device: &Device, size: ScreenSize) -> GfxSwapChain {

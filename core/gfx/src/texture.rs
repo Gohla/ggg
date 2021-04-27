@@ -51,9 +51,9 @@ impl<'a> TextureBuilder<'a> {
 
   #[inline]
   pub fn new_multisampled_framebuffer(swap_chain: &GfxSwapChain, sample_count: u32) -> Self {
-    let (width, height) = swap_chain.get_size();
+    let (width, height): (u64, u64) = swap_chain.get_size().physical.into();
     Self::new()
-      .with_2d_size(width, height)
+      .with_2d_size(width as u32, height as u32)
       .with_sample_count(sample_count)
       .with_format(swap_chain.get_texture_format())
       .with_render_attachment_usage()
