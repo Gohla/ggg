@@ -67,10 +67,10 @@ impl ArrayTextureDefBuilder {
       .with_texture_view_label(texture_view_label)
       .build(device);
     let (texture_layout_entry, texture_bind_group_entry) = texture.create_default_float_2d_array_bind_group_entries(0, ShaderStage::FRAGMENT);
-    for data in self.data {
+    for (idx, data) in self.data.into_iter().enumerate() {
       let data = data.into_rgba8();
       let (width, height) = data.dimensions();
-      texture.write_texture_data(queue, data.as_raw(), 0, width * 4, 0, Extent3d { width, height, depth: 1 });
+      texture.write_texture_data(queue, data.as_raw(), 0, width * 4, 0, Extent3d { width, height, depth: idx as u32 });
     }
     let sampler = SamplerBuilder::new()
       .with_label(sampler_label)

@@ -1,9 +1,10 @@
+///! Quad grids
+
 use std::mem::size_of;
 use std::ops::Range;
 
-///! Quad grids
-
 use bytemuck::{Pod, Zeroable};
+use egui::Ui;
 use rand::prelude::*;
 use ultraviolet::Mat4;
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
@@ -13,7 +14,7 @@ use common::idx_assigner::Item;
 use common::input::RawInput;
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::CameraSys;
+use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
@@ -22,8 +23,8 @@ use graphics::include_shader;
 const NUM_QUAD_INDICES: usize = 6;
 const NUM_QUAD_VERTICES: usize = 4;
 const QUAD_INDICES: [u32; NUM_QUAD_INDICES] = [
-  0, 2, 1,
-  2, 3, 1,
+  0, 3, 2,
+  0, 1, 3,
 ];
 
 const MAX_INSTANCES: usize = 64;
@@ -64,12 +65,14 @@ impl Instance {
 
 
 #[derive(Default)]
-pub struct Input {}
+pub struct Input {
+  camera: CameraInput,
+}
 
 pub struct QuadGrid {
   camera_sys: CameraSys,
 
-  _uniform_buffer: GfxBuffer,
+  uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
   bind_group: BindGroup,
 
@@ -155,7 +158,7 @@ impl app::Application for QuadGrid {
 
     Self {
       camera_sys,
-      _uniform_buffer: uniform_buffer,
+      uniform_buffer,
       _instance_buffer: instance_buffer,
       bind_group,
       array_texture_def,
@@ -167,13 +170,20 @@ impl app::Application for QuadGrid {
 
   type Input = Input;
 
-  fn process_input(&mut self, _raw_input: RawInput) -> Input {
-    let input = Input::default();
-    input
+  fn process_input(&mut self, input: RawInput) -> Input {
+    let camera = CameraInput::from(&input);
+    Input { camera }
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, _gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn add_to_debug_menu(&mut self, ui: &mut Ui) {
+    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+  }
+
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera_sys)]);
+
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Quad grid render pass")
       .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
