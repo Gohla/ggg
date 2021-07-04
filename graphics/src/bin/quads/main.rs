@@ -29,7 +29,7 @@ struct Vertex {
 
 impl Vertex {
   fn buffer_layout() -> VertexBufferLayout<'static> {
-    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float2, 1 => Float2];
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
       step_mode: InputStepMode::Vertex,
@@ -66,7 +66,7 @@ impl Instance {
   fn from_isometry(isometry: Isometry3) -> Self { Self { model: isometry.into_homogeneous_matrix() } }
 
   fn buffer_layout() -> VertexBufferLayout<'static> {
-    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![2 => Float4, 3 => Float4, 4 => Float4, 5 => Float4];
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4];
     VertexBufferLayout {
       array_stride: size_of::<Instance>() as BufferAddress,
       step_mode: InputStepMode::Instance,

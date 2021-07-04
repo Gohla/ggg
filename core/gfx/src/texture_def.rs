@@ -70,7 +70,7 @@ impl ArrayTextureDefBuilder {
     for (idx, data) in self.data.into_iter().enumerate() {
       let data = data.into_rgba8();
       let (width, height) = data.dimensions();
-      texture.write_texture_data(queue, data.as_raw(), 0, width * 4, 0, Extent3d { width, height, depth: idx as u32 });
+      texture.write_texture_data(queue, data.as_raw(), 0, NonZeroU32::new(width * 4), None, Extent3d { width, height, depth_or_array_layers: idx as u32 });
     }
     let sampler = SamplerBuilder::new()
       .with_label(sampler_label)

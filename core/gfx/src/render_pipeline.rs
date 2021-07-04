@@ -1,4 +1,4 @@
-use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, CullMode, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
+use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
 
 use crate::swap_chain::GfxSwapChain;
 
@@ -39,8 +39,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       fragment: None,
       default_fragment_targets: [ColorTargetState {
         format: TextureFormat::R8Unorm,
-        alpha_blend: Default::default(),
-        color_blend: Default::default(),
+        blend: Default::default(),
         write_mask: Default::default(),
       }],
       use_default_fragment_targets: false,
@@ -112,7 +111,7 @@ impl<'a> RenderPipelineBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_cull_mode(mut self, cull_mode: CullMode) -> Self {
+  pub fn with_cull_mode(mut self, cull_mode: Option<Face>) -> Self {
     self.primitive.cull_mode = cull_mode;
     self
   }
@@ -138,7 +137,6 @@ impl<'a> RenderPipelineBuilder<'a> {
       depth_compare: CompareFunction::Less,
       stencil: Default::default(),
       bias: Default::default(),
-      clamp_depth: false,
     })
   }
 
@@ -177,7 +175,6 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.multisample.count = count;
     self
   }
-
 
 
   pub fn build(self, device: &Device) -> (PipelineLayout, RenderPipeline) {

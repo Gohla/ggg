@@ -1,11 +1,11 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBindingType, BufferSize, Device, Sampler, ShaderStage, TextureSampleType, TextureView, TextureViewDimension};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, ShaderStage, TextureSampleType, TextureView, TextureViewDimension};
 
 // Bind group layout entry creation
 
 pub struct BindGroupLayoutEntryBuilder {
-  entry: BindGroupLayoutEntry
+  entry: BindGroupLayoutEntry,
 }
 
 impl BindGroupLayoutEntryBuilder {
@@ -106,7 +106,7 @@ impl BindGroupLayoutEntryBuilder {
 // Bind group entry creation
 
 pub struct BindGroupEntryBuilder<'a> {
-  entry: BindGroupEntry<'a>
+  entry: BindGroupEntry<'a>,
 }
 
 impl<'a> BindGroupEntryBuilder<'a> {
@@ -122,12 +122,12 @@ impl<'a> BindGroupEntryBuilder<'a> {
 
   #[inline]
   pub fn new_buffer(buffer: &'a Buffer, offset: BufferAddress, size: Option<BufferSize>) -> Self {
-    Self::new(BindingResource::Buffer { buffer, offset, size })
+    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset, size }))
   }
 
   #[inline]
   pub fn new_whole_buffer(buffer: &'a Buffer) -> Self {
-    Self::new(BindingResource::Buffer { buffer, offset: 0, size: None })
+    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset: 0, size: None }))
   }
 
   #[inline]

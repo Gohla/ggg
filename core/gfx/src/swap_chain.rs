@@ -13,7 +13,8 @@ impl GfxSwapChain {
   pub fn new(surface: &Surface, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> GfxSwapChain {
     let descriptor = SwapChainDescriptor {
       usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-      format: adapter.get_swap_chain_preferred_format(&surface),
+      format: adapter.get_swap_chain_preferred_format(&surface)
+        .unwrap_or_else(|| panic!("surface is incompatible with the adapter")),
       width: size.physical.width as u32,
       height: size.physical.height as u32,
       present_mode,

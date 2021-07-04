@@ -22,7 +22,7 @@ struct Vertex {
 
 impl Vertex {
   fn buffer_layout() -> VertexBufferLayout<'static> {
-    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float3, 1 => Float3];
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
       step_mode: InputStepMode::Vertex,

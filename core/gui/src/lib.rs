@@ -4,7 +4,7 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2};
 use egui::epaint::{Mesh, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
+use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
@@ -69,20 +69,22 @@ impl Gui {
       .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
         array_stride: 5 * 4,
         step_mode: InputStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Uint],
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
       }])
       .with_fragment_state(&fragment_shader_module, "main", &[ColorTargetState {
         format: swap_chain_texture_format,
-        alpha_blend: BlendState { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
-          src_factor: BlendFactor::OneMinusDstAlpha,
-          dst_factor: BlendFactor::One,
-          operation: BlendOperation::Add,
-        },
-        color_blend: BlendState {
-          src_factor: BlendFactor::One,
-          dst_factor: BlendFactor::OneMinusSrcAlpha,
-          operation: BlendOperation::Add,
-        },
+        blend: Some(BlendState {
+          alpha: BlendComponent { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
+            src_factor: BlendFactor::OneMinusDstAlpha,
+            dst_factor: BlendFactor::One,
+            operation: BlendOperation::Add,
+          },
+          color: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+          },
+        }),
         write_mask: Default::default(),
       }])
       .with_layout_label("GUI pipeline layout")
@@ -319,7 +321,11 @@ impl Gui {
     let mut vertex_offset = 0;
     let mut vertex_buffer_offset = 0;
     #[derive(Debug)]
-    struct Draw { clip_rect: Rect, indices: Range<u32>, base_vertex: i32 }
+    struct Draw {
+      clip_rect: Rect,
+      indices: Range<u32>,
+      base_vertex: i32,
+    }
     let mut draws = Vec::with_capacity(clipped_meshes.len());
     for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes {
       index_buffer.write_data(queue, index_buffer_offset, indices);

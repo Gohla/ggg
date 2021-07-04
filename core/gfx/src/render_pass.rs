@@ -1,9 +1,9 @@
-use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, SwapChainTexture, TextureView};
+use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, SwapChainTexture, TextureView};
 
 pub struct RenderPassBuilder<'a, 'b> {
-  pub label: Option<&'b str>,
-  pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
-  pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+  pub label: Option<&'a str>,
+  pub color_attachments: &'b [RenderPassColorAttachment<'a>],
+  pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
 }
 
 impl<'a, 'b> RenderPassBuilder<'a, 'b> {
@@ -23,21 +23,21 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   }
 
   #[inline]
-  pub fn with_color_attachments(mut self, color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>]) -> Self {
+  pub fn with_color_attachments(mut self, color_attachments: &'b [RenderPassColorAttachment<'a>]) -> Self {
     self.color_attachments = color_attachments;
     self
   }
 
   #[inline]
-  pub fn with_depth_stencil_attachment(mut self, depth_stencil_attachment: RenderPassDepthStencilAttachmentDescriptor<'a>) -> Self {
+  pub fn with_depth_stencil_attachment(mut self, depth_stencil_attachment: RenderPassDepthStencilAttachment<'a>) -> Self {
     self.depth_stencil_attachment = Some(depth_stencil_attachment);
     self
   }
 
   #[inline]
   pub fn with_depth_texture(self, depth_texture_view: &'a TextureView) -> Self {
-    self.with_depth_stencil_attachment(RenderPassDepthStencilAttachmentDescriptor {
-      attachment: depth_texture_view,
+    self.with_depth_stencil_attachment(RenderPassDepthStencilAttachment {
+      view: depth_texture_view,
       depth_ops: Some(Operations {
         load: LoadOp::Clear(1.0),
         store: true,
@@ -58,15 +58,15 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   pub fn begin_render_pass_with_color_attachment(
     self,
     encoder: &'a mut CommandEncoder,
-    attachment: &'a TextureView,
+    view: &'a TextureView,
     resolve_target: Option<&'a TextureView>,
     ops: Operations<Color>,
   ) -> RenderPass<'a> {
     encoder.begin_render_pass(&RenderPassDescriptor {
       label: self.label,
       color_attachments: &[
-        RenderPassColorAttachmentDescriptor {
-          attachment,
+        RenderPassColorAttachment {
+          view,
           resolve_target,
           ops,
         }
