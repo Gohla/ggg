@@ -2,7 +2,7 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use dotenv;
-use egui::{CtxRef, TopPanel, Ui};
+use egui::{CtxRef, TopBottomPanel, Ui};
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
@@ -262,7 +262,7 @@ fn run_loop<A: Application>(
     // Create GUI frame
     let gui_frame = if !minimized {
       let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
-      TopPanel::top("GUI top panel").show(&gui_context, |ui| {
+      TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
         app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
           debug_gui.add_debug_menu(ui, |ui| app.add_to_debug_menu(ui));

@@ -10,7 +10,7 @@ common = { path = "../../core/common" }
 gui_widget = { path = "../../core/gui_widget" }
 wgpu = "0.9"
 raw-window-handle = "0.3"
-egui = "0.11"
+egui = "0.13"
 image = { version = "0.23", default-features = false }
 ultraviolet = "0.8"
 bytemuck = "1.5"
