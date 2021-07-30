@@ -8,6 +8,7 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 pub struct BufferBuilder<'a> {
   descriptor: BufferDescriptor<'a>,
+  len: usize,
 }
 
 impl<'a> BufferBuilder<'a> {
@@ -19,7 +20,8 @@ impl<'a> BufferBuilder<'a> {
         size: 0,
         usage: BufferUsage::COPY_DST,
         mapped_at_creation: false,
-      }
+      },
+      len: 0,
     }
   }
 
@@ -27,6 +29,12 @@ impl<'a> BufferBuilder<'a> {
   #[inline]
   pub fn with_size(mut self, size: BufferAddress) -> Self {
     self.descriptor.size = size;
+    self
+  }
+
+  #[inline]
+  pub fn with_len(mut self, len: usize) -> Self {
+    self.len = len;
     self
   }
 
@@ -71,17 +79,19 @@ impl<'a> BufferBuilder<'a> {
 pub struct GfxBuffer {
   pub buffer: Buffer,
   pub size: BufferAddress,
+  pub len: usize,
 }
 
 impl<'a> BufferBuilder<'a> {
   #[inline]
   pub fn build(self, device: &Device) -> GfxBuffer {
-    let size = self.descriptor.size;
     let buffer = device.create_buffer(&self.descriptor);
-    GfxBuffer { buffer, size }
+    let size = self.descriptor.size;
+    let len = self.len;
+    GfxBuffer { buffer, size, len }
   }
 
-  /// Ignores the previously set `size` and `mapped_at_creation` values.
+  /// Ignores the previously set `size`, `len`, and `mapped_at_creation` values.
   #[inline]
   pub fn build_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
     let contents: &[u8] = bytemuck::cast_slice(data);
@@ -92,7 +102,8 @@ impl<'a> BufferBuilder<'a> {
       contents,
       usage: self.descriptor.usage,
     });
-    GfxBuffer { buffer, size }
+    let len = data.len();
+    GfxBuffer { buffer, size, len }
   }
 }
 

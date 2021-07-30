@@ -12,17 +12,9 @@ members = [
   "graphics"
 ]
 
-# Development profile: full debug information, some optimisations.
+# Development profile: full debug information, no optimisations.
 [profile.dev]
-opt-level = 2
-overflow-checks = true
-debug-assertions = true
 panic = "abort"
-debug = true
-split-debuginfo = "unpacked"
-codegen-units = 8
-lto = false
-incremental = true
 
 # Fast development profile: no debug information, some optimisations.
 [profile.fastdev]
