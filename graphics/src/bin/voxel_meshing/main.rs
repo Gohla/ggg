@@ -3,30 +3,37 @@
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
+use egui::{color_picker, DragValue, Rgba, Ui};
+use egui::color_picker::Alpha;
 use simdnoise::NoiseBuilder;
-use ultraviolet::{UVec3, Vec3, Mat4};
-use wgpu::{BufferAddress, CommandBuffer, InputStepMode, PowerPreference, RenderPipeline, VertexAttribute, VertexBufferLayout, BindGroup, ShaderStage};
+use ultraviolet::{Mat4, UVec3, Vec3, Vec4};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, InputStepMode, PowerPreference, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gui_widget::UiWidgetsExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 struct Vertex {
   pos: Vec3,
+  nor: Vec3,
 }
 
 impl Vertex {
   fn buffer_layout() -> VertexBufferLayout<'static> {
-    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x3];
+    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![
+      0 => Float32x3,
+      1 => Float32x3,
+    ];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
       step_mode: InputStepMode::Vertex,
@@ -35,20 +42,46 @@ impl Vertex {
   }
 
   #[inline]
-  fn new(pos: Vec3) -> Self {
-    Self { pos }
+  fn new(pos: Vec3, nor: Vec3) -> Self {
+    Self { pos, nor }
   }
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
-struct Uniform {
+struct CameraUniform {
+  position: Vec4,
   view_projection: Mat4,
+}
+
+impl CameraUniform {
+  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
+    Self {
+      position: camera_sys.position.into_homogeneous_point(),
+      view_projection: camera_sys.get_view_projection_matrix(),
+    }
+  }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+struct LightUniform {
+  color: Vec3,
+  ambient: f32,
+  direction: Vec3,
+}
+
+impl LightUniform {
+  pub fn new(color: Vec3, ambient: f32, direction: Vec3) -> Self {
+    Self { color, ambient, direction }
+  }
 }
 
 pub struct VoxelMeshing {
   camera_sys: CameraSys,
-  uniform_buffer: GfxBuffer,
+  camera_uniform_buffer: GfxBuffer,
+  light_uniform: LightUniform,
+  light_uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
@@ -70,13 +103,20 @@ impl app::Application for VoxelMeshing {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
 
-    let uniform_buffer = BufferBuilder::new()
+    let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
-      .build_with_data(&gfx.device, &[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+      .with_label("Camera uniform buffer")
+      .build_with_data(&gfx.device, &[CameraUniform::from_camera_sys(&camera_sys)]);
+    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX_FRAGMENT);
+    let light_uniform = LightUniform::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5));
+    let light_uniform_buffer = BufferBuilder::new()
+      .with_uniform_usage()
+      .with_label("Light uniform buffer")
+      .build_with_data(&gfx.device, &[light_uniform]);
+    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStage::FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry])
+      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry])
+      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry])
       .with_layout_label("Voxel meshing uniform bind group layout")
       .with_label("Voxel meshing uniform bind group")
       .build(&gfx.device);
@@ -97,7 +137,9 @@ impl app::Application for VoxelMeshing {
 
     Self {
       camera_sys,
-      uniform_buffer,
+      camera_uniform_buffer,
+      light_uniform_buffer,
+      light_uniform,
       uniform_bind_group,
       depth_texture,
       render_pipeline,
@@ -120,10 +162,31 @@ impl app::Application for VoxelMeshing {
     Input { camera }
   }
 
+  fn add_to_debug_menu(&mut self, ui: &mut Ui) {
+    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+  }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
+    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
+
+    egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
+      ui.grid("Light", |mut ui| {
+        ui.label("Color");
+        let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
+        color_picker::color_edit_button_srgba(&mut ui, &mut color, Alpha::Opaque);
+        let color: Rgba = color.into();
+        self.light_uniform.color = Vec3::new(color.r(), color.g(), color.b());
+        ui.end_row();
+        ui.label("Ambient");
+        ui.add(DragValue::new(&mut self.light_uniform.ambient).speed(0.001).clamp_range(0.0..=1.0));
+        ui.end_row();
+        ui.label("Direction");
+        ui.drag_vec3(0.01, &mut self.light_uniform.direction);
+        ui.end_row();
+      });
+    });
+    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_uniform]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
@@ -193,9 +256,13 @@ impl VoxelMeshing {
       let b1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
       let c0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
       let c1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-      vertices.push(Vertex::new(Vec3::from(corners[a0] + corners[a1]) * 0.5));
-      vertices.push(Vertex::new(Vec3::from(corners[b0] + corners[b1]) * 0.5));
-      vertices.push(Vertex::new(Vec3::from(corners[c0] + corners[c1]) * 0.5));
+      let pa = Vec3::from(corners[a0] + corners[a1]) * 0.5;
+      let pb = Vec3::from(corners[b0] + corners[b1]) * 0.5;
+      let pc = Vec3::from(corners[c0] + corners[c1]) * 0.5;
+      let n = (pa - pb).cross(pc - pb).normalized();
+      vertices.push(Vertex::new(pa, n));
+      vertices.push(Vertex::new(pb, n));
+      vertices.push(Vertex::new(pc, n));
     }
     vertices
   }
