@@ -20,7 +20,11 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
+use crate::density_function::NoiseDensityFunction;
+use crate::marching_cubes::MarchingCubes;
+
 mod marching_cubes;
+mod density_function;
 
 pub struct VoxelMeshing {
   camera_sys: CameraSys,
@@ -75,10 +79,12 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
+    let noise_density_function = NoiseDensityFunction::new_ridge(32 * 4, -1.0, 1.0);
+    let marching_cubes = MarchingCubes::new(noise_density_function, 0.0);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
-      .build_with_data(&gfx.device, &marching_cubes::generate(-1.0, 1.0, 0.0));
+      .build_with_data(&gfx.device, &marching_cubes.generate());
 
     Self {
       camera_sys,

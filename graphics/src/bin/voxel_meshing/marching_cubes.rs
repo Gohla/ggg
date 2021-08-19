@@ -7,95 +7,91 @@
 ///! * https://people.eecs.berkeley.edu/~jrs/meshpapers/LorensenCline.pdf
 ///! * https://www.boristhebrave.com/2018/04/15/marching-cubes-tutorial/
 
-use simdnoise::NoiseBuilder;
 use ultraviolet::{UVec3, Vec3};
 
+use crate::density_function::DensityFunction;
 use crate::Vertex;
 
-pub fn generate(min: f32, max: f32, surface_level: f32) -> Vec<Vertex> {
-  let points_per_axis = 32 * 4;
-  let noise = NoiseBuilder::ridge_3d(points_per_axis, points_per_axis, points_per_axis)
-    .with_freq(0.05)
-    .with_octaves(5)
-    .with_gain(2.0)
-    .with_seed(1337)
-    .with_lacunarity(0.5)
-    .generate_scaled(min, max);
-  let points_per_axis = points_per_axis as u32;
-  let cubes_per_axis = points_per_axis - 1;
-  let mut vertices = Vec::new();
-  for x in 0..cubes_per_axis {
-    for y in 0..cubes_per_axis {
-      for z in 0..cubes_per_axis {
-        cube_vertices(&noise, UVec3::new(x, y, z), points_per_axis, surface_level, &mut vertices);
+pub struct MarchingCubes<D> {
+  density_function: D,
+  cubes_per_axis: u32,
+  surface_level: f32,
+}
+
+impl<D: DensityFunction> MarchingCubes<D> {
+  pub fn new(density_function: D, surface_level: f32) -> Self {
+    let cubes_per_axis = density_function.points_per_axis() - 1;
+    Self { density_function, cubes_per_axis, surface_level }
+  }
+
+  pub fn generate(&self) -> Vec<Vertex> {
+    let mut vertices = Vec::new();
+    for x in 0..self.cubes_per_axis {
+      for y in 0..self.cubes_per_axis {
+        for z in 0..self.cubes_per_axis {
+          self.add_cube_vertices(UVec3::new(x, y, z), &mut vertices);
+        }
       }
     }
+    vertices
   }
-  vertices
-}
 
-#[inline]
-fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_level: f32, vertices: &mut Vec<Vertex>) {
-  /*
-     v5.+------+v6
-     .' |    .'|
-  v1+---+--+'v2|
-    |   |  |   |
-    |v4,+--+---+v7
-    |.'    | .'
-  v0+------+'v3
-  */
-  let local_vertices = [
-    pos + UVec3::new(0, 0, 0),
-    pos + UVec3::new(0, 1, 0),
-    pos + UVec3::new(1, 1, 0),
-    pos + UVec3::new(1, 0, 0),
-    pos + UVec3::new(0, 0, 1),
-    pos + UVec3::new(0, 1, 1),
-    pos + UVec3::new(1, 1, 1),
-    pos + UVec3::new(1, 0, 1),
-  ];
+  #[inline]
+  fn add_cube_vertices(&self, pos: UVec3, vertices: &mut Vec<Vertex>) {
+    /* v5.+------+v6
+       .' |    .'|
+    v1+---+--+'v2|
+      |   |  |   |
+    +y|v4,+--+---+v7
+      |.' +x | .'+z
+    v0+------+'v3 */
+    let local_vertices = [
+      pos + UVec3::new(0, 0, 0), // v0
+      pos + UVec3::new(0, 1, 0), // v1
+      pos + UVec3::new(1, 1, 0), // v2
+      pos + UVec3::new(1, 0, 0), // v3
+      pos + UVec3::new(0, 0, 1), // v4
+      pos + UVec3::new(0, 1, 1), // v5
+      pos + UVec3::new(1, 1, 1), // v6
+      pos + UVec3::new(1, 0, 1), // v7
+    ];
 
-  let mut configuration = 0;
-  for (i, local_vertex) in local_vertices.iter().enumerate() {
-    let value = noise_value(noise, *local_vertex, points_per_axis);
-    if value < surface_level {
-      configuration |= 1 << i;
+    let mut configuration = 0;
+    for (i, local_vertex) in local_vertices.iter().enumerate() {
+      let value = self.density_function.density_at(local_vertex);
+      if value < self.surface_level {
+        configuration |= 1 << i;
+      }
+    }
+
+    let edge_indices: &EdgeIndices = &TRIANGULATION[configuration];
+    for i in (0..16).step_by(3) {
+      if edge_indices[i] == N { break; }
+      let a_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
+      let a_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
+      let b_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
+      let b_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
+      let c_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
+      let c_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
+      let pos_a = self.vertex_position(local_vertices[a_0], local_vertices[a_1]);
+      let pos_b = self.vertex_position(local_vertices[b_0], local_vertices[b_1]);
+      let pos_c = self.vertex_position(local_vertices[c_0], local_vertices[c_1]);
+      let normal = (pos_a - pos_b).cross(pos_c - pos_b).normalized();
+      vertices.push(Vertex::new(pos_a, normal));
+      vertices.push(Vertex::new(pos_b, normal));
+      vertices.push(Vertex::new(pos_c, normal));
     }
   }
 
-  let edge_indices: &EdgeIndices = &TRIANGULATION[configuration];
-  for i in (0..16).step_by(3) {
-    if edge_indices[i] == N { break; }
-    let a_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
-    let a_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
-    let b_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
-    let b_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
-    let c_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-    let c_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-    let pos_a = vertex_position(noise, local_vertices[a_0], local_vertices[a_1], points_per_axis);
-    let pos_b = vertex_position(noise, local_vertices[b_0], local_vertices[b_1], points_per_axis);
-    let pos_c = vertex_position(noise, local_vertices[c_0], local_vertices[c_1], points_per_axis);
-    let normal = (pos_a - pos_b).cross(pos_c - pos_b).normalized();
-    vertices.push(Vertex::new(pos_a, normal));
-    vertices.push(Vertex::new(pos_b, normal));
-    vertices.push(Vertex::new(pos_c, normal));
+  #[inline]
+  fn vertex_position(&self, pos_a: UVec3, pos_b: UVec3) -> Vec3 {
+    let value_a = self.density_function.density_at(&pos_a);
+    let value_b = &self.density_function.density_at(&pos_b);
+    let t = (0f32 - value_a) / (value_b - value_a);
+    let pos_a = Vec3::from(pos_a);
+    let pos_b = Vec3::from(pos_b);
+    pos_a + t * (pos_b - pos_a)
   }
-}
-
-#[inline]
-fn vertex_position(noise: &Vec<f32>, pos_a: UVec3, pos_b: UVec3, points_per_axis: u32) -> Vec3 {
-  let value_a = noise_value(noise, pos_a, points_per_axis);
-  let value_b = noise_value(noise, pos_b, points_per_axis);
-  let t = (0f32 - value_a) / (value_b - value_a);
-  let pos_a = Vec3::from(pos_a);
-  let pos_b = Vec3::from(pos_b);
-  pos_a + t * (pos_b - pos_a)
-}
-
-#[inline]
-fn noise_value(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32) -> f32 {
-  noise[(pos.x + (pos.y * points_per_axis) + (pos.z * points_per_axis * points_per_axis)) as usize]
 }
 
 
