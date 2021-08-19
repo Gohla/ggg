@@ -1,5 +1,5 @@
 use simdnoise::NoiseBuilder;
-use ultraviolet::UVec3;
+use ultraviolet::{UVec3, Vec3};
 
 pub trait DensityFunction {
   fn points_per_axis(&self) -> u32;
@@ -7,12 +7,38 @@ pub trait DensityFunction {
   fn density_at(&self, position: &UVec3) -> f32;
 }
 
-pub struct NoiseDensityFunction {
+
+pub struct Sphere {
+  points_per_axis: u32,
+  radius: f32,
+}
+
+impl Sphere {
+  pub fn new(points_per_axis: u32) -> Self {
+    let radius = (points_per_axis - 1) as f32;
+    Self { points_per_axis, radius }
+  }
+}
+
+impl DensityFunction for Sphere {
+  fn points_per_axis(&self) -> u32 {
+    self.points_per_axis
+  }
+
+  fn density_at(&self, position: &UVec3) -> f32 {
+    // Transform position from 0..points_per_axis to -half_radius..half_radius.
+    let position = Vec3::from(*position) - (Vec3::one() * (self.radius / 2.0));
+    0.5 - position.mag() / self.radius
+  }
+}
+
+
+pub struct Noise {
   points_per_axis: u32,
   noise: Vec<f32>,
 }
 
-impl NoiseDensityFunction {
+impl Noise {
   pub fn new(points_per_axis: u32, noise: Vec<f32>) -> Self {
     Self { points_per_axis, noise }
   }
@@ -30,7 +56,7 @@ impl NoiseDensityFunction {
   }
 }
 
-impl DensityFunction for NoiseDensityFunction {
+impl DensityFunction for Noise {
   #[inline]
   fn points_per_axis(&self) -> u32 {
     self.points_per_axis
@@ -41,3 +67,4 @@ impl DensityFunction for NoiseDensityFunction {
     self.noise[(position.x + (position.y * self.points_per_axis) + (position.z * self.points_per_axis * self.points_per_axis)) as usize]
   }
 }
+

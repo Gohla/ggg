@@ -20,7 +20,7 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
-use crate::density_function::NoiseDensityFunction;
+use crate::density_function::{Noise, Sphere};
 use crate::marching_cubes::MarchingCubes;
 
 mod marching_cubes;
@@ -79,8 +79,9 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
-    let noise_density_function = NoiseDensityFunction::new_ridge(32 * 4, -1.0, 1.0);
-    let marching_cubes = MarchingCubes::new(noise_density_function, 0.0);
+    let density_function = Noise::new_ridge(32 * 4, -1.0, 1.0);
+    let _density_function = Sphere::new(32);
+    let marching_cubes = MarchingCubes::new(density_function, 0.0);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
