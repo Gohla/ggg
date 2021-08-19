@@ -13,8 +13,20 @@ pub struct Sphere {
   radius: f32,
 }
 
+#[derive(Copy, Clone)]
+pub struct SphereSettings {
+  pub points_per_axis: u32,
+}
+
+impl Default for SphereSettings {
+  fn default() -> Self {
+    Self { points_per_axis: 32 }
+  }
+}
+
 impl Sphere {
-  pub fn new(points_per_axis: u32) -> Self {
+  pub fn new(settings: SphereSettings) -> Self {
+    let points_per_axis = settings.points_per_axis;
     let radius = (points_per_axis - 1) as f32;
     Self { points_per_axis, radius }
   }
@@ -38,21 +50,45 @@ pub struct Noise {
   noise: Vec<f32>,
 }
 
-impl Noise {
-  pub fn new(points_per_axis: u32, noise: Vec<f32>) -> Self {
-    Self { points_per_axis, noise }
-  }
+#[derive(Copy, Clone)]
+pub struct NoiseSettings {
+  pub points_per_axis: u32,
+  pub seed: i32,
+  pub lacunarity: f32,
+  pub frequency: f32,
+  pub gain: f32,
+  pub octaves: u8,
+  pub min: f32,
+  pub max: f32,
+}
 
-  pub fn new_ridge(points_per_axis: u32, min: f32, max: f32) -> Self {
+impl Default for NoiseSettings {
+  fn default() -> Self {
+    Self {
+      points_per_axis: 32 * 4,
+      seed: 1337,
+      lacunarity: 0.5,
+      frequency: 0.05,
+      gain: 2.0,
+      octaves: 5,
+      min: -1.0,
+      max: 1.0,
+    }
+  }
+}
+
+impl Noise {
+  pub fn new(settings: NoiseSettings) -> Self {
+    let points_per_axis = settings.points_per_axis;
     let points_per_axis_usize = points_per_axis as usize;
     let noise = NoiseBuilder::ridge_3d(points_per_axis_usize, points_per_axis_usize, points_per_axis_usize)
-      .with_freq(0.05)
-      .with_octaves(5)
-      .with_gain(2.0)
-      .with_seed(1337)
-      .with_lacunarity(0.5)
-      .generate_scaled(min, max);
-    Self::new(points_per_axis, noise)
+      .with_seed(settings.seed)
+      .with_lacunarity(settings.lacunarity)
+      .with_freq(settings.frequency)
+      .with_gain(settings.gain)
+      .with_octaves(settings.octaves)
+      .generate_scaled(settings.min, settings.max);
+    Self { points_per_axis, noise }
   }
 }
 

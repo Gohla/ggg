@@ -18,9 +18,21 @@ pub struct MarchingCubes<D> {
   surface_level: f32,
 }
 
+#[derive(Copy, Clone)]
+pub struct MarchingCubesSettings {
+  pub surface_level: f32,
+}
+
+impl Default for MarchingCubesSettings {
+  fn default() -> Self {
+    Self { surface_level: 0.0 }
+  }
+}
+
 impl<D: DensityFunction> MarchingCubes<D> {
-  pub fn new(density_function: D, surface_level: f32) -> Self {
+  pub fn new(density_function: D, settings: MarchingCubesSettings) -> Self {
     let cubes_per_axis = density_function.points_per_axis() - 1;
+    let surface_level = settings.surface_level;
     Self { density_function, cubes_per_axis, surface_level }
   }
 
@@ -59,7 +71,7 @@ impl<D: DensityFunction> MarchingCubes<D> {
     let mut configuration = 0;
     for (i, local_vertex) in local_vertices.iter().enumerate() {
       let value = self.density_function.density_at(local_vertex);
-      if value < self.surface_level {
+      if value < self.surface_level { // TODO: fix weird artefacts when != 0
         configuration |= 1 << i;
       }
     }

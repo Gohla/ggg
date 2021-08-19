@@ -3,7 +3,7 @@
 use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{color_picker, DragValue, Rgba, Ui};
+use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, InputStepMode, PowerPreference, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
@@ -20,8 +20,8 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
-use crate::density_function::{Noise, Sphere};
-use crate::marching_cubes::MarchingCubes;
+use crate::density_function::{Noise, NoiseSettings, Sphere, SphereSettings};
+use crate::marching_cubes::{MarchingCubes, MarchingCubesSettings};
 
 mod marching_cubes;
 mod density_function;
@@ -35,6 +35,12 @@ pub struct VoxelMeshing {
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
   vertex_buffer: GfxBuffer,
+
+  density_function_type: DensityFunctionType,
+  sphere_settings: SphereSettings,
+  noise_settings: NoiseSettings,
+  meshing_algorithm_type: MeshingAlgorithmType,
+  marching_cubes_settings: MarchingCubesSettings,
 }
 
 #[derive(Default)]
@@ -79,9 +85,12 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
-    let density_function = Noise::new_ridge(32 * 4, -1.0, 1.0);
-    let _density_function = Sphere::new(32);
-    let marching_cubes = MarchingCubes::new(density_function, 0.0);
+    let density_function_type = DensityFunctionType::Sphere;
+    let sphere_settings = SphereSettings::default();
+    let noise_settings = NoiseSettings::default();
+    let meshing_algorithm_type = MeshingAlgorithmType::MarchingCubes;
+    let marching_cubes_settings = MarchingCubesSettings::default();
+    let marching_cubes = MarchingCubes::new(Sphere::new(sphere_settings), marching_cubes_settings);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
@@ -96,6 +105,12 @@ impl app::Application for VoxelMeshing {
       depth_texture,
       render_pipeline,
       vertex_buffer,
+
+      density_function_type,
+      sphere_settings,
+      noise_settings,
+      meshing_algorithm_type,
+      marching_cubes_settings,
     }
   }
 
@@ -123,7 +138,7 @@ impl app::Application for VoxelMeshing {
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
 
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
-      ui.grid("Light", |mut ui| {
+      ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
         ui.label("Color");
         let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
         color_picker::color_edit_button_srgba(&mut ui, &mut color, Alpha::Opaque);
@@ -136,6 +151,69 @@ impl app::Application for VoxelMeshing {
         ui.label("Direction");
         ui.drag_vec3(0.01, &mut self.light_uniform.direction);
         ui.end_row();
+      });
+      ui.collapsing_open_with_grid("Density Function", "Grid", |ui| {
+        ui.label("Type");
+        ComboBox::from_id_source("Type")
+          .selected_text(format!("{:?}", self.density_function_type))
+          .show_ui(ui, |ui| {
+            ui.selectable_value(&mut self.density_function_type, DensityFunctionType::Sphere, "Sphere");
+            ui.selectable_value(&mut self.density_function_type, DensityFunctionType::Noise, "Noise");
+          });
+        ui.end_row();
+        match self.density_function_type {
+          DensityFunctionType::Sphere => {
+            ui.label("Points per axis");
+            ui.drag_unlabelled(&mut self.sphere_settings.points_per_axis, 1);
+            ui.end_row();
+          }
+          DensityFunctionType::Noise => {
+            ui.label("Seed");
+            ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
+            ui.end_row();
+            ui.label("Lacunarity");
+            ui.drag_unlabelled(&mut self.noise_settings.lacunarity, 0.1);
+            ui.end_row();
+            ui.label("Frequency");
+            ui.drag_unlabelled(&mut self.noise_settings.frequency, 0.01);
+            ui.end_row();
+            ui.label("Gain");
+            ui.drag_unlabelled(&mut self.noise_settings.gain, 0.1);
+            ui.end_row();
+            ui.label("Octaves");
+            ui.drag_unlabelled(&mut self.noise_settings.octaves, 1);
+            ui.end_row();
+            ui.label("Minimum density");
+            ui.drag_unlabelled(&mut self.noise_settings.min, 0.1);
+            ui.end_row();
+            ui.label("Maximum density");
+            ui.drag_unlabelled(&mut self.noise_settings.max, 0.1);
+            ui.end_row();
+          }
+        }
+      });
+      ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
+        ui.label("Type");
+        ComboBox::from_id_source("Type")
+          .selected_text(format!("{:?}", self.meshing_algorithm_type))
+          .show_ui(ui, |ui| {
+            ui.selectable_value(&mut self.meshing_algorithm_type, MeshingAlgorithmType::MarchingCubes, "Marching Cubes");
+          });
+        ui.end_row();
+        match self.meshing_algorithm_type {
+          MeshingAlgorithmType::MarchingCubes => {
+            ui.label("Surface level");
+            ui.drag_unlabelled(&mut self.marching_cubes_settings.surface_level, 0.01);
+            ui.end_row();
+            if ui.button("Generate").clicked() {
+              let vertices = self.generate_vertex_buffer();
+              self.vertex_buffer = BufferBuilder::new()
+                .with_vertex_usage()
+                .with_label("Voxel meshing vertex buffer")
+                .build_with_data(&gfx.device, &vertices);
+            }
+          }
+        }
       });
     });
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_uniform]);
@@ -152,6 +230,27 @@ impl app::Application for VoxelMeshing {
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
+}
+
+impl VoxelMeshing {
+  fn generate_vertex_buffer(&self) -> Vec<Vertex> {
+    match (self.density_function_type, self.meshing_algorithm_type) {
+      (DensityFunctionType::Sphere, MeshingAlgorithmType::MarchingCubes) => MarchingCubes::new(Sphere::new(self.sphere_settings), self.marching_cubes_settings).generate(),
+      (DensityFunctionType::Noise, MeshingAlgorithmType::MarchingCubes) => MarchingCubes::new(Noise::new(self.noise_settings), self.marching_cubes_settings).generate()
+    }
+  }
+}
+
+
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum DensityFunctionType {
+  Sphere,
+  Noise,
+}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum MeshingAlgorithmType {
+  MarchingCubes,
 }
 
 
