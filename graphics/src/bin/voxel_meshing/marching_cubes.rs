@@ -36,20 +36,29 @@ pub fn generate(min: f32, max: f32, surface_level: f32) -> Vec<Vertex> {
 
 #[inline]
 fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_level: f32, vertices: &mut Vec<Vertex>) {
-  let corners = [
+  /*
+     v5.+------+v6
+     .' |    .'|
+  v1+---+--+'v2|
+    |   |  |   |
+    |v4,+--+---+v7
+    |.'    | .'
+  v0+------+'v3
+  */
+  let local_vertices = [
     pos + UVec3::new(0, 0, 0),
-    pos + UVec3::new(1, 0, 0),
-    pos + UVec3::new(1, 0, 1),
-    pos + UVec3::new(0, 0, 1),
     pos + UVec3::new(0, 1, 0),
     pos + UVec3::new(1, 1, 0),
-    pos + UVec3::new(1, 1, 1),
+    pos + UVec3::new(1, 0, 0),
+    pos + UVec3::new(0, 0, 1),
     pos + UVec3::new(0, 1, 1),
+    pos + UVec3::new(1, 1, 1),
+    pos + UVec3::new(1, 0, 1),
   ];
 
   let mut configuration = 0;
-  for (i, corner) in corners.iter().enumerate() {
-    let value = noise_value(noise, *corner, points_per_axis);
+  for (i, local_vertex) in local_vertices.iter().enumerate() {
+    let value = noise_value(noise, *local_vertex, points_per_axis);
     if value < surface_level {
       configuration |= 1 << i;
     }
@@ -58,20 +67,30 @@ fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_lev
   let edge_indices: &EdgeIndices = &TRIANGULATION[configuration];
   for i in (0..16).step_by(3) {
     if edge_indices[i] == N { break; }
-    let a0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
-    let a1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
-    let b0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
-    let b1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
-    let c0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-    let c1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-    let pa = Vec3::from(corners[a0] + corners[a1]) * 0.5;
-    let pb = Vec3::from(corners[b0] + corners[b1]) * 0.5;
-    let pc = Vec3::from(corners[c0] + corners[c1]) * 0.5;
-    let n = (pa - pb).cross(pc - pb).normalized();
-    vertices.push(Vertex::new(pa, n));
-    vertices.push(Vertex::new(pb, n));
-    vertices.push(Vertex::new(pc, n));
+    let a_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
+    let a_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 0] as usize] as usize;
+    let b_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
+    let b_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
+    let c_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
+    let c_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
+    let pos_a = vertex_position(noise, local_vertices[a_0], local_vertices[a_1], points_per_axis);
+    let pos_b = vertex_position(noise, local_vertices[b_0], local_vertices[b_1], points_per_axis);
+    let pos_c = vertex_position(noise, local_vertices[c_0], local_vertices[c_1], points_per_axis);
+    let normal = (pos_a - pos_b).cross(pos_c - pos_b).normalized();
+    vertices.push(Vertex::new(pos_a, normal));
+    vertices.push(Vertex::new(pos_b, normal));
+    vertices.push(Vertex::new(pos_c, normal));
   }
+}
+
+#[inline]
+fn vertex_position(noise: &Vec<f32>, pos_a: UVec3, pos_b: UVec3, points_per_axis: u32) -> Vec3 {
+  let value_a = noise_value(noise, pos_a, points_per_axis);
+  let value_b = noise_value(noise, pos_b, points_per_axis);
+  let t = (0f32 - value_a) / (value_b - value_a);
+  let pos_a = Vec3::from(pos_a);
+  let pos_b = Vec3::from(pos_b);
+  pos_a + t * (pos_b - pos_a)
 }
 
 #[inline]
