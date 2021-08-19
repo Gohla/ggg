@@ -27,7 +27,7 @@ pub fn generate(min: f32, max: f32, surface_level: f32) -> Vec<Vertex> {
   for x in 0..cubes_per_axis {
     for y in 0..cubes_per_axis {
       for z in 0..cubes_per_axis {
-        vertices.extend(cube_vertices(&noise, UVec3::new(x, y, z), points_per_axis, surface_level));
+        cube_vertices(&noise, UVec3::new(x, y, z), points_per_axis, surface_level, &mut vertices);
       }
     }
   }
@@ -35,7 +35,7 @@ pub fn generate(min: f32, max: f32, surface_level: f32) -> Vec<Vertex> {
 }
 
 #[inline]
-fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_level: f32) -> Vec<Vertex> {
+fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_level: f32, vertices: &mut Vec<Vertex>) {
   let corners = [
     pos + UVec3::new(0, 0, 0),
     pos + UVec3::new(1, 0, 0),
@@ -55,7 +55,6 @@ fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_lev
     }
   }
 
-  let mut vertices = Vec::new();
   let edge_indices: &EdgeIndices = &TRIANGULATION[configuration];
   for i in (0..16).step_by(3) {
     if edge_indices[i] == N { break; }
@@ -73,7 +72,6 @@ fn cube_vertices(noise: &Vec<f32>, pos: UVec3, points_per_axis: u32, surface_lev
     vertices.push(Vertex::new(pb, n));
     vertices.push(Vertex::new(pc, n));
   }
-  vertices
 }
 
 #[inline]
