@@ -71,7 +71,7 @@ impl<D: DensityFunction> MarchingCubes<D> {
     let mut configuration = 0;
     for (i, local_vertex) in local_vertices.iter().enumerate() {
       let value = self.density_function.density_at(local_vertex);
-      if value < self.surface_level { // TODO: fix weird artefacts when != 0
+      if value < self.surface_level {
         configuration |= 1 << i;
       }
     }
@@ -98,8 +98,8 @@ impl<D: DensityFunction> MarchingCubes<D> {
   #[inline]
   fn vertex_position(&self, pos_a: UVec3, pos_b: UVec3) -> Vec3 {
     let value_a = self.density_function.density_at(&pos_a);
-    let value_b = &self.density_function.density_at(&pos_b);
-    let t = (0f32 - value_a) / (value_b - value_a);
+    let value_b = self.density_function.density_at(&pos_b);
+    let t = (self.surface_level - value_a) / (value_b - value_a);
     let pos_a = Vec3::from(pos_a);
     let pos_b = Vec3::from(pos_b);
     pos_a + t * (pos_b - pos_a)
