@@ -9,31 +9,34 @@
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::density_function::DensityFunction;
+use crate::density_function::Volume;
 use crate::Vertex;
 
-pub struct MarchingCubes<D> {
-  density_function: D,
+pub struct MarchingCubes<V> {
+  volume: V,
   cubes_per_axis: u32,
   surface_level: f32,
 }
 
 #[derive(Copy, Clone)]
 pub struct MarchingCubesSettings {
+  pub cubes_per_axis: u32,
   pub surface_level: f32,
 }
 
 impl Default for MarchingCubesSettings {
   fn default() -> Self {
-    Self { surface_level: 0.0 }
+    Self { cubes_per_axis: 15, surface_level: 0.0 }
   }
 }
 
-impl<D: DensityFunction> MarchingCubes<D> {
-  pub fn new(density_function: D, settings: MarchingCubesSettings) -> Self {
-    let cubes_per_axis = density_function.points_per_axis() - 1;
-    let surface_level = settings.surface_level;
-    Self { density_function, cubes_per_axis, surface_level }
+impl<V: Volume> MarchingCubes<V> {
+  pub fn new(volume: V, settings: MarchingCubesSettings) -> Self {
+    let (min_bound, max_bound) = volume.bounds();
+    debug_assert_eq!(min_bound, UVec3::zero(), "Volume has a non-zero minimum bound");
+    let required_bound = (settings.cubes_per_axis + 1) * UVec3::one();
+    debug_assert!(max_bound.component_max() >= required_bound.component_max(), "Volume has maximum bound {:?} that is smaller than required bound {:?}", max_bound, required_bound);
+    Self { volume, cubes_per_axis: settings.cubes_per_axis, surface_level: settings.surface_level }
   }
 
   pub fn generate(&self) -> Vec<Vertex> {
@@ -70,7 +73,7 @@ impl<D: DensityFunction> MarchingCubes<D> {
 
     let mut configuration = 0;
     for (i, local_vertex) in local_vertices.iter().enumerate() {
-      let value = self.density_function.density_at(local_vertex);
+      let value = self.volume.sample(local_vertex);
       if value < self.surface_level {
         configuration |= 1 << i;
       }
@@ -97,8 +100,8 @@ impl<D: DensityFunction> MarchingCubes<D> {
 
   #[inline]
   fn vertex_position(&self, pos_a: UVec3, pos_b: UVec3) -> Vec3 {
-    let value_a = self.density_function.density_at(&pos_a);
-    let value_b = self.density_function.density_at(&pos_b);
+    let value_a = self.volume.sample(&pos_a);
+    let value_b = self.volume.sample(&pos_b);
     let t = (self.surface_level - value_a) / (value_b - value_a);
     let pos_a = Vec3::from(pos_a);
     let pos_b = Vec3::from(pos_b);

@@ -1,58 +1,57 @@
 use simdnoise::NoiseBuilder;
 use ultraviolet::{UVec3, Vec3};
 
-pub trait DensityFunction {
-  fn points_per_axis(&self) -> u32;
+pub trait Volume {
+  fn sample(&self, position: &UVec3) -> f32;
 
-  fn density_at(&self, position: &UVec3) -> f32;
+  fn bounds(&self) -> (UVec3, UVec3);
 }
 
 
 pub struct Sphere {
-  points_per_axis: u32,
   radius: f32,
 }
 
 #[derive(Copy, Clone)]
 pub struct SphereSettings {
-  pub points_per_axis: u32,
+  pub radius: f32,
 }
 
 impl Default for SphereSettings {
   fn default() -> Self {
-    Self { points_per_axis: 32 }
+    Self { radius: 15.0 }
   }
 }
 
 impl Sphere {
   pub fn new(settings: SphereSettings) -> Self {
-    let points_per_axis = settings.points_per_axis;
-    let radius = (points_per_axis - 1) as f32;
-    Self { points_per_axis, radius }
+    Self { radius: settings.radius }
   }
 }
 
-impl DensityFunction for Sphere {
-  fn points_per_axis(&self) -> u32 {
-    self.points_per_axis
-  }
-
-  fn density_at(&self, position: &UVec3) -> f32 {
-    // Transform position from 0..points_per_axis to -half_radius..half_radius.
+impl Volume for Sphere {
+  #[inline]
+  fn sample(&self, position: &UVec3) -> f32 {
+    // Transform position from 0..n to -half_radius..half_radius.
     let position = Vec3::from(*position) - (Vec3::one() * (self.radius / 2.0));
     0.5 - position.mag() / self.radius
+  }
+
+  #[inline]
+  fn bounds(&self) -> (UVec3, UVec3) {
+    (UVec3::zero(), UVec3::one() * u32::MAX)
   }
 }
 
 
 pub struct Noise {
-  points_per_axis: u32,
+  max_bound: u32,
   noise: Vec<f32>,
 }
 
 #[derive(Copy, Clone)]
 pub struct NoiseSettings {
-  pub points_per_axis: u32,
+  pub max_bound: u32,
   pub seed: i32,
   pub lacunarity: f32,
   pub frequency: f32,
@@ -65,7 +64,7 @@ pub struct NoiseSettings {
 impl Default for NoiseSettings {
   fn default() -> Self {
     Self {
-      points_per_axis: 32 * 4,
+      max_bound: 16,
       seed: 1337,
       lacunarity: 0.5,
       frequency: 0.05,
@@ -79,28 +78,28 @@ impl Default for NoiseSettings {
 
 impl Noise {
   pub fn new(settings: NoiseSettings) -> Self {
-    let points_per_axis = settings.points_per_axis;
-    let points_per_axis_usize = points_per_axis as usize;
-    let noise = NoiseBuilder::ridge_3d(points_per_axis_usize, points_per_axis_usize, points_per_axis_usize)
+    let max_bound = settings.max_bound;
+    let max_bound_usize = max_bound as usize;
+    let noise = NoiseBuilder::ridge_3d(max_bound_usize, max_bound_usize, max_bound_usize)
       .with_seed(settings.seed)
       .with_lacunarity(settings.lacunarity)
       .with_freq(settings.frequency)
       .with_gain(settings.gain)
       .with_octaves(settings.octaves)
       .generate_scaled(settings.min, settings.max);
-    Self { points_per_axis, noise }
+    Self { max_bound, noise }
   }
 }
 
-impl DensityFunction for Noise {
+impl Volume for Noise {
   #[inline]
-  fn points_per_axis(&self) -> u32 {
-    self.points_per_axis
+  fn sample(&self, position: &UVec3) -> f32 {
+    self.noise[(position.x + (position.y * self.max_bound) + (position.z * self.max_bound * self.max_bound)) as usize]
   }
 
   #[inline]
-  fn density_at(&self, position: &UVec3) -> f32 {
-    self.noise[(position.x + (position.y * self.points_per_axis) + (position.z * self.points_per_axis * self.points_per_axis)) as usize]
+  fn bounds(&self) -> (UVec3, UVec3) {
+    (UVec3::zero(), UVec3::one() * self.max_bound)
   }
 }
 

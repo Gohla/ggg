@@ -163,8 +163,8 @@ impl app::Application for VoxelMeshing {
         ui.end_row();
         match self.density_function_type {
           DensityFunctionType::Sphere => {
-            ui.label("Points per axis");
-            ui.drag_unlabelled(&mut self.sphere_settings.points_per_axis, 1);
+            ui.label("Radius");
+            ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
             ui.end_row();
           }
           DensityFunctionType::Noise => {
@@ -172,22 +172,22 @@ impl app::Application for VoxelMeshing {
             ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
             ui.end_row();
             ui.label("Lacunarity");
-            ui.drag_unlabelled(&mut self.noise_settings.lacunarity, 0.1);
+            ui.drag_unlabelled(&mut self.noise_settings.lacunarity, 0.01);
             ui.end_row();
             ui.label("Frequency");
-            ui.drag_unlabelled(&mut self.noise_settings.frequency, 0.01);
+            ui.drag_unlabelled(&mut self.noise_settings.frequency, 0.001);
             ui.end_row();
             ui.label("Gain");
-            ui.drag_unlabelled(&mut self.noise_settings.gain, 0.1);
+            ui.drag_unlabelled(&mut self.noise_settings.gain, 0.01);
             ui.end_row();
             ui.label("Octaves");
             ui.drag_unlabelled(&mut self.noise_settings.octaves, 1);
             ui.end_row();
             ui.label("Minimum density");
-            ui.drag_unlabelled(&mut self.noise_settings.min, 0.1);
+            ui.drag_unlabelled(&mut self.noise_settings.min, 0.01);
             ui.end_row();
             ui.label("Maximum density");
-            ui.drag_unlabelled(&mut self.noise_settings.max, 0.1);
+            ui.drag_unlabelled(&mut self.noise_settings.max, 0.01);
             ui.end_row();
           }
         }
