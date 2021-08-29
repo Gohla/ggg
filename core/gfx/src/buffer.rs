@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferUsage, Device, Queue, ShaderStage};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferUsages, Device, Queue, ShaderStages};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 // Buffer builder
@@ -18,7 +18,7 @@ impl<'a> BufferBuilder<'a> {
       descriptor: BufferDescriptor {
         label: None,
         size: 0,
-        usage: BufferUsage::COPY_DST,
+        usage: BufferUsages::COPY_DST,
         mapped_at_creation: false,
       },
       len: 0,
@@ -39,27 +39,27 @@ impl<'a> BufferBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_usage(mut self, usage: BufferUsage) -> Self {
+  pub fn with_usage(mut self, usage: BufferUsages) -> Self {
     self.descriptor.usage = usage;
     self
   }
 
   #[inline]
-  pub fn with_static_vertex_usage(self) -> Self { self.with_usage(BufferUsage::VERTEX) }
+  pub fn with_static_vertex_usage(self) -> Self { self.with_usage(BufferUsages::VERTEX) }
   #[inline]
-  pub fn with_vertex_usage(self) -> Self { self.with_usage(BufferUsage::VERTEX | BufferUsage::COPY_DST) }
+  pub fn with_vertex_usage(self) -> Self { self.with_usage(BufferUsages::VERTEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_index_usage(self) -> Self { self.with_usage(BufferUsage::INDEX) }
+  pub fn with_static_index_usage(self) -> Self { self.with_usage(BufferUsages::INDEX) }
   #[inline]
-  pub fn with_index_usage(self) -> Self { self.with_usage(BufferUsage::INDEX | BufferUsage::COPY_DST) }
+  pub fn with_index_usage(self) -> Self { self.with_usage(BufferUsages::INDEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_uniform_usage(self) -> Self { self.with_usage(BufferUsage::UNIFORM) }
+  pub fn with_static_uniform_usage(self) -> Self { self.with_usage(BufferUsages::UNIFORM) }
   #[inline]
-  pub fn with_uniform_usage(self) -> Self { self.with_usage(BufferUsage::UNIFORM | BufferUsage::COPY_DST) }
+  pub fn with_uniform_usage(self) -> Self { self.with_usage(BufferUsages::UNIFORM | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_storage_usage(self) -> Self { self.with_usage(BufferUsage::STORAGE) }
+  pub fn with_static_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE) }
   #[inline]
-  pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsage::STORAGE | BufferUsage::COPY_DST) }
+  pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
 
   #[inline]
   pub fn with_mapped_at_creation(mut self, mapped_at_creation: bool) -> Self {
@@ -141,7 +141,7 @@ impl GfxBuffer {
 
 impl<'a> GfxBuffer {
   #[inline]
-  pub fn create_uniform_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStage) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+  pub fn create_uniform_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,
@@ -156,7 +156,7 @@ impl<'a> GfxBuffer {
   }
 
   #[inline]
-  pub fn create_storage_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStage, read_only: bool) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+  pub fn create_storage_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages, read_only: bool) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,

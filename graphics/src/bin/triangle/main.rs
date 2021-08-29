@@ -4,7 +4,7 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, InputStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
+use wgpu::{Buffer, BufferAddress, CommandBuffer, VertexStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
@@ -25,7 +25,7 @@ impl Vertex {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
-      step_mode: InputStepMode::Vertex,
+      step_mode: VertexStepMode::Vertex,
       attributes: ATTRIBUTES,
     }
   }
@@ -47,7 +47,7 @@ impl app::Application for Triangle {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_layout_label("Triangle pipeline layout")
       .with_label("Triangle render pipeline")

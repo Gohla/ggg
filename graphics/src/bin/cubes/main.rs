@@ -8,7 +8,7 @@ use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BackendBit, BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{Backends, BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -101,7 +101,7 @@ impl app::Application for Cubes {
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
       let buffer = BufferBuilder::new()
@@ -121,7 +121,7 @@ impl app::Application for Cubes {
       buffer.unmap();
       buffer
     };
-    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStage::VERTEX, true);
+    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStages::VERTEX, true);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
@@ -137,7 +137,7 @@ impl app::Application for Cubes {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Cubes pipeline layout")
       .with_label("Cubes render pipeline")
@@ -237,7 +237,7 @@ impl app::Application for Cubes {
 fn main() {
   app::run::<Cubes>(Options {
     name: "Cubes".to_string(),
-    graphics_backends: BackendBit::all(),
+    graphics_backends: Backends::all(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
     ..Options::default()
   }).unwrap();

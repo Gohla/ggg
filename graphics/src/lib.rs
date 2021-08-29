@@ -11,10 +11,9 @@ macro_rules! include_shader {
 #[macro_export]
 macro_rules! include_shader_without_validation {
   ($p:expr) => {
-    wgpu::ShaderModuleDescriptor {
+    wgpu::ShaderModuleDescriptorSpirV {
       label: Some($crate::shader_file!($p)),
-      source: wgpu::util::make_spirv(include_bytes!($crate::shader_file!($p))),
-      flags: wgpu::ShaderFlags::default(),
+      source: wgpu::util::make_spirv_raw(include_bytes!($crate::shader_file!($p))),
     }
   }
 }

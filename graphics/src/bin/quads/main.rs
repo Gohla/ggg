@@ -5,7 +5,7 @@ use std::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, InputStepMode, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, VertexStepMode, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Os};
 use common::input::RawInput;
@@ -32,7 +32,7 @@ impl Vertex {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
-      step_mode: InputStepMode::Vertex,
+      step_mode: VertexStepMode::Vertex,
       attributes: ATTRIBUTES,
     }
   }
@@ -69,7 +69,7 @@ impl Instance {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4];
     VertexBufferLayout {
       array_stride: size_of::<Instance>() as BufferAddress,
-      step_mode: InputStepMode::Instance,
+      step_mode: VertexStepMode::Instance,
       attributes: ATTRIBUTES,
     }
   }
@@ -114,8 +114,8 @@ impl app::Application for Quads {
       let sampler = SamplerBuilder::new()
         .with_label("Cobblestone diffuse sampler")
         .build(&gfx.device);
-      let (view_layout_entry, view_bind_entry) = texture.create_default_float_2d_bind_group_entries(0, ShaderStage::FRAGMENT);
-      let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
+      let (view_layout_entry, view_bind_entry) = texture.create_default_float_2d_bind_group_entries(0, ShaderStages::FRAGMENT);
+      let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
       CombinedBindGroupLayoutBuilder::new()
         .with_layout_entries(&[view_layout_entry, sampler_layout_entry])
         .with_entries(&[view_bind_entry, sampler_bind_entry])
@@ -127,7 +127,7 @@ impl app::Application for Quads {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .build_with_data(&gfx.device, &[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
       .with_entries(&[uniform_bind_group_entry])
@@ -143,7 +143,7 @@ impl app::Application for Quads {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Quads pipeline layout")

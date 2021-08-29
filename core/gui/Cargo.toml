@@ -10,7 +10,7 @@ common = { path = "../../core/common" }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
 egui = "0.13"
-wgpu = "0.9"
+wgpu = "0.10"
 bytemuck = { version = "1.5", features = ["derive"] }
 thiserror = "1"
 

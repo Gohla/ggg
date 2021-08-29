@@ -4,7 +4,7 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2};
 use egui::epaint::{Mesh, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, InputStepMode, PipelineLayout, Queue, RenderPipeline, ShaderStage, SwapChainTexture, TextureFormat, VertexBufferLayout};
+use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureFormat, VertexBufferLayout, VertexStepMode, TextureView};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
@@ -43,13 +43,13 @@ impl Gui {
       .with_label("GUI uniform buffer")
       .build_with_data(device, &[Uniform::default()]);
     let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
-      uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+      uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
     let sampler = SamplerBuilder::new()
       .with_mag_filter(FilterMode::Linear)
       .with_min_filter(FilterMode::Linear)
       .with_label("GUI texture sampler")
       .build(device);
-    let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStage::FRAGMENT);
+    let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_bind_layout_entry])
       .with_layout_label("GUI static bind group layout")
@@ -68,7 +68,7 @@ impl Gui {
       .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
       .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
         array_stride: 5 * 4,
-        step_mode: InputStepMode::Vertex,
+        step_mode: VertexStepMode::Vertex,
         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
       }])
       .with_fragment_state(&fragment_shader_module, "main", &[ColorTargetState {
@@ -255,7 +255,7 @@ impl Gui {
     device: &Device,
     queue: &Queue,
     encoder: &mut CommandEncoder,
-    swap_chain_texture: &SwapChainTexture,
+    surface_texture_view: &TextureView,
   ) {
     // Update texture if no texture was created yet, or if the texture has changed.
     let texture = self.context.texture();
@@ -341,7 +341,7 @@ impl Gui {
     {
       let mut render_pass = RenderPassBuilder::new()
         .with_label("GUI render pass")
-        .begin_render_pass_for_swap_chain_with_load(encoder, swap_chain_texture);
+        .begin_render_pass_for_swap_chain_with_load(encoder, surface_texture_view);
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);

@@ -1,4 +1,4 @@
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerDescriptor, ShaderStage};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerDescriptor, ShaderStages};
 
 // Sampler builder creation and modification
 
@@ -45,12 +45,12 @@ pub trait SamplerBuilderSamplerEx<'a> {
   fn create_bind_group_entries(
     &'a self,
     binding_index: u32,
-    shader_visibility: ShaderStage,
+    shader_visibility: ShaderStages,
   ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>);
 }
 
 impl<'a> SamplerBuilderSamplerEx<'a> for Sampler {
-  fn create_bind_group_entries(&'a self, binding_index: u32, shader_visibility: ShaderStage) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+  fn create_bind_group_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let bind_group_layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,

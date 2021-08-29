@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, InputStepMode, PowerPreference, RenderPipeline, ShaderStage, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, VertexStepMode, PowerPreference, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -62,13 +62,13 @@ impl app::Application for VoxelMeshing {
       .with_uniform_usage()
       .with_label("Camera uniform buffer")
       .build_with_data(&gfx.device, &[CameraUniform::from_camera_sys(&camera_sys)]);
-    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX_FRAGMENT);
+    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let light_uniform = LightUniform::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5));
     let light_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
       .build_with_data(&gfx.device, &[light_uniform]);
-    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStage::FRAGMENT);
+    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry])
       .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry])
@@ -78,7 +78,7 @@ impl app::Application for VoxelMeshing {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Voxel meshing pipeline layout")
@@ -269,7 +269,7 @@ impl Vertex {
     ];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
-      step_mode: InputStepMode::Vertex,
+      step_mode: VertexStepMode::Vertex,
       attributes: ATTRIBUTES,
     }
   }

@@ -1,5 +1,5 @@
 pub mod prelude;
-pub mod swap_chain;
+pub mod surface;
 pub mod render_pipeline;
 pub mod buffer;
 pub mod command;

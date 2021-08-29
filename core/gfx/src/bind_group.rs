@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, ShaderStage, TextureSampleType, TextureView, TextureViewDimension};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, ShaderStages, TextureSampleType, TextureView, TextureViewDimension};
 
 // Bind group layout entry creation
 
@@ -14,7 +14,7 @@ impl BindGroupLayoutEntryBuilder {
     Self {
       entry: BindGroupLayoutEntry {
         binding: 0,
-        visibility: ShaderStage::NONE,
+        visibility: ShaderStages::NONE,
         ty,
         count: None,
       }
@@ -81,16 +81,16 @@ impl BindGroupLayoutEntryBuilder {
   }
 
   #[inline]
-  pub fn with_shader_visibility(mut self, visibility: ShaderStage) -> Self {
+  pub fn with_shader_visibility(mut self, visibility: ShaderStages) -> Self {
     self.entry.visibility = visibility;
     self
   }
   #[inline]
-  pub fn with_vertex_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStage::VERTEX) }
+  pub fn with_vertex_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStages::VERTEX) }
   #[inline]
-  pub fn with_fragment_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStage::FRAGMENT) }
+  pub fn with_fragment_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStages::FRAGMENT) }
   #[inline]
-  pub fn with_compute_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStage::COMPUTE) }
+  pub fn with_compute_shader_visibility(self) -> Self { self.with_shader_visibility(ShaderStages::COMPUTE) }
 
   #[inline]
   pub fn with_count(mut self, count: NonZeroU32) -> Self {

@@ -2,7 +2,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{BindGroup, CommandBuffer, Features, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::{KeyboardButton, KeyboardModifier, RawInput};
@@ -65,7 +65,7 @@ impl app::Application for RayTracing {
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::new(os.window.get_inner_size(), 0.0, camera_aperture, camera_origin, v_fov)]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::FRAGMENT);
+    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -74,17 +74,17 @@ impl app::Application for RayTracing {
       .with_label("Ray tracing static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_without_validation!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_without_validation!("frag"));
+    let vertex_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation!("vert")) };
+    let fragment_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation!("frag")) };
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_multisample_count(SAMPLE_COUNT)
       .with_layout_label("Ray tracing pipeline layout")
       .with_label("Ray tracing render pipeline")
       .build(&gfx.device);
 
-    let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.swap_chain, SAMPLE_COUNT)
+    let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
       .with_texture_label("Multisampling texture")
       .with_texture_view_label("Multisampling texture view")
       .build(&gfx.device);
@@ -104,7 +104,7 @@ impl app::Application for RayTracing {
   }
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, _screen_size: ScreenSize) {
-    self.multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.swap_chain, SAMPLE_COUNT)
+    self.multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
       .build(&gfx.device);
   }
 
@@ -172,6 +172,7 @@ fn main() {
   app::run::<RayTracing>(Options {
     name: "Ray tracing".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
+    graphics_device_features: Features::SPIRV_SHADER_PASSTHROUGH,
     ..Options::default()
   }).unwrap();
 }

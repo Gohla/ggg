@@ -6,13 +6,13 @@ use egui::{CtxRef, TopBottomPanel, Ui};
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::{Adapter, BackendBit, CommandBuffer, CommandEncoder, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SwapChainError, SwapChainTexture};
+use wgpu::{Adapter, Backends, CommandBuffer, CommandEncoder, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, SurfaceError, TextureView};
 
 use common::input::RawInput;
 use common::screen::{LogicalSize, ScreenSize};
 use common::timing::{Duration, FrameTime, FrameTimer, TickTimer, TimingStats};
 use gfx::prelude::*;
-use gfx::swap_chain::GfxSwapChain;
+use gfx::surface::GfxSurface;
 use gui::Gui;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
@@ -31,11 +31,10 @@ pub struct Os {
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
-  pub surface: Surface,
   pub adapter: Adapter,
   pub device: Device,
   pub queue: Queue,
-  pub swap_chain: GfxSwapChain,
+  pub surface: GfxSurface,
 }
 
 #[derive(Debug)]
@@ -47,7 +46,7 @@ pub struct Tick {
 #[derive(Debug)]
 pub struct Frame<'a> {
   pub screen_size: ScreenSize,
-  pub output_texture: &'a SwapChainTexture,
+  pub output_texture: &'a TextureView,
   pub encoder: &'a mut CommandEncoder,
   pub extrapolation: f64,
   pub time: FrameTime,
@@ -99,7 +98,7 @@ pub struct Options {
   pub window_inner_size: LogicalSize,
   pub window_min_inner_size: LogicalSize,
 
-  pub graphics_backends: BackendBit,
+  pub graphics_backends: Backends,
   pub graphics_adapter_power_preference: PowerPreference,
   pub graphics_device_features: Features,
   pub graphics_device_limits: Limits,
@@ -115,7 +114,7 @@ impl Default for Options {
       window_inner_size: size,
       window_min_inner_size: size,
 
-      graphics_backends: BackendBit::all(),
+      graphics_backends: Backends::all(),
       graphics_adapter_power_preference: PowerPreference::LowPower,
       graphics_device_features: Features::empty(),
       graphics_device_limits: Limits::default(),
@@ -183,9 +182,9 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
     ..DeviceDescriptor::default()
   }, None).await?;
   let screen_size = os.window.get_inner_size();
-  let swap_chain = GfxSwapChain::new(&surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
-  let gui = Gui::new(&device, swap_chain.get_texture_format());
-  let gfx = Gfx { instance, surface, adapter, device, queue, swap_chain };
+  let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
+  let gui = Gui::new(&device, surface.get_texture_format());
+  let gfx = Gfx { instance, adapter, device, queue, surface };
 
   thread::Builder::new()
     .name(options.name)
@@ -236,7 +235,7 @@ fn run_loop<A: Application>(
         minimized = true;
       } else {
         screen_size = size;
-        gfx.swap_chain = gfx.swap_chain.resize(&gfx.surface, &gfx.adapter, &gfx.device, screen_size);
+        gfx.surface = gfx.surface.resize(&gfx.adapter, &gfx.device, screen_size);
         app.screen_resize(&os, &gfx, screen_size);
         resized = false;
         minimized = false;
@@ -301,33 +300,34 @@ fn run_loop<A: Application>(
     debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
 
     // Get frame to draw into
-    let swap_chain_frame = match gfx.swap_chain.get_current_frame() {
+    let surface_frame = match gfx.surface.get_current_frame() {
       Ok(frame) => frame,
       Err(e) => {
         match e {
-          SwapChainError::Outdated => resized = true,
-          SwapChainError::Lost => resized = true,
-          SwapChainError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
+          SurfaceError::Outdated => resized = true,
+          SurfaceError::Lost => resized = true,
+          SurfaceError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
           _ => {}
         };
         continue;
       }
     };
-    if swap_chain_frame.suboptimal {
+    if surface_frame.suboptimal {
       resized = true;
     }
+    let output_texture = surface_frame.output.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     // Render
     let mut encoder = gfx.device.create_default_command_encoder();
     let frame = Frame {
       screen_size,
-      output_texture: &swap_chain_frame.output,
+      output_texture: &output_texture,
       encoder: &mut encoder,
       extrapolation,
       time: frame_time,
     };
     let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
-    gui.render(screen_size, &gfx.device, &gfx.queue, &mut encoder, &swap_chain_frame.output);
+    gui.render(screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
 
     // Submit command buffers
     let command_buffer = encoder.finish();

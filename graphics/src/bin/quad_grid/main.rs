@@ -7,7 +7,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use rand::prelude::*;
 use ultraviolet::Mat4;
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStage};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::idx_assigner::Item;
@@ -85,14 +85,14 @@ pub struct QuadGrid {
 
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
-    let viewport = gfx.swap_chain.get_size().physical;
+    let viewport = gfx.surface.get_size().physical;
     let camera_sys = CameraSys::with_defaults_perspective(viewport);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Quad grid uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStage::VERTEX);
+    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
     let texture_1 = array_texture_def_builder.add_texture(image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap()).unwrap();
@@ -126,7 +126,7 @@ impl app::Application for QuadGrid {
       buffer.unmap();
       buffer
     };
-    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStage::VERTEX, true);
+    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStages::VERTEX, true);
 
     let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
@@ -139,7 +139,7 @@ impl app::Application for QuadGrid {
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&bind_group_layout, &array_texture_def.bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.swap_chain)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_layout_label("Quad grid pipeline layout")
       .with_label("Quad grid render pipeline")
       .build(&gfx.device);

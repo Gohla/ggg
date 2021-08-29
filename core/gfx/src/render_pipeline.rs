@@ -1,6 +1,6 @@
 use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
 
-use crate::swap_chain::GfxSwapChain;
+use crate::surface::GfxSurface;
 
 pub struct RenderPipelineBuilder<'a> {
   layout: PipelineLayoutDescriptor<'a>,
@@ -152,13 +152,13 @@ impl<'a> RenderPipelineBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_default_fragment_state(mut self, module: &'a ShaderModule, swap_chain: &GfxSwapChain) -> Self {
+  pub fn with_default_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
     self.fragment = Some(FragmentState {
       module,
       entry_point: "main",
       targets: &[],
     });
-    unsafe { self.default_fragment_targets.get_unchecked_mut(0).format = swap_chain.get_texture_format() };
+    unsafe { self.default_fragment_targets.get_unchecked_mut(0).format = surface.get_texture_format() };
     self.use_default_fragment_targets = true;
     self
   }

@@ -1,4 +1,4 @@
-use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, SwapChainTexture, TextureView};
+use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, TextureView};
 
 pub struct RenderPassBuilder<'a, 'b> {
   pub label: Option<&'a str>,
@@ -76,22 +76,22 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   }
 
   /// Ignores the previously set `color_attachments`.
-  pub fn begin_render_pass_for_swap_chain_with_clear(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, &swap_chain_texture.view, None, Operations::default())
+  pub fn begin_render_pass_for_swap_chain_with_clear(self, encoder: &'a mut CommandEncoder, surface_texture_view: &'a TextureView) -> RenderPass<'a> {
+    self.begin_render_pass_with_color_attachment(encoder, surface_texture_view, None, Operations::default())
   }
 
   /// Ignores the previously set `color_attachments`.
-  pub fn begin_render_pass_for_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, &swap_chain_texture.view, None, Operations { load: LoadOp::Load, store: true })
+  pub fn begin_render_pass_for_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, surface_texture_view: &'a TextureView) -> RenderPass<'a> {
+    self.begin_render_pass_with_color_attachment(encoder, &surface_texture_view, None, Operations { load: LoadOp::Load, store: true })
   }
 
   /// Ignores the previously set `color_attachments`.
-  pub fn begin_render_pass_for_multisampled_swap_chain_with_clear(self, encoder: &'a mut CommandEncoder, multisampled_framebuffer: &'a TextureView, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&swap_chain_texture.view), Operations::default())
+  pub fn begin_render_pass_for_multisampled_swap_chain_with_clear(self, encoder: &'a mut CommandEncoder, multisampled_framebuffer: &'a TextureView, surface_texture_view: &'a TextureView) -> RenderPass<'a> {
+    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&surface_texture_view), Operations::default())
   }
 
   /// Ignores the previously set `color_attachments`.
-  pub fn begin_render_pass_for_multisampled_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, multisampled_framebuffer: &'a TextureView, swap_chain_texture: &'a SwapChainTexture) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&swap_chain_texture.view), Operations { load: LoadOp::Load, store: true })
+  pub fn begin_render_pass_for_multisampled_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, multisampled_framebuffer: &'a TextureView, surface_texture_view: &'a TextureView) -> RenderPass<'a> {
+    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&surface_texture_view), Operations { load: LoadOp::Load, store: true })
   }
 }

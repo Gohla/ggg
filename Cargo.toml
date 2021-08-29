@@ -2,15 +2,13 @@ cargo-features = ["named-profiles", "profile-overrides"]
 
 [workspace]
 members = [
-  "core/common",
-  "core/os",
-  "core/gfx",
-  "core/gfxc",
-  "core/gui",
-  "core/gui_widget",
-  "core/app",
+  "core/*",
   "graphics"
 ]
+default-members = [
+  "graphics"
+]
+resolver = "2"
 
 # Development profile: no debug information, some optimisations.
 [profile.dev]
