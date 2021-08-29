@@ -6,6 +6,7 @@
 ///! * http://paulbourke.net/geometry/polygonise/
 ///! * https://people.eecs.berkeley.edu/~jrs/meshpapers/LorensenCline.pdf
 ///! * https://www.boristhebrave.com/2018/04/15/marching-cubes-tutorial/
+///! * https://github.com/swiftcoder/isosurface
 
 use ultraviolet::{UVec3, Vec3};
 

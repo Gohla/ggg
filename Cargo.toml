@@ -12,37 +12,25 @@ members = [
   "graphics"
 ]
 
-# Development profile: full debug information, no optimisations.
+# Development profile: no debug information, some optimisations.
 [profile.dev]
 panic = "abort"
-
-# Fast development profile: no debug information, some optimisations.
-[profile.fastdev]
-inherits = 'dev'
 opt-level = 2
 debug = false
 # Fully optimize all dependencies, but not our own crates, to speed up compilation.
-[profile.fastdev.package."*"]
+[profile.dev.package."*"]
 opt-level = 3
-[profile.fastdev.package."common"]
-opt-level = 2
-[profile.fastdev.package."os"]
-opt-level = 2
-[profile.fastdev.package."gfx"]
-opt-level = 2
-[profile.fastdev.package."gfxc"]
-opt-level = 2
-[profile.fastdev.package."gui"]
-opt-level = 2
-[profile.fastdev.package."gui_widget"]
-opt-level = 2
-[profile.fastdev.package."app"]
-opt-level = 2
-[profile.fastdev.package."graphics"]
-opt-level = 2
 
+# Testing: same as development profile.
 [profile.test]
-inherits = 'fastdev'
+inherits = "dev"
+
+# Debug profile: full debug information, no optimisations.
+[profile.dbg]
+inherits = "dev"
+opt-level = 0
+debug = true
+panic = "unwind"
 
 # Release profile: full optimisations, including link-time optimisations.
 [profile.release]
@@ -54,5 +42,5 @@ debug = false
 
 # Performance profiling profile: full debug information, full optimisations.
 [profile.profile]
-inherits = 'release'
+inherits = "release"
 debug = true
