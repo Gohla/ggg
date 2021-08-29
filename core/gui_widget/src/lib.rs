@@ -6,12 +6,12 @@ use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
 
 pub trait CtxRefWidgetsExt {
-  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<Response>;
+  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
 }
 
-impl CtxRefWidgetsExt for CtxRef {
+impl CtxRefWidgetsExt for &CtxRef {
   #[inline]
-  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<Response> {
+  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
     Window::new(title).show(self, add_contents)
   }
 }
