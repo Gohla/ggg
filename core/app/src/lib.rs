@@ -174,6 +174,7 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
   let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),
+    ..RequestAdapterOptions::default()
   }).await.ok_or(CreateError::AdapterRequestFail)?;
   let (device, queue) = adapter.request_device(&DeviceDescriptor {
     features: options.graphics_device_features,
@@ -300,8 +301,8 @@ fn run_loop<A: Application>(
     debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
 
     // Get frame to draw into
-    let surface_frame = match gfx.surface.get_current_frame() {
-      Ok(frame) => frame,
+    let surface_texture = match gfx.surface.get_current_texture() {
+      Ok(surface_texture) => surface_texture,
       Err(e) => {
         match e {
           SurfaceError::Outdated => resized = true,
@@ -312,10 +313,10 @@ fn run_loop<A: Application>(
         continue;
       }
     };
-    if surface_frame.suboptimal {
+    if surface_texture.suboptimal {
       resized = true;
     }
-    let output_texture = surface_frame.output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let output_texture = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     // Render
     let mut encoder = gfx.device.create_default_command_encoder();
@@ -332,5 +333,8 @@ fn run_loop<A: Application>(
     // Submit command buffers
     let command_buffer = encoder.finish();
     gfx.queue.submit(std::iter::once(command_buffer).chain(additional_command_buffers));
+
+    // Present
+    surface_texture.present()
   }
 }
