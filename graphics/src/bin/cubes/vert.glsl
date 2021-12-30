@@ -3,7 +3,7 @@
 layout (location = 0) out vec3 outPos;
 out gl_PerVertex { vec4 gl_Position; };
 
-layout(set = 0, binding = 0) uniform Uniform {
+layout(std140, set = 0, binding = 0) uniform Uniform {
   vec4 cameraPos;
   mat4 uniViewProj;
 };
@@ -12,7 +12,7 @@ struct Instance {
   vec4 pos;
 };
 
-layout(std140, set = 0, binding = 1) readonly buffer Instances {
+layout(std430, set = 0, binding = 1) readonly buffer Instances {
   Instance instances[];
 };
 

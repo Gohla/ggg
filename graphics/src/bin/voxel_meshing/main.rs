@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, VertexStepMode, PowerPreference, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, PowerPreference, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -20,8 +20,8 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
-use crate::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 use crate::marching_cubes::{MarchingCubes, MarchingCubesSettings};
+use crate::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 
 mod marching_cubes;
 mod volume;
@@ -303,11 +303,12 @@ struct LightUniform {
   color: Vec3,
   ambient: f32,
   direction: Vec3,
+  _dummy: f32, // TODO: replace with crevice crate?
 }
 
 impl LightUniform {
   pub fn new(color: Vec3, ambient: f32, direction: Vec3) -> Self {
-    Self { color, ambient, direction }
+    Self { color, ambient, direction, _dummy: 0.0 }
   }
 }
 

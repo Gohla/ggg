@@ -2,7 +2,7 @@
 
 /// Inputs
 
-layout(set = 0, binding = 0) uniform Uniform {
+layout(std140, set = 0, binding = 0) uniform Uniform {
   mat4 uniViewProj;
 };
 
@@ -16,7 +16,7 @@ struct Instance {
 //  float tex_z;
 //};
 
-layout(std140, set = 0, binding = 1) readonly buffer Instances {
+layout(std430, set = 0, binding = 1) readonly buffer Instances {
   Instance instances[];
 };
 

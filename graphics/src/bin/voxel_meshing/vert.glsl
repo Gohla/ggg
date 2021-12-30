@@ -7,8 +7,7 @@ out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec3 outPosition;
 layout(location = 1) out vec3 outNormal;
 
-layout(set = 0, binding = 0)
-uniform CameraUniform {
+layout(std140, set = 0, binding = 0) uniform CameraUniform {
   vec4 position;
   mat4 viewProjection;
 } camera;

@@ -7,6 +7,6 @@ publish = false
 
 [dependencies]
 common = { path = "../common" }
-winit = "0.25"
+winit = "0.26"
 thiserror = "1.0"
 tracing = "0.1"

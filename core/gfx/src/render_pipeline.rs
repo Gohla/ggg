@@ -193,6 +193,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       depth_stencil: self.depth_stencil,
       multisample: self.multisample,
       fragment,
+      multiview: None,
     });
     (layout, pipeline)
   }

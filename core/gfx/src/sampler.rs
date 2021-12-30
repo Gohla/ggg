@@ -1,4 +1,4 @@
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerDescriptor, ShaderStages};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages};
 
 // Sampler builder creation and modification
 
@@ -54,10 +54,7 @@ impl<'a> SamplerBuilderSamplerEx<'a> for Sampler {
     let bind_group_layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,
-      ty: BindingType::Sampler {
-        comparison: false,
-        filtering: true,
-      },
+      ty: BindingType::Sampler(SamplerBindingType::Filtering), // TODO: make configurable
       count: None,
     };
     let bind_group = BindGroupEntry {

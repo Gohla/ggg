@@ -12,7 +12,7 @@ gfx = { path = "../core/gfx" }
 gui_widget = { path = "../core/gui_widget" }
 app = { path = "../core/app" }
 simdnoise = "3.1"
-wgpu = { version = "0.11", features = ["spirv"] }
+wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.15"
 image = { version = "0.23", default-features = false, features = ["bmp", "png"] }
 rand = { version = "0.8", default-features = false, features = ["small_rng"] }

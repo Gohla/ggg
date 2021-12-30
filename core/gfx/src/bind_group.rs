@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, ShaderStages, TextureSampleType, TextureView, TextureViewDimension};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, SamplerBindingType, ShaderStages, TextureSampleType, TextureView, TextureViewDimension};
 
 // Bind group layout entry creation
 
@@ -40,8 +40,8 @@ impl BindGroupLayoutEntryBuilder {
   }
 
   #[inline]
-  pub fn new_sampler(filtering: bool, comparison: bool) -> Self {
-    Self::new(BindingType::Sampler { filtering, comparison })
+  pub fn new_sampler(sampler_binding_type: SamplerBindingType) -> Self {
+    Self::new(BindingType::Sampler(sampler_binding_type))
   }
 
   #[inline]
