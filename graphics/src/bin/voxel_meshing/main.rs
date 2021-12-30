@@ -20,11 +20,12 @@ use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
-use crate::density_function::{Noise, NoiseSettings, Sphere, SphereSettings};
+use crate::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 use crate::marching_cubes::{MarchingCubes, MarchingCubesSettings};
 
 mod marching_cubes;
-mod density_function;
+mod volume;
+mod octree;
 
 pub struct VoxelMeshing {
   camera_sys: CameraSys,

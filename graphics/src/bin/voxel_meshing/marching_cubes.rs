@@ -10,7 +10,7 @@
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::density_function::Volume;
+use crate::volume::Volume;
 use crate::Vertex;
 
 pub struct MarchingCubes<V> {
