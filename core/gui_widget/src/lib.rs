@@ -1,27 +1,27 @@
 use std::fmt::Display;
 use std::hash::Hash;
 
-use egui::{CollapsingHeader, CollapsingResponse, CtxRef, DragValue, Grid, InnerResponse, Response, Ui, Window};
+use egui::{CollapsingHeader, CollapsingResponse, CtxRef, DragValue, Grid, InnerResponse, Response, Ui, WidgetText, Window};
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
 
 pub trait CtxRefWidgetsExt {
-  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
+  fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
 }
 
 impl CtxRefWidgetsExt for &CtxRef {
   #[inline]
-  fn window(&self, title: impl ToString, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
+  fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
     Window::new(title).show(self, add_contents)
   }
 }
 
 pub trait UiWidgetsExt {
-  fn collapsing_open<R>(&mut self, heading: impl ToString, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<R>;
+  fn collapsing_open<R>(&mut self, heading: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<R>;
 
   fn grid<R>(&mut self, id_source: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
 
-  fn collapsing_open_with_grid<R>(&mut self, heading: impl ToString, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
+  fn collapsing_open_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
 
 
   fn drag(&mut self, prefix: impl ToString, value: &mut impl Numeric, speed: impl Into<f64>) -> Response;
@@ -52,7 +52,7 @@ impl UiWidgetsExt for Ui {
   #[inline]
   fn collapsing_open<R>(
     &mut self,
-    heading: impl ToString,
+    heading: impl Into<WidgetText>,
     add_contents: impl FnOnce(&mut Ui) -> R,
   ) -> CollapsingResponse<R> {
     CollapsingHeader::new(heading).default_open(true).show(self, add_contents)
@@ -64,7 +64,7 @@ impl UiWidgetsExt for Ui {
   }
 
   #[inline]
-  fn collapsing_open_with_grid<R>(&mut self, heading: impl ToString, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>> {
+  fn collapsing_open_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>> {
     self.collapsing_open(heading, |ui| { ui.grid(grid_id, add_contents) })
   }
 

@@ -11,7 +11,7 @@ pub struct DebugGui {
 
 impl DebugGui {
   pub fn add_debug_menu(&mut self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
-    menu::menu(ui, "Debug", |ui| {
+    menu::menu_button(ui, "Debug", |ui| {
       ui.checkbox(&mut self.show_timing, "Timing");
       ui.checkbox(&mut self.show_input, "Input");
       add_contents(ui);

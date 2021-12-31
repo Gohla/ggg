@@ -4,7 +4,7 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2};
 use egui::epaint::{Mesh, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureFormat, VertexBufferLayout, VertexStepMode, TextureView};
+use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
@@ -26,8 +26,8 @@ pub struct Gui {
   _static_bind_group_layout: BindGroupLayout,
   static_bind_group: BindGroup,
   texture_bind_group_layout: BindGroupLayout,
-  texture_bind_group: Option<BindGroup>,
-  previous_texture_version: u64,
+  font_image_bind_group: Option<BindGroup>,
+  previous_font_image_version: u64,
   _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
 }
@@ -99,8 +99,8 @@ impl Gui {
       _static_bind_group_layout: static_bind_group_layout,
       static_bind_group,
       texture_bind_group_layout,
-      texture_bind_group: None,
-      previous_texture_version: 0,
+      font_image_bind_group: None,
+      previous_font_image_version: 0,
       _pipeline_layout: pipeline_layout,
       render_pipeline,
     }
@@ -130,10 +130,12 @@ impl Gui {
 
     if process_mouse_input {
       // Mouse wheel delta // TODO: properly handle line to pixel conversion?
-      self.input.scroll_delta = Vec2::new(
-        (input.mouse_wheel_pixel_delta.logical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
-        (input.mouse_wheel_pixel_delta.logical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
-      );
+      if !input.mouse_wheel_pixel_delta.is_zero() {
+        self.input.events.push(Event::Scroll(Vec2::new(
+          (input.mouse_wheel_pixel_delta.logical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
+          (input.mouse_wheel_pixel_delta.logical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
+        )));
+      }
 
       // Mouse movement
       let mouse_position = Pos2::new(input.mouse_position.logical.x as f32, input.mouse_position.logical.y as f32);
@@ -257,13 +259,13 @@ impl Gui {
     encoder: &mut CommandEncoder,
     surface_texture_view: &TextureView,
   ) {
-    // Update texture if no texture was created yet, or if the texture has changed.
-    let texture = self.context.texture();
-    if self.texture_bind_group.is_none() || texture.version != self.previous_texture_version {
-      self.previous_texture_version = texture.version;
+    // Update font image if no font image was created yet, or if the font image has changed.
+    let font_image = self.context.font_image();
+    if self.font_image_bind_group.is_none() || font_image.version != self.previous_font_image_version {
+      self.previous_font_image_version = font_image.version;
       // Convert into Rgba8UnormSrgb format.
-      let mut pixels: Vec<u8> = Vec::with_capacity(texture.pixels.len() * 4);
-      for srgba in texture.srgba_pixels(1.0) {
+      let mut pixels: Vec<u8> = Vec::with_capacity(font_image.pixels.len() * 4);
+      for srgba in font_image.srgba_pixels(1.0) {
         pixels.push(srgba.r());
         pixels.push(srgba.g());
         pixels.push(srgba.b());
@@ -271,19 +273,19 @@ impl Gui {
       }
       // Create and write texture.
       let texture = TextureBuilder::new()
-        .with_2d_size(texture.width as u32, texture.height as u32)
+        .with_2d_size(font_image.width as u32, font_image.height as u32)
         .with_rgba8_unorm_srgb_format()
         .with_sampled_usage()
-        .with_texture_label("GUI texture")
-        .with_texture_view_label("GUI texture view")
+        .with_texture_label("GUI font image")
+        .with_texture_view_label("GUI font image view")
         .build(device);
       texture.write_2d_rgba_texture_data(queue, pixels.as_slice());
       // Create texture bind group.
-      let texture_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
+      let font_image_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
         .with_entries(&[texture.create_bind_group_entry(0)])
-        .with_label("GUI texture bind group")
+        .with_label("GUI font image bind group")
         .build(device);
-      self.texture_bind_group = Some(texture_bind_group)
+      self.font_image_bind_group = Some(font_image_bind_group)
     }
 
     // Get vertices to draw.
@@ -345,7 +347,7 @@ impl Gui {
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
-      render_pass.set_bind_group(1, self.texture_bind_group.as_ref().unwrap(), &[]);
+      render_pass.set_bind_group(1, self.font_image_bind_group.as_ref().unwrap(), &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
       render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
       let scale_factor: f64 = screen_size.scale.into();

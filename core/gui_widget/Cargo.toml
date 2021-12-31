@@ -7,5 +7,5 @@ publish = false
 
 [dependencies]
 common = { path = "../../core/common" }
-egui = "0.15"
+egui = "0.16.1"
 ultraviolet = "0.8"
