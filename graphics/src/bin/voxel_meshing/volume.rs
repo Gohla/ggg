@@ -94,7 +94,8 @@ impl Noise {
 impl Volume for Noise {
   #[inline]
   fn sample(&self, position: &UVec3) -> f32 {
-    self.noise[(position.x + (position.y * self.max_bound) + (position.z * self.max_bound * self.max_bound)) as usize]
+    let idx = (position.x + (position.y * self.max_bound) + (position.z * self.max_bound * self.max_bound)) as usize;
+    self.noise.get(idx).map_or(0.0f32, |v|*v) // HACK: return 0.0 when out of bounds.
   }
 
   #[inline]
