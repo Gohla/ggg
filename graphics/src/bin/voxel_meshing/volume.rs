@@ -19,7 +19,7 @@ pub struct SphereSettings {
 
 impl Default for SphereSettings {
   fn default() -> Self {
-    Self { radius: 15.0 }
+    Self { radius: 256.0 }
   }
 }
 
@@ -64,7 +64,7 @@ pub struct NoiseSettings {
 impl Default for NoiseSettings {
   fn default() -> Self {
     Self {
-      max_bound: 16,
+      max_bound: 256,
       seed: 1337,
       lacunarity: 0.5,
       frequency: 0.05,

@@ -1,3 +1,5 @@
+#![feature(int_log)]
+
 ///! Voxel meshing
 
 use std::mem::size_of;
@@ -21,6 +23,7 @@ use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 
 use crate::marching_cubes::{MarchingCubes, MarchingCubesSettings};
+use crate::octree::{Octree, OctreeSettings};
 use crate::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 
 mod marching_cubes;
@@ -37,11 +40,16 @@ pub struct VoxelMeshing {
   render_pipeline: RenderPipeline,
   vertex_buffer: GfxBuffer,
 
-  density_function_type: DensityFunctionType,
+  volume_type: VolumeType,
   sphere_settings: SphereSettings,
   noise_settings: NoiseSettings,
+
   meshing_algorithm_type: MeshingAlgorithmType,
   marching_cubes_settings: MarchingCubesSettings,
+
+  octree_settings: OctreeSettings,
+  octree_lod_level: u32,
+  vertices: Vec<Vertex>,
 }
 
 #[derive(Default)]
@@ -86,16 +94,23 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
-    let density_function_type = DensityFunctionType::Sphere;
+    let volume_type = VolumeType::Sphere;
     let sphere_settings = SphereSettings::default();
     let noise_settings = NoiseSettings::default();
+
     let meshing_algorithm_type = MeshingAlgorithmType::MarchingCubes;
     let marching_cubes_settings = MarchingCubesSettings::default();
-    let marching_cubes = MarchingCubes::new(Sphere::new(sphere_settings), marching_cubes_settings);
+    let marching_cubes = MarchingCubes::new(marching_cubes_settings);
+
+    let octree_settings = OctreeSettings::default();
+    let octree = Octree::new(octree_settings, Sphere::new(sphere_settings), marching_cubes);
+    let mut vertices = Vec::new();
+    let octree_lod_level = 0;
+    octree.generate_into(octree_lod_level, &mut vertices);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
-      .build_with_data(&gfx.device, &marching_cubes.generate());
+      .build_with_data(&gfx.device, &vertices);
 
     Self {
       camera_sys,
@@ -107,11 +122,16 @@ impl app::Application for VoxelMeshing {
       render_pipeline,
       vertex_buffer,
 
-      density_function_type,
+      volume_type,
       sphere_settings,
       noise_settings,
+
       meshing_algorithm_type,
       marching_cubes_settings,
+
+      octree_settings,
+      octree_lod_level,
+      vertices,
     }
   }
 
@@ -153,22 +173,22 @@ impl app::Application for VoxelMeshing {
         ui.drag_vec3(0.01, &mut self.light_uniform.direction);
         ui.end_row();
       });
-      ui.collapsing_open_with_grid("Density Function", "Grid", |ui| {
+      ui.collapsing_open_with_grid("Volume", "Grid", |ui| {
         ui.label("Type");
         ComboBox::from_id_source("Type")
-          .selected_text(format!("{:?}", self.density_function_type))
+          .selected_text(format!("{:?}", self.volume_type))
           .show_ui(ui, |ui| {
-            ui.selectable_value(&mut self.density_function_type, DensityFunctionType::Sphere, "Sphere");
-            ui.selectable_value(&mut self.density_function_type, DensityFunctionType::Noise, "Noise");
+            ui.selectable_value(&mut self.volume_type, VolumeType::Sphere, "Sphere");
+            ui.selectable_value(&mut self.volume_type, VolumeType::Noise, "Noise");
           });
         ui.end_row();
-        match self.density_function_type {
-          DensityFunctionType::Sphere => {
+        match self.volume_type {
+          VolumeType::Sphere => {
             ui.label("Radius");
             ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
             ui.end_row();
           }
-          DensityFunctionType::Noise => {
+          VolumeType::Noise => {
             ui.label("Seed");
             ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
             ui.end_row();
@@ -206,16 +226,21 @@ impl app::Application for VoxelMeshing {
             ui.label("Surface level");
             ui.drag_unlabelled(&mut self.marching_cubes_settings.surface_level, 0.01);
             ui.end_row();
-            if ui.button("Generate").clicked() {
-              let vertices = self.generate_vertex_buffer();
-              self.vertex_buffer = BufferBuilder::new()
-                .with_vertex_usage()
-                .with_label("Voxel meshing vertex buffer")
-                .build_with_data(&gfx.device, &vertices);
-            }
           }
         }
       });
+      ui.collapsing_open_with_grid("Octree", "Grid", |ui| {
+        ui.label("LOD level");
+        ui.drag_unlabelled(&mut self.octree_lod_level, 1); // TODO: limit range
+        ui.end_row();
+      });
+      if ui.button("Generate").clicked() {
+        self.generate_vertices();
+        self.vertex_buffer = BufferBuilder::new()
+          .with_vertex_usage()
+          .with_label("Voxel meshing vertex buffer")
+          .build_with_data(&gfx.device, &self.vertices);
+      }
     });
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_uniform]);
 
@@ -234,17 +259,19 @@ impl app::Application for VoxelMeshing {
 }
 
 impl VoxelMeshing {
-  fn generate_vertex_buffer(&self) -> Vec<Vertex> {
-    match (self.density_function_type, self.meshing_algorithm_type) {
-      (DensityFunctionType::Sphere, MeshingAlgorithmType::MarchingCubes) => MarchingCubes::new(Sphere::new(self.sphere_settings), self.marching_cubes_settings).generate(),
-      (DensityFunctionType::Noise, MeshingAlgorithmType::MarchingCubes) => MarchingCubes::new(Noise::new(self.noise_settings), self.marching_cubes_settings).generate()
-    }
+  fn generate_vertices(&mut self) {
+    self.vertices.clear();
+    let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
+    match self.volume_type {
+      VolumeType::Sphere => Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).generate_into(self.octree_lod_level, &mut self.vertices),
+      VolumeType::Noise => Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).generate_into(self.octree_lod_level, &mut self.vertices),
+    };
   }
 }
 
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum DensityFunctionType {
+pub enum VolumeType {
   Sphere,
   Noise,
 }
