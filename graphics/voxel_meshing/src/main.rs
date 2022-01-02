@@ -2,13 +2,11 @@
 
 ///! Voxel meshing
 
-use std::mem::size_of;
-
 use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, PowerPreference, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BindGroup, CommandBuffer, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{Frame, Gfx, GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -21,14 +19,10 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
-
-use crate::marching_cubes::{MarchingCubes, MarchingCubesSettings};
-use crate::octree::{Octree, OctreeSettings};
-use crate::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
-
-mod marching_cubes;
-mod volume;
-mod octree;
+use voxel_meshing::marching_cubes::{MarchingCubes, MarchingCubesSettings};
+use voxel_meshing::octree::{Octree, OctreeSettings};
+use voxel_meshing::vertex::Vertex;
+use voxel_meshing::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 
 pub struct VoxelMeshing {
   camera_sys: CameraSys,
@@ -281,32 +275,6 @@ pub enum MeshingAlgorithmType {
   MarchingCubes,
 }
 
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex {
-  pos: Vec3,
-  nor: Vec3,
-}
-
-impl Vertex {
-  fn buffer_layout() -> VertexBufferLayout<'static> {
-    const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![
-      0 => Float32x3,
-      1 => Float32x3,
-    ];
-    VertexBufferLayout {
-      array_stride: size_of::<Vertex>() as BufferAddress,
-      step_mode: VertexStepMode::Vertex,
-      attributes: ATTRIBUTES,
-    }
-  }
-
-  #[inline]
-  fn new(pos: Vec3, nor: Vec3) -> Self {
-    Self { pos, nor }
-  }
-}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]

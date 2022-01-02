@@ -21,3 +21,10 @@ tracing = "0.1"
 
 [build-dependencies]
 gfxc = { path = "../../core/gfxc" }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "marching_cubes"
+harness = false

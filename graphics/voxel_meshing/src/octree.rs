@@ -3,7 +3,8 @@
 use tracing::trace;
 use ultraviolet::UVec3;
 
-use crate::{MarchingCubes, Vertex};
+use crate::marching_cubes::MarchingCubes;
+use crate::vertex::Vertex;
 use crate::volume::Volume;
 
 #[derive(Copy, Clone)]
