@@ -12,7 +12,7 @@ use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader_without_validation;
+use graphics::include_shader_without_validation_for_bin;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -74,8 +74,8 @@ impl app::Application for RayTracing {
       .with_label("Ray tracing static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation!("vert")) };
-    let fragment_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation!("frag")) };
+    let vertex_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation_for_bin!("vert")) };
+    let fragment_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation_for_bin!("frag")) };
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)

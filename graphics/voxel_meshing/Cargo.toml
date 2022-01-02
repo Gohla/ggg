@@ -1,0 +1,23 @@
+[package]
+name = "voxel_meshing"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+common = { path = "../../core/common" }
+os = { path = "../../core/os" }
+gfx = { path = "../../core/gfx" }
+gui_widget = { path = "../../core/gui_widget" }
+app = { path = "../../core/app" }
+graphics = { path = ".." }
+simdnoise = "3.1"
+wgpu = { version = "0.12", features = ["spirv"] }
+egui = "0.16.1"
+ultraviolet = { version = "0.8", features = ["bytemuck", "int"] }
+bytemuck = { version = "1.5", features = ["derive"] }
+tracing = "0.1"
+
+[build-dependencies]
+gfxc = { path = "../../core/gfxc" }

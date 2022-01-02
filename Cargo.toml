@@ -3,10 +3,12 @@ cargo-features = ["named-profiles", "profile-overrides"]
 [workspace]
 members = [
   "core/*",
-  "graphics"
+  "graphics",
+  "graphics/voxel_meshing"
 ]
 default-members = [
-  "graphics"
+  "graphics",
+  "graphics/voxel_meshing"
 ]
 resolver = "2"
 
@@ -48,10 +50,11 @@ debug-assertions = true
 # Release profile: full optimisations, including link-time optimisations.
 [profile.release]
 opt-level = 3
+debug = false
 overflow-checks = false
 debug-assertions = false
 lto = true
-debug = false
+panic = "abort"
 
 # Performance profiling profile: full debug information, full optimisations.
 [profile.profile]

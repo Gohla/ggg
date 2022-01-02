@@ -18,7 +18,7 @@ use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
-use graphics::include_shader;
+use graphics::include_shader_for_bin;
 
 const NUM_QUAD_INDICES: usize = 6;
 const NUM_QUAD_VERTICES: usize = 4;
@@ -135,8 +135,8 @@ impl app::Application for QuadGrid {
       .with_label("Quad grid bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&bind_group_layout, &array_texture_def.bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)

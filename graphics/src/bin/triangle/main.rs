@@ -11,7 +11,7 @@ use common::input::RawInput;
 use gfx::buffer::BufferBuilder;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use graphics::include_shader;
+use graphics::include_shader_for_bin;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -44,8 +44,8 @@ pub struct Triangle {
 
 impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])

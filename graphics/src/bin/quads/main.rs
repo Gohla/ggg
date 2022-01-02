@@ -18,7 +18,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader;
+use graphics::include_shader_for_bin;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -136,8 +136,8 @@ impl app::Application for Quads {
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
