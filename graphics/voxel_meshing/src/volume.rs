@@ -8,6 +8,7 @@ pub trait Volume {
 }
 
 
+#[derive(Copy, Clone)]
 pub struct Sphere {
   radius: f32,
 }

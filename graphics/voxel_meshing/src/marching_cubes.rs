@@ -13,6 +13,7 @@ use ultraviolet::{UVec3, Vec3};
 use crate::vertex::Vertex;
 use crate::volume::Volume;
 
+#[derive(Copy, Clone)]
 pub struct MarchingCubes {
   surface_level: f32,
 }
