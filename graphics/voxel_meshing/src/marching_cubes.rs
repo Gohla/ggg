@@ -34,10 +34,11 @@ impl MarchingCubes {
     Self { surface_level: settings.surface_level }
   }
 
-  pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: UVec3, volume: &V, vertices: &mut Vec<Vertex>) {
-    for x in (start.x..=end.x).step_by(step.x as usize) {
-      for y in (start.y..=end.y).step_by(step.y as usize) {
-        for z in (start.z..=end.z).step_by(step.z as usize) {
+  pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
+    let step_usize = step as usize;
+    for x in (start.x..=end.x).step_by(step_usize) {
+      for y in (start.y..=end.y).step_by(step_usize) {
+        for z in (start.z..=end.z).step_by(step_usize) {
           self.add_cube_vertices(UVec3::new(x, y, z), step, volume, vertices);
         }
       }
@@ -45,7 +46,7 @@ impl MarchingCubes {
   }
 
   #[inline]
-  fn add_cube_vertices<V: Volume>(&self, pos: UVec3, step: UVec3, volume: &V, vertices: &mut Vec<Vertex>) {
+  fn add_cube_vertices<V: Volume>(&self, pos: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
     /* v5.+------+v6
        .' |    .'|
     v1+---+--+'v2|
@@ -55,13 +56,13 @@ impl MarchingCubes {
     v0+------+'v3 */
     let local_vertices = [
       pos + UVec3::new(0, 0, 0), // v0
-      pos + UVec3::new(0, step.y, 0), // v1
-      pos + UVec3::new(step.x, step.y, 0), // v2
-      pos + UVec3::new(step.x, 0, 0), // v3
-      pos + UVec3::new(0, 0, step.z), // v4
-      pos + UVec3::new(0, step.y, step.z), // v5
-      pos + UVec3::new(step.x, step.y, step.z), // v6
-      pos + UVec3::new(step.x, 0, step.z), // v7
+      pos + UVec3::new(0, step, 0), // v1
+      pos + UVec3::new(step, step, 0), // v2
+      pos + UVec3::new(step, 0, 0), // v3
+      pos + UVec3::new(0, 0, step), // v4
+      pos + UVec3::new(0, step, step), // v5
+      pos + UVec3::new(step, step, step), // v6
+      pos + UVec3::new(step, 0, step), // v7
     ];
 
     let mut configuration = 0;
