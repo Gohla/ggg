@@ -20,6 +20,7 @@ impl OctreeSettings {
   pub fn check(&self) {
     assert_ne!(self.total_size, 0, "Total size may not be 0");
     assert_ne!(self.chunk_size, 0, "Chunk size may not be 0");
+    assert_ne!(self.chunk_size, 1, "Chunk size may not be 1");
     assert!(self.total_size.is_power_of_two(), "Total size {} must be a power of 2", self.total_size);
     assert!(self.chunk_size.is_power_of_two(), "Chunk size {} must be a power of 2", self.chunk_size);
     assert!(self.chunk_size <= self.total_size, "Chunk size {} must be less than or equal to total size {}", self.chunk_size, self.total_size);
