@@ -20,12 +20,14 @@ debug-assertions = true
 overflow-checks = true
 lto = false
 panic = "abort"
+incremental = true
 # Optimize all dependencies, but not our own crates, to speed up runtime.
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
 overflow-checks = true
 debug-assertions = true
+incremental = true
 
 # Testing: same as development profile.
 [profile.test]
@@ -40,14 +42,16 @@ debug-assertions = true
 overflow-checks = true
 lto = false
 panic = "abort"
+incremental = true
 # Optimize all dependencies, but not our own crates, to speed up runtime.
 [profile.dbg.package."*"]
 opt-level = 3
 debug = true
 overflow-checks = true
 debug-assertions = true
+incremental = true
 
-# Release profile: full optimisations, including link-time optimisations.
+# Release profile: full optimisations, including full LTO.
 [profile.release]
 opt-level = 3
 debug = false
@@ -55,6 +59,17 @@ overflow-checks = false
 debug-assertions = false
 lto = true
 panic = "abort"
+
+# Benchmarking profile: full optimisations, including full LTO.
+[profile.bench]
+inherits = "release"
+
+# Fast benchmarking profile: full optimisations, but with thin LTO and incrementality enabled.
+[profile.fastbench]
+inherits = "release"
+incremental = true
+codegen-units = 256
+lto = "thin"
 
 # Performance profiling profile: full debug information, full optimisations.
 [profile.profile]

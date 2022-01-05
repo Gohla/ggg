@@ -20,7 +20,7 @@ pub struct SphereSettings {
 
 impl Default for SphereSettings {
   fn default() -> Self {
-    Self { radius: 256.0 }
+    Self { radius: 4096.0 }
   }
 }
 

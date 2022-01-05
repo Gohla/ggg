@@ -42,7 +42,6 @@ pub struct VoxelMeshing {
   marching_cubes_settings: MarchingCubesSettings,
 
   octree_settings: OctreeSettings,
-  octree_lod_level: u32,
   vertices: Vec<Vertex>,
 }
 
@@ -54,7 +53,8 @@ pub struct Input {
 impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
+    camera_sys.position = Vec3::new(4096.0 / 2.0, 4096.0 / 2.0, -(4096.0 / 2.0) - 200.0);
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
@@ -97,10 +97,8 @@ impl app::Application for VoxelMeshing {
     let marching_cubes = MarchingCubes::new(marching_cubes_settings);
 
     let octree_settings = OctreeSettings::default();
-    let octree = Octree::new(octree_settings, Sphere::new(sphere_settings), marching_cubes);
-    let mut vertices = Vec::new();
-    let octree_lod_level = 0;
-    octree.generate_into(octree_lod_level, &mut vertices);
+    let mut octree = Octree::new(octree_settings, Sphere::new(sphere_settings), marching_cubes);
+    let vertices: Vec<Vertex> = octree.update(camera_sys.position).flat_map(|(_, vertices)| vertices).map(|v| *v).collect();
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
@@ -124,7 +122,6 @@ impl app::Application for VoxelMeshing {
       marching_cubes_settings,
 
       octree_settings,
-      octree_lod_level,
       vertices,
     }
   }
@@ -224,8 +221,8 @@ impl app::Application for VoxelMeshing {
         }
       });
       ui.collapsing_open_with_grid("Octree", "Grid", |ui| {
-        ui.label("LOD level");
-        ui.drag_unlabelled(&mut self.octree_lod_level, 1); // TODO: limit range
+        ui.label("LOD factor");
+        ui.drag_unlabelled(&mut self.octree_settings.lod_factor, 1); // TODO: limit range
         ui.end_row();
       });
       if ui.button("Generate").clicked() {
@@ -254,11 +251,19 @@ impl app::Application for VoxelMeshing {
 
 impl VoxelMeshing {
   fn generate_vertices(&mut self) {
-    self.vertices.clear();
     let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
+    self.vertices.clear();
     match self.volume_type {
-      VolumeType::Sphere => Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).generate_into(self.octree_lod_level, &mut self.vertices),
-      VolumeType::Noise => Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).generate_into(self.octree_lod_level, &mut self.vertices),
+      VolumeType::Sphere => {
+        for (_, vertices) in Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).update(self.camera_sys.position) {
+          self.vertices.extend(vertices);
+        }
+      }
+      VolumeType::Noise => {
+        for (_, vertices) in Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).update(self.camera_sys.position) {
+          self.vertices.extend(vertices);
+        }
+      }
     };
   }
 }
