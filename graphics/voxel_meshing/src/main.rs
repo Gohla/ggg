@@ -84,7 +84,7 @@ impl app::Application for VoxelMeshing {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Voxel meshing pipeline layout")
@@ -271,13 +271,13 @@ impl VoxelMeshing {
       VolumeType::Sphere => {
         for (aabb, vertices) in Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).update(self.camera_sys.position) {
           self.vertices.extend(vertices);
-          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.8));
+          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.5));
         }
       }
       VolumeType::Noise => {
         for (aabb, vertices) in Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).update(self.camera_sys.position) {
           self.vertices.extend(vertices);
-          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.8));
+          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.5));
         }
       }
     };

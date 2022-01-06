@@ -1,4 +1,4 @@
-use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
+use wgpu::{BindGroupLayout, BlendState, ColorTargetState, CompareFunction, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureFormat, VertexBufferLayout, VertexState};
 
 use crate::surface::GfxSurface;
 
@@ -148,6 +148,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       entry_point,
       targets,
     });
+    self.use_default_fragment_targets = false;
     self
   }
 
@@ -158,11 +159,39 @@ impl<'a> RenderPipelineBuilder<'a> {
       entry_point: "main",
       targets: &[],
     });
-    unsafe { self.default_fragment_targets.get_unchecked_mut(0).format = surface.get_texture_format() };
+    let target = &mut self.default_fragment_targets[0];
+    target.format = surface.get_texture_format();
     self.use_default_fragment_targets = true;
     self
   }
 
+  #[inline]
+  pub fn with_default_alpha_blending_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
+    self.fragment = Some(FragmentState {
+      module,
+      entry_point: "main",
+      targets: &[],
+    });
+    let target = &mut self.default_fragment_targets[0];
+    target.format = surface.get_texture_format();
+    target.blend = Some(BlendState::ALPHA_BLENDING);
+    self.use_default_fragment_targets = true;
+    self
+  }
+
+  #[inline]
+  pub fn with_default_premultiplied_alpha_blending_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
+    self.fragment = Some(FragmentState {
+      module,
+      entry_point: "main",
+      targets: &[],
+    });
+    let target = &mut self.default_fragment_targets[0];
+    target.format = surface.get_texture_format();
+    target.blend = Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING);
+    self.use_default_fragment_targets = true;
+    self
+  }
 
   #[inline]
   pub fn with_multisample(mut self, multisample: MultisampleState) -> Self {
