@@ -26,8 +26,8 @@ pub struct CameraSys {
 
 #[derive(Debug)]
 pub struct PerspectiveProjection {
-  vertical_fov_radians: f32,
-  fov_change_speed: f32,
+  pub vertical_fov_radians: f32,
+  pub fov_change_speed: f32,
 }
 
 impl Default for PerspectiveProjection {
@@ -41,8 +41,8 @@ impl Default for PerspectiveProjection {
 
 #[derive(Debug)]
 pub struct OrthographicProjection {
-  zoom: f32,
-  zoom_change_speed: f32,
+  pub zoom: f32,
+  pub zoom_change_speed: f32,
 }
 
 impl Default for OrthographicProjection {

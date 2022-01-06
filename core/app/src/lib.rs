@@ -6,11 +6,12 @@ use egui::{CtxRef, TopBottomPanel, Ui};
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
-use wgpu::{Adapter, Backends, CommandBuffer, CommandEncoder, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, SurfaceError, TextureView};
+use wgpu::{Backends, CommandBuffer, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, RequestAdapterOptions, RequestDeviceError, SurfaceError};
 
 use common::input::RawInput;
 use common::screen::{LogicalSize, ScreenSize};
-use common::timing::{Duration, FrameTime, FrameTimer, TickTimer, TimingStats};
+use common::timing::{Duration, FrameTimer, TickTimer, TimingStats};
+use gfx::{Frame, Gfx};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gui::Gui;
@@ -29,27 +30,9 @@ pub struct Os {
 }
 
 #[derive(Debug)]
-pub struct Gfx {
-  pub instance: Instance,
-  pub adapter: Adapter,
-  pub device: Device,
-  pub queue: Queue,
-  pub surface: GfxSurface,
-}
-
-#[derive(Debug)]
 pub struct Tick {
   pub time_target: Duration,
   pub count: u64,
-}
-
-#[derive(Debug)]
-pub struct Frame<'a> {
-  pub screen_size: ScreenSize,
-  pub output_texture: &'a TextureView,
-  pub encoder: &'a mut CommandEncoder,
-  pub extrapolation: f64,
-  pub time: FrameTime,
 }
 
 pub struct GuiFrame {

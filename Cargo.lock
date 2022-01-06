@@ -786,6 +786,7 @@ dependencies = [
  "bytemuck",
  "common",
  "egui",
+ "gfxc",
  "gui_widget",
  "image",
  "raw-window-handle",

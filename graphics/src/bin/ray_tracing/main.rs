@@ -4,15 +4,15 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, PowerPreference, RenderPipeline, ShaderStages};
 
-use app::{Frame, Gfx, GuiFrame, Options, Os};
+use app::{GuiFrame, Options, Os};
 use common::input::{KeyboardButton, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
+use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader_without_validation_for_bin;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]

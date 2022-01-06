@@ -4,14 +4,14 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, VertexStepMode, RenderPipeline, VertexAttribute, VertexBufferLayout};
+use wgpu::{Buffer, BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{Frame, Gfx, GuiFrame, Os};
+use app::{GuiFrame, Os};
 use common::input::RawInput;
+use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::buffer::BufferBuilder;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use graphics::include_shader_for_bin;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

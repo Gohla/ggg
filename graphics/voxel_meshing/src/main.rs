@@ -6,18 +6,19 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, CommandBuffer, Features, PowerPreference, RenderPipeline, ShaderStages};
 
-use app::{Frame, Gfx, GuiFrame, Options, Os};
+use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use gfx::{Frame, Gfx, include_shader};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
+use gfx::debug_renderer::DebugRenderer;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader;
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::marching_cubes::{MarchingCubes, MarchingCubesSettings};
 use voxel_meshing::octree::{Octree, OctreeSettings};
@@ -43,6 +44,8 @@ pub struct VoxelMeshing {
 
   octree_settings: OctreeSettings,
   vertices: Vec<Vertex>,
+
+  debug_renderer: DebugRenderer,
 }
 
 #[derive(Default)]
@@ -104,6 +107,8 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing vertex buffer")
       .build_with_data(&gfx.device, &vertices);
 
+    let debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+
     Self {
       camera_sys,
       camera_uniform_buffer,
@@ -123,6 +128,8 @@ impl app::Application for VoxelMeshing {
 
       octree_settings,
       vertices,
+
+      debug_renderer,
     }
   }
 
@@ -145,8 +152,10 @@ impl app::Application for VoxelMeshing {
     ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera_sys.panning_speed = 2000.0;
+    self.camera_sys.far = 10000.0;
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
 
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
@@ -245,6 +254,10 @@ impl app::Application for VoxelMeshing {
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
     render_pass.pop_debug_group();
+    drop(render_pass);
+
+    self.debug_renderer.render(gfx, &mut frame, self.camera_sys.get_view_projection_matrix());
+
     Box::new(std::iter::empty())
   }
 }
@@ -253,15 +266,18 @@ impl VoxelMeshing {
   fn generate_vertices(&mut self) {
     let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
     self.vertices.clear();
+    self.debug_renderer.clear();
     match self.volume_type {
       VolumeType::Sphere => {
-        for (_, vertices) in Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).update(self.camera_sys.position) {
+        for (aabb, vertices) in Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).update(self.camera_sys.position) {
           self.vertices.extend(vertices);
+          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.8));
         }
       }
       VolumeType::Noise => {
-        for (_, vertices) in Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).update(self.camera_sys.position) {
+        for (aabb, vertices) in Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).update(self.camera_sys.position) {
           self.vertices.extend(vertices);
+          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.8));
         }
       }
     };
@@ -317,6 +333,7 @@ fn main() {
   app::run::<VoxelMeshing>(Options {
     name: "Voxel meshing".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
+    graphics_device_features: Features::POLYGON_MODE_LINE,
     ..Options::default()
   }).unwrap();
 }

@@ -10,16 +10,16 @@ use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{Backends, BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
-use app::{Frame, Gfx, GuiFrame, Options, Os};
+use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader_for_bin;
 use gui_widget::UiWidgetsExt;
 
 const NUM_CUBE_INDICES: usize = 3 * 3 * 2;

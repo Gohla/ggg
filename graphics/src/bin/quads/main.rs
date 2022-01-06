@@ -5,11 +5,12 @@ use std::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, VertexStepMode, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{Frame, Gfx, GuiFrame, Os};
+use app::{GuiFrame, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
@@ -18,7 +19,6 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use graphics::include_shader_for_bin;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

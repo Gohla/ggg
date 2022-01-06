@@ -9,16 +9,16 @@ use rand::prelude::*;
 use ultraviolet::Mat4;
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
-use app::{Frame, Gfx, GuiFrame, Options, Os};
+use app::{GuiFrame, Options, Os};
 use common::idx_assigner::Item;
 use common::input::RawInput;
+use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{CameraInput, CameraSys};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
-use graphics::include_shader_for_bin;
 
 const NUM_QUAD_INDICES: usize = 6;
 const NUM_QUAD_VERTICES: usize = 4;
