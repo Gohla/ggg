@@ -34,19 +34,21 @@ impl MarchingCubes {
     Self { surface_level: settings.surface_level }
   }
 
-  pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
+  pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: u32, volume: &mut V, vertices: &mut Vec<Vertex>) {
+    volume.load(start, step);
     let step_usize = step as usize;
     for x in (start.x..=end.x).step_by(step_usize) {
       for y in (start.y..=end.y).step_by(step_usize) {
         for z in (start.z..=end.z).step_by(step_usize) {
-          self.add_cube_vertices(UVec3::new(x, y, z), step, volume, vertices);
+          let pos = UVec3::new(x, y, z);
+          self.add_cube_vertices(pos, start, step, volume, vertices);
         }
       }
     }
   }
 
   #[inline]
-  fn add_cube_vertices<V: Volume>(&self, pos: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
+  fn add_cube_vertices<V: Volume>(&self, pos: UVec3, start: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
     /* v5.+------+v6
        .' |    .'|
     v1+---+--+'v2|
@@ -67,7 +69,7 @@ impl MarchingCubes {
 
     let mut configuration = 0;
     for (i, local_vertex) in local_vertices.iter().enumerate() {
-      let value = volume.sample(local_vertex);
+      let value = volume.sample(*local_vertex, start, step);
       if value < self.surface_level {
         configuration |= 1 << i;
       }
@@ -82,9 +84,9 @@ impl MarchingCubes {
       let b_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 1] as usize] as usize;
       let c_0 = CORNER_INDEX_A_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
       let c_1 = CORNER_INDEX_B_FROM_EDGE[edge_indices[i + 2] as usize] as usize;
-      let pos_a = self.vertex_position(volume, local_vertices[a_0], local_vertices[a_1]);
-      let pos_b = self.vertex_position(volume, local_vertices[b_0], local_vertices[b_1]);
-      let pos_c = self.vertex_position(volume, local_vertices[c_0], local_vertices[c_1]);
+      let pos_a = self.vertex_position(volume, local_vertices[a_0], local_vertices[a_1], start, step);
+      let pos_b = self.vertex_position(volume, local_vertices[b_0], local_vertices[b_1], start, step);
+      let pos_c = self.vertex_position(volume, local_vertices[c_0], local_vertices[c_1], start, step);
       let normal = (pos_a - pos_b).cross(pos_c - pos_b).normalized();
       vertices.push(Vertex::new(pos_a, normal));
       vertices.push(Vertex::new(pos_b, normal));
@@ -93,9 +95,9 @@ impl MarchingCubes {
   }
 
   #[inline]
-  fn vertex_position<V: Volume>(&self, volume: &V, pos_a: UVec3, pos_b: UVec3) -> Vec3 {
-    let value_a = volume.sample(&pos_a);
-    let value_b = volume.sample(&pos_b);
+  fn vertex_position<V: Volume>(&self, volume: &V, pos_a: UVec3, pos_b: UVec3, start: UVec3, step: u32) -> Vec3 {
+    let value_a = volume.sample(pos_a, start, step);
+    let value_b = volume.sample(pos_b, start, step);
     let t = (self.surface_level - value_a) / (value_b - value_a);
     let pos_a = Vec3::from(pos_a);
     let pos_b = Vec3::from(pos_b);
