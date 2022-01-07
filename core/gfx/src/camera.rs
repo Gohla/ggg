@@ -100,7 +100,7 @@ impl CameraSys {
       projection_type,
       PerspectiveProjection::default(),
       OrthographicProjection::default(),
-      0.01,
+      0.1,
       5000.0,
     )
   }

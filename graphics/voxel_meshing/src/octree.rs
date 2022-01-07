@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
+use tracing::debug;
 
 use ultraviolet::{UVec3, Vec3};
 
@@ -99,6 +100,7 @@ impl<V: Volume> Octree<V> {
   fn generate_mesh(&mut self, aabb: AABB) {
     let step = aabb.size() / self.chunk_size;
     let vertices = self.meshes.entry(aabb).and_modify(|vertices| vertices.clear()).or_default();
+    debug!("Running MC for {:?} step {}", aabb, step);
     self.marching_cubes.generate_into(aabb.min, aabb.max(), step, &mut self.volume, vertices);
   }
 

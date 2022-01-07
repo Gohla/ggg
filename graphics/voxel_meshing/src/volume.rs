@@ -65,12 +65,12 @@ pub struct NoiseSettings {
 impl Default for NoiseSettings {
   fn default() -> Self {
     Self {
-      size: 16,
+      size: 17,
       seed: 1337,
       lacunarity: 0.5,
-      frequency: 0.01,
-      gain: 2.0,
-      octaves: 5,
+      frequency: 0.002,
+      gain: 10.0,
+      octaves: 3,
       min: -1.0,
       max: 1.0,
     }
@@ -90,27 +90,35 @@ impl Noise {
 
 impl Volume for Noise {
   fn load(&mut self, start: UVec3, step: u32) {
-    let key = (start, step);
-    if !self.noise.contains_key(&key) {
-      let size = self.settings.size;
-      let noise = NoiseBuilder::ridge_3d_offset(start.x as f32, size, start.y as f32, size, start.z as f32, size)
-        .with_seed(self.settings.seed)
-        .with_lacunarity(self.settings.lacunarity)
-        .with_freq(self.settings.frequency * step as f32)
-        .with_gain(self.settings.gain)
-        .with_octaves(self.settings.octaves)
-        .generate_scaled(self.settings.min, self.settings.max);
-      self.noise.insert(key, noise);
-    }
+    // let key = (start, step);
+    // if !self.noise.contains_key(&key) {
+    //   let size = self.settings.size;
+    //   debug!("Generating noise at {:?} step {}", start, step);
+    //   let (noise, min, max) = NoiseBuilder::fbm_3d_offset(start.x as f32, size, start.y as f32, size, start.z as f32, size)
+    //     .with_seed(self.settings.seed)
+    //     .with_lacunarity(self.settings.lacunarity)
+    //     .with_freq(self.settings.frequency * step as f32)
+    //     .with_gain(self.settings.gain)
+    //     .with_octaves(self.settings.octaves)
+    //     .generate();
+    //   debug!("Generating {} noise values, min {}, max {}", noise.len(), min, max);
+    //   self.noise.insert(key, noise);
+    // } else {
+    //   debug!("Reusing noise at {:?} step {}", start, step);
+    // }
   }
 
   #[inline]
   fn sample(&self, position: UVec3, start: UVec3, step: u32) -> f32 {
-    let noise = self.noise.get(&(start, step)).unwrap();
-    let size = self.settings.size as u32;
-    let position = position / step;
-    let idx = (position.x + (position.y * size) + (position.z * size * size)) as usize;
-    noise.get(idx).map_or(0.0f32, |v| *v) // HACK: return 0.0 when out of bounds.
+    let freq = self.settings.frequency;
+    unsafe {
+      simdnoise::scalar::fbm_3d(position.x as f32 * freq, position.y as f32 * freq, position.z as f32 * freq, self.settings.lacunarity, self.settings.gain, self.settings.octaves, self.settings.seed)
+    }
+    // let noise = self.noise.get(&(start, step)).unwrap();
+    // let size = self.settings.size as u32;
+    // let position = (position - start) / step;
+    // let idx = (position.x + (position.y * size) + (position.z * size * size)) as usize;
+    // *noise.get(idx).unwrap() // HACK: return 0.0 when out of bounds.
   }
 }
 

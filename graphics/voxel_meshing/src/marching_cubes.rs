@@ -37,9 +37,9 @@ impl MarchingCubes {
   pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: u32, volume: &mut V, vertices: &mut Vec<Vertex>) {
     volume.load(start, step);
     let step_usize = step as usize;
-    for x in (start.x..=end.x).step_by(step_usize) {
-      for y in (start.y..=end.y).step_by(step_usize) {
-        for z in (start.z..=end.z).step_by(step_usize) {
+    for x in (start.x..end.x).step_by(step_usize) {
+      for y in (start.y..end.y).step_by(step_usize) {
+        for z in (start.z..end.z).step_by(step_usize) {
           let pos = UVec3::new(x, y, z);
           self.add_cube_vertices(pos, start, step, volume, vertices);
         }
