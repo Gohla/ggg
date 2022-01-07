@@ -1,15 +1,9 @@
-use std::collections::HashMap;
-
-use simdnoise::NoiseBuilder;
-use tracing::debug;
 use ultraviolet::{UVec3, Vec3};
 
 // Trait
 
 pub trait Volume {
-  fn load(&mut self, start: UVec3, step: u32);
-
-  fn sample(&self, position: UVec3, start: UVec3, step: u32) -> f32;
+  fn sample(&self, position: UVec3) -> f32;
 }
 
 // Sphere
@@ -38,10 +32,7 @@ impl Sphere {
 
 impl Volume for Sphere {
   #[inline]
-  fn load(&mut self, _start: UVec3, _step: u32) { /* Nothing to load*/ }
-
-  #[inline]
-  fn sample(&self, position: UVec3, _start: UVec3, _step: u32) -> f32 {
+  fn sample(&self, position: UVec3) -> f32 {
     // Transform position from 0..n to -half_radius..half_radius.
     let position = Vec3::from(position) - (Vec3::one() * (self.radius / 2.0));
     0.5 - position.mag() / self.radius
@@ -79,46 +70,21 @@ impl Default for NoiseSettings {
 
 pub struct Noise {
   settings: NoiseSettings,
-  noise: HashMap<(UVec3, u32), Vec<f32>>,
 }
 
 impl Noise {
   pub fn new(settings: NoiseSettings) -> Self {
-    Self { settings, noise: HashMap::new() }
+    Self { settings }
   }
 }
 
 impl Volume for Noise {
-  fn load(&mut self, start: UVec3, step: u32) {
-    // let key = (start, step);
-    // if !self.noise.contains_key(&key) {
-    //   let size = self.settings.size;
-    //   debug!("Generating noise at {:?} step {}", start, step);
-    //   let (noise, min, max) = NoiseBuilder::fbm_3d_offset(start.x as f32, size, start.y as f32, size, start.z as f32, size)
-    //     .with_seed(self.settings.seed)
-    //     .with_lacunarity(self.settings.lacunarity)
-    //     .with_freq(self.settings.frequency * step as f32)
-    //     .with_gain(self.settings.gain)
-    //     .with_octaves(self.settings.octaves)
-    //     .generate();
-    //   debug!("Generating {} noise values, min {}, max {}", noise.len(), min, max);
-    //   self.noise.insert(key, noise);
-    // } else {
-    //   debug!("Reusing noise at {:?} step {}", start, step);
-    // }
-  }
-
   #[inline]
-  fn sample(&self, position: UVec3, start: UVec3, step: u32) -> f32 {
+  fn sample(&self, position: UVec3) -> f32 {
     let freq = self.settings.frequency;
     unsafe {
       simdnoise::scalar::fbm_3d(position.x as f32 * freq, position.y as f32 * freq, position.z as f32 * freq, self.settings.lacunarity, self.settings.gain, self.settings.octaves, self.settings.seed)
     }
-    // let noise = self.noise.get(&(start, step)).unwrap();
-    // let size = self.settings.size as u32;
-    // let position = (position - start) / step;
-    // let idx = (position.x + (position.y * size) + (position.z * size * size)) as usize;
-    // *noise.get(idx).unwrap() // HACK: return 0.0 when out of bounds.
   }
 }
 

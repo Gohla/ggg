@@ -101,7 +101,7 @@ impl<V: Volume> Octree<V> {
     let step = aabb.size() / self.chunk_size;
     let vertices = self.meshes.entry(aabb).and_modify(|vertices| vertices.clear()).or_default();
     debug!("Running MC for {:?} step {}", aabb, step);
-    self.marching_cubes.generate_into(aabb.min, aabb.max(), step, &mut self.volume, vertices);
+    self.marching_cubes.generate_into(aabb.min, aabb.max(), step, &self.volume, vertices);
   }
 
   #[inline]
