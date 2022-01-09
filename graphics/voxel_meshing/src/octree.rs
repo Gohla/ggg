@@ -1,15 +1,27 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
-use tracing::debug;
 
+use tracing::debug;
 use ultraviolet::{UVec3, Vec3};
 
 use crate::marching_cubes::MarchingCubes;
 use crate::vertex::Vertex;
 use crate::volume::Volume;
 
-#[derive(Copy, Clone)]
+// Trait
+
+pub trait VolumeMeshManager {
+  fn get_max_lod_level(&self) -> u32;
+  fn get_lod_factor(&self) -> f32;
+  fn get_lod_factor_mut(&mut self) -> &mut f32;
+
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> + '_>;
+}
+
+// Octree settings
+
+#[derive(Copy, Clone, Debug)]
 pub struct OctreeSettings {
   pub total_size: u32,
   pub chunk_size: u32,
@@ -38,6 +50,8 @@ impl Default for OctreeSettings {
   }
 }
 
+// Octree
+
 pub struct Octree<V: Volume> {
   total_size: u32,
   chunk_size: u32,
@@ -48,7 +62,7 @@ pub struct Octree<V: Volume> {
   marching_cubes: MarchingCubes,
 
   active_aabbs: HashSet<AABB>,
-  meshes: HashMap<AABB, Vec<Vertex>>,
+  meshes: HashMap<AABB, (Vec<Vertex>, bool)>,
 }
 
 impl<V: Volume> Octree<V> {
@@ -71,20 +85,24 @@ impl<V: Volume> Octree<V> {
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &Vec<Vertex>)> {
-    self.active_aabbs.clear();
+  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> {
+    let prev_active: HashSet<_> = self.active_aabbs.drain().collect();
     self.update_nodes(AABB::from_size(self.total_size), 0, position);
+    for removed in prev_active.difference(&self.active_aabbs) {
+      if let Some((mesh, filled)) = self.meshes.get_mut(removed) {
+        debug!("Removing unused mesh for {:?}", removed);
+        mesh.clear();
+        *filled = false;
+      }
+    }
     self.meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
   }
 
   fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) {
     if self.is_terminal(aabb, lod_level, position) {
       self.active_aabbs.insert(aabb);
-      if !self.meshes.contains_key(&aabb) {
-        self.generate_mesh(aabb);
-      }
+      self.generate_mesh(aabb);
     } else { // Subdivide
-      self.clear_mesh(&aabb); // Remove lower detail mesh.
       for sub_aabb in aabb.subdivide() {
         self.update_nodes(sub_aabb, lod_level + 1, position);
       }
@@ -98,19 +116,29 @@ impl<V: Volume> Octree<V> {
 
   #[inline]
   fn generate_mesh(&mut self, aabb: AABB) {
+    let (vertices, filled) = self.meshes.entry(aabb).or_default();
+    if *filled { return; }
+    vertices.clear();
     let step = aabb.size() / self.chunk_size;
-    let vertices = self.meshes.entry(aabb).and_modify(|vertices| vertices.clear()).or_default();
     debug!("Running MC for {:?} step {}", aabb, step);
     self.marching_cubes.generate_into(aabb.min, aabb.max(), step, &self.volume, vertices);
-  }
-
-  #[inline]
-  fn clear_mesh(&mut self, aabb: &AABB) {
-    if let Some(mesh) = self.meshes.get_mut(aabb) {
-      mesh.clear();
-    }
+    *filled = true;
   }
 }
+
+impl<V: Volume> VolumeMeshManager for Octree<V> {
+  #[inline]
+  fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
+  #[inline]
+  fn get_lod_factor(&self) -> f32 { self.lod_factor }
+  #[inline]
+  fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
+
+  #[inline]
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> + '_> { Box::new(self.update(position)) }
+}
+
+// AABB
 
 /// Square axis-aligned bounding box, always in powers of 2, and with size always larger than 1.
 #[derive(Default, Copy, Clone, Eq, PartialEq, Hash, Debug)]

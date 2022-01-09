@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::hash::Hash;
+use std::ops::RangeInclusive;
 
 use egui::{CollapsingHeader, CollapsingResponse, CtxRef, DragValue, Grid, InnerResponse, Response, Ui, WidgetText, Window};
 use egui::emath::Numeric;
@@ -25,7 +26,9 @@ pub trait UiWidgetsExt {
 
 
   fn drag(&mut self, prefix: impl ToString, value: &mut impl Numeric, speed: impl Into<f64>) -> Response;
+  fn drag_range<N: Numeric>(&mut self, prefix: impl ToString, value: &mut impl Numeric, speed: impl Into<f64>, clamp_range: RangeInclusive<N>) -> Response;
   fn drag_unlabelled(&mut self, value: &mut impl Numeric, speed: impl Into<f64>) -> Response;
+  fn drag_unlabelled_range<N: Numeric>(&mut self, value: &mut impl Numeric, speed: impl Into<f64>, clamp_range: RangeInclusive<N>) -> Response;
 
 
   fn show_f32_2(&mut self, float: f32);
@@ -75,8 +78,18 @@ impl UiWidgetsExt for Ui {
   }
 
   #[inline]
+  fn drag_range<N: Numeric>(&mut self, prefix: impl ToString, value: &mut impl Numeric, speed: impl Into<f64>, clamp_range: RangeInclusive<N>) -> Response {
+    self.add(DragValue::new(value).prefix(prefix).speed(speed).clamp_range(clamp_range))
+  }
+
+  #[inline]
   fn drag_unlabelled(&mut self, value: &mut impl Numeric, speed: impl Into<f64>) -> Response {
     self.add(DragValue::new(value).speed(speed))
+  }
+
+  #[inline]
+  fn drag_unlabelled_range<N: Numeric>(&mut self, value: &mut impl Numeric, speed: impl Into<f64>, clamp_range: RangeInclusive<N>) -> Response {
+    self.add(DragValue::new(value).speed(speed).clamp_range(clamp_range))
   }
 
 

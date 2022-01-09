@@ -18,7 +18,7 @@ pub struct MarchingCubes {
   surface_level: f32,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MarchingCubesSettings {
   pub surface_level: f32,
 }

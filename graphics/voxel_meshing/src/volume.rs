@@ -8,7 +8,7 @@ pub trait Volume {
 
 // Sphere
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SphereSettings {
   pub radius: f32,
 }
@@ -19,7 +19,7 @@ impl Default for SphereSettings {
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Sphere {
   radius: f32,
 }
@@ -41,7 +41,7 @@ impl Volume for Sphere {
 
 // Noise
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct NoiseSettings {
   pub size: usize,
   pub seed: i32,

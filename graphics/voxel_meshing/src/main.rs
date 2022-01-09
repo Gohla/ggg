@@ -5,8 +5,8 @@
 use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
-use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Features, PowerPreference, RenderPipeline, ShaderStages};
+use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
+use wgpu::{BindGroup, CommandBuffer, Device, Features, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -21,30 +21,22 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::marching_cubes::{MarchingCubes, MarchingCubesSettings};
-use voxel_meshing::octree::{Octree, OctreeSettings};
+use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::vertex::Vertex;
 use voxel_meshing::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
 
 pub struct VoxelMeshing {
+  settings: Settings,
+
   camera_sys: CameraSys,
+
   camera_uniform_buffer: GfxBuffer,
-  light_uniform: LightUniform,
   light_uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
-  vertex_buffer: GfxBuffer,
 
-  volume_type: VolumeType,
-  sphere_settings: SphereSettings,
-  noise_settings: NoiseSettings,
-
-  meshing_algorithm_type: MeshingAlgorithmType,
-  marching_cubes_settings: MarchingCubesSettings,
-
-  octree_settings: OctreeSettings,
-  vertices: Vec<Vertex>,
-
+  mesh_generation: MeshGeneration,
   debug_renderer: DebugRenderer,
 }
 
@@ -55,9 +47,14 @@ pub struct Input {
 
 impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
+    let mut settings = Settings::default();
+    settings.light_rotation_y_degree = 270.0;
+
     let viewport = os.window.get_inner_size().physical;
     let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
     camera_sys.position = Vec3::new(4096.0 / 2.0, 4096.0 / 2.0, -(4096.0 / 2.0) - 200.0);
+    camera_sys.panning_speed = 2000.0;
+    camera_sys.far = 10000.0;
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
@@ -69,11 +66,10 @@ impl app::Application for VoxelMeshing {
       .with_label("Camera uniform buffer")
       .build_with_data(&gfx.device, &[CameraUniform::from_camera_sys(&camera_sys)]);
     let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
-    let light_uniform = LightUniform::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5));
     let light_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
-      .build_with_data(&gfx.device, &[light_uniform]);
+      .build_with_data(&gfx.device, &[settings.light_uniform]);
     let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry])
@@ -91,44 +87,22 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
-    let volume_type = VolumeType::Sphere;
-    let sphere_settings = SphereSettings::default();
-    let noise_settings = NoiseSettings::default();
-
-    let meshing_algorithm_type = MeshingAlgorithmType::MarchingCubes;
-    let marching_cubes_settings = MarchingCubesSettings::default();
-    let marching_cubes = MarchingCubes::new(marching_cubes_settings);
-
-    let octree_settings = OctreeSettings::default();
-    let mut octree = Octree::new(octree_settings, Sphere::new(sphere_settings), marching_cubes);
-    let vertices: Vec<Vertex> = octree.update(camera_sys.position).flat_map(|(_, vertices)| vertices).map(|v| *v).collect();
-    let vertex_buffer = BufferBuilder::new()
-      .with_vertex_usage()
-      .with_label("Voxel meshing vertex buffer")
-      .build_with_data(&gfx.device, &vertices);
-
-    let debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+    let volume_mesh_manager = settings.create_volume_mesh_manager();
+    let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+    let mesh_generation = MeshGeneration::new(volume_mesh_manager, &mut debug_renderer, camera_sys.position, &gfx.device);
 
     Self {
+      settings,
+
       camera_sys,
+
       camera_uniform_buffer,
       light_uniform_buffer,
-      light_uniform,
       uniform_bind_group,
       depth_texture,
       render_pipeline,
-      vertex_buffer,
 
-      volume_type,
-      sphere_settings,
-      noise_settings,
-
-      meshing_algorithm_type,
-      marching_cubes_settings,
-
-      octree_settings,
-      vertices,
-
+      mesh_generation,
       debug_renderer,
     }
   }
@@ -154,95 +128,16 @@ impl app::Application for VoxelMeshing {
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.camera_sys.panning_speed = 2000.0;
-    self.camera_sys.far = 10000.0;
-    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
 
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
-      ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
-        ui.label("Color");
-        let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
-        color_picker::color_edit_button_srgba(&mut ui, &mut color, Alpha::Opaque);
-        let color: Rgba = color.into();
-        self.light_uniform.color = Vec3::new(color.r(), color.g(), color.b());
-        ui.end_row();
-        ui.label("Ambient");
-        ui.add(DragValue::new(&mut self.light_uniform.ambient).speed(0.001).clamp_range(0.0..=1.0));
-        ui.end_row();
-        ui.label("Direction");
-        ui.drag_vec3(0.01, &mut self.light_uniform.direction);
-        ui.end_row();
-      });
-      ui.collapsing_open_with_grid("Volume", "Grid", |ui| {
-        ui.label("Type");
-        ComboBox::from_id_source("Type")
-          .selected_text(format!("{:?}", self.volume_type))
-          .show_ui(ui, |ui| {
-            ui.selectable_value(&mut self.volume_type, VolumeType::Sphere, "Sphere");
-            ui.selectable_value(&mut self.volume_type, VolumeType::Noise, "Noise");
-          });
-        ui.end_row();
-        match self.volume_type {
-          VolumeType::Sphere => {
-            ui.label("Radius");
-            ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
-            ui.end_row();
-          }
-          VolumeType::Noise => {
-            ui.label("Seed");
-            ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
-            ui.end_row();
-            ui.label("Lacunarity");
-            ui.drag_unlabelled(&mut self.noise_settings.lacunarity, 0.01);
-            ui.end_row();
-            ui.label("Frequency");
-            ui.drag_unlabelled(&mut self.noise_settings.frequency, 0.001);
-            ui.end_row();
-            ui.label("Gain");
-            ui.drag_unlabelled(&mut self.noise_settings.gain, 0.01);
-            ui.end_row();
-            ui.label("Octaves");
-            ui.drag_unlabelled(&mut self.noise_settings.octaves, 1);
-            ui.end_row();
-            ui.label("Minimum density");
-            ui.drag_unlabelled(&mut self.noise_settings.min, 0.01);
-            ui.end_row();
-            ui.label("Maximum density");
-            ui.drag_unlabelled(&mut self.noise_settings.max, 0.01);
-            ui.end_row();
-          }
-        }
-      });
-      ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
-        ui.label("Type");
-        ComboBox::from_id_source("Type")
-          .selected_text(format!("{:?}", self.meshing_algorithm_type))
-          .show_ui(ui, |ui| {
-            ui.selectable_value(&mut self.meshing_algorithm_type, MeshingAlgorithmType::MarchingCubes, "Marching Cubes");
-          });
-        ui.end_row();
-        match self.meshing_algorithm_type {
-          MeshingAlgorithmType::MarchingCubes => {
-            ui.label("Surface level");
-            ui.drag_unlabelled(&mut self.marching_cubes_settings.surface_level, 0.01);
-            ui.end_row();
-          }
-        }
-      });
-      ui.collapsing_open_with_grid("Octree", "Grid", |ui| {
-        ui.label("LOD factor");
-        ui.drag_unlabelled(&mut self.octree_settings.lod_factor, 1); // TODO: limit range
-        ui.end_row();
-      });
-      if ui.button("Generate").clicked() {
-        self.generate_vertices();
-        self.vertex_buffer = BufferBuilder::new()
-          .with_vertex_usage()
-          .with_label("Voxel meshing vertex buffer")
-          .build_with_data(&gfx.device, &self.vertices);
+      self.settings.render_gui(ui, &mut self.mesh_generation);
+      if ui.button("Update").clicked() {
+        self.mesh_generation.update(self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
       }
     });
-    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_uniform]);
+
+    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
+    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light_uniform]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
@@ -251,8 +146,8 @@ impl app::Application for VoxelMeshing {
     render_pass.push_debug_group("Draw voxelized mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
+    render_pass.set_vertex_buffer(0, self.mesh_generation.vertex_buffer.slice(..));
+    render_pass.draw(0..self.mesh_generation.vertex_buffer.len as u32, 0..1);
     render_pass.pop_debug_group();
     drop(render_pass);
 
@@ -262,43 +157,184 @@ impl app::Application for VoxelMeshing {
   }
 }
 
-impl VoxelMeshing {
-  fn generate_vertices(&mut self) {
-    let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
-    self.vertices.clear();
-    self.debug_renderer.clear();
-    match self.volume_type {
-      VolumeType::Sphere => {
-        for (aabb, vertices) in Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm).update(self.camera_sys.position) {
-          self.vertices.extend(vertices);
-          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.5));
-        }
-      }
-      VolumeType::Noise => {
-        for (aabb, vertices) in Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm).update(self.camera_sys.position) {
-          self.vertices.extend(vertices);
-          self.debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, Vec4::new(0.0, 1.0, 0.0, 0.5));
-        }
-      }
-    };
-  }
-}
-
+// Volume-mesh management
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum VolumeType {
+enum VolumeType {
   Sphere,
   Noise,
 }
 
+impl Default for VolumeType {
+  fn default() -> Self { Self::Sphere }
+}
+
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum MeshingAlgorithmType {
+enum MeshingAlgorithmType {
   MarchingCubes,
 }
 
+impl Default for MeshingAlgorithmType {
+  fn default() -> Self { Self::MarchingCubes }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+struct Settings {
+  light_rotation_x_degree: f32,
+  light_rotation_y_degree: f32,
+  light_rotation_z_degree: f32,
+  light_uniform: LightUniform,
+
+  volume_type: VolumeType,
+  sphere_settings: SphereSettings,
+  noise_settings: NoiseSettings,
+
+  meshing_algorithm_type: MeshingAlgorithmType,
+  marching_cubes_settings: MarchingCubesSettings,
+
+  octree_settings: OctreeSettings,
+}
+
+impl Settings {
+  fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
+    let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
+    match self.volume_type {
+      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm)),
+      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm)),
+    }
+  }
+
+  fn render_gui(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration) {
+    ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
+      ui.label("Color");
+      let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
+      color_picker::color_edit_button_srgba(&mut ui, &mut color, Alpha::Opaque);
+      let color: Rgba = color.into();
+      self.light_uniform.color = Vec3::new(color.r(), color.g(), color.b());
+      ui.end_row();
+      ui.label("Ambient");
+      ui.add(DragValue::new(&mut self.light_uniform.ambient).speed(0.001).clamp_range(0.0..=1.0));
+      ui.end_row();
+      ui.label("Direction");
+      ui.drag("x: ", &mut self.light_rotation_x_degree, 0.5);
+      ui.drag("y: ", &mut self.light_rotation_y_degree, 0.5);
+      ui.drag("z: ", &mut self.light_rotation_z_degree, 0.5);
+      self.light_uniform.direction = Rotor3::from_euler_angles((self.light_rotation_z_degree % 360.0).to_radians(), (self.light_rotation_x_degree % 360.0).to_radians(), (self.light_rotation_y_degree % 360.0).to_radians()) * Vec3::one();
+      ui.end_row();
+    });
+    ui.collapsing_open_with_grid("Volume", "Grid", |ui| {
+      ui.label("Type");
+      ComboBox::from_id_source("Type")
+        .selected_text(format!("{:?}", self.volume_type))
+        .show_ui(ui, |ui| {
+          ui.selectable_value(&mut self.volume_type, VolumeType::Sphere, "Sphere");
+          ui.selectable_value(&mut self.volume_type, VolumeType::Noise, "Noise");
+        });
+      ui.end_row();
+      match self.volume_type {
+        VolumeType::Sphere => {
+          ui.label("Radius");
+          ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
+          ui.end_row();
+        }
+        VolumeType::Noise => {
+          ui.label("Seed");
+          ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
+          ui.end_row();
+          ui.label("Lacunarity");
+          ui.drag_unlabelled_range(&mut self.noise_settings.lacunarity, 0.01, 0.0..=10.0);
+          ui.end_row();
+          ui.label("Frequency");
+          ui.drag_unlabelled_range(&mut self.noise_settings.frequency, 0.001, 0.0..=1.0);
+          ui.end_row();
+          ui.label("Gain");
+          ui.drag_unlabelled_range(&mut self.noise_settings.gain, 0.01, 0.0..=10.0);
+          ui.end_row();
+          ui.label("Octaves");
+          ui.drag_unlabelled_range(&mut self.noise_settings.octaves, 1, 0..=10);
+          ui.end_row();
+          ui.label("Minimum density");
+          ui.drag_unlabelled(&mut self.noise_settings.min, 0.01);
+          ui.end_row();
+          ui.label("Maximum density");
+          ui.drag_unlabelled(&mut self.noise_settings.max, 0.01);
+          ui.end_row();
+        }
+      }
+    });
+    ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
+      ui.label("Type");
+      ComboBox::from_id_source("Type")
+        .selected_text(format!("{:?}", self.meshing_algorithm_type))
+        .show_ui(ui, |ui| {
+          ui.selectable_value(&mut self.meshing_algorithm_type, MeshingAlgorithmType::MarchingCubes, "Marching Cubes");
+        });
+      ui.end_row();
+      match self.meshing_algorithm_type {
+        MeshingAlgorithmType::MarchingCubes => {
+          ui.label("Surface level");
+          ui.drag_unlabelled(&mut self.marching_cubes_settings.surface_level, 0.01);
+          ui.end_row();
+        }
+      }
+    });
+    ui.collapsing_open_with_grid("Volume mesh manager", "Grid", |ui| {
+      ui.label("LOD factor");
+      ui.drag_unlabelled_range(mesh_generation.volume_mesh_manager.get_lod_factor_mut(), 0.1, 0.0..=4.0);
+      ui.end_row();
+      ui.label("Max LOD level");
+      ui.monospace(format!("{}", mesh_generation.volume_mesh_manager.get_max_lod_level()));
+      ui.end_row();
+      ui.label("# vertices");
+      ui.monospace(format!("{}", mesh_generation.vertices.len()));
+      ui.end_row();
+      ui.label("Vertex buffer size");
+      ui.monospace(format!("{}", mesh_generation.vertex_buffer.size));
+      ui.end_row();
+    });
+  }
+}
+
+// Mesh generation
+
+struct MeshGeneration {
+  volume_mesh_manager: Box<dyn VolumeMeshManager>,
+  vertices: Vec<Vertex>,
+  vertex_buffer: GfxBuffer,
+}
+
+impl MeshGeneration {
+  fn new(mut volume_mesh_manager: Box<dyn VolumeMeshManager>, debug_renderer: &mut DebugRenderer, position: Vec3, device: &Device) -> Self {
+    let mut vertices = Vec::new();
+    let vertex_buffer = Self::do_update(&mut vertices, debug_renderer, &mut *volume_mesh_manager, position, device);
+    Self { volume_mesh_manager, vertices, vertex_buffer }
+  }
+
+  fn update(&mut self, position: Vec3, debug_renderer: &mut DebugRenderer, device: &Device) {
+    self.vertex_buffer = Self::do_update(&mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, position, device);
+  }
+
+  fn do_update(vertices: &mut Vec<Vertex>, debug_renderer: &mut DebugRenderer, volume_mesh_manager: &mut dyn VolumeMeshManager, position: Vec3, device: &Device) -> GfxBuffer {
+    vertices.clear();
+    debug_renderer.clear();
+    let color = Vec4::new(0.0, 1.0, 0.0, 0.5);
+    for (aabb, (chunk_vertices, filled)) in volume_mesh_manager.update(position) {
+      if *filled {
+        vertices.extend(chunk_vertices);
+        debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, color);
+      }
+    }
+    BufferBuilder::new()
+      .with_vertex_usage()
+      .with_label("Voxel meshing vertex buffer")
+      .build_with_data(device, &vertices)
+  }
+}
+
+// Uniform data
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug)]
 struct CameraUniform {
   position: Vec4,
   view_projection: Mat4,
@@ -314,7 +350,7 @@ impl CameraUniform {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug)]
 struct LightUniform {
   color: Vec3,
   ambient: f32,
@@ -328,6 +364,13 @@ impl LightUniform {
   }
 }
 
+impl Default for LightUniform {
+  fn default() -> Self {
+    Self::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5))
+  }
+}
+
+// Main
 
 fn main() {
   app::run::<VoxelMeshing>(Options {
