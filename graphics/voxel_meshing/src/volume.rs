@@ -49,21 +49,17 @@ pub struct NoiseSettings {
   pub frequency: f32,
   pub gain: f32,
   pub octaves: u8,
-  pub min: f32,
-  pub max: f32,
 }
 
 impl Default for NoiseSettings {
   fn default() -> Self {
     Self {
-      size: 17,
+      size: 17, // Chunk size of 16 + 1 because marching cubes samples on the primal grid.
       seed: 1337,
       lacunarity: 0.5,
       frequency: 0.002,
       gain: 10.0,
       octaves: 3,
-      min: -1.0,
-      max: 1.0,
     }
   }
 }

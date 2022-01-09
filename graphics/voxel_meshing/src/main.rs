@@ -89,7 +89,7 @@ impl app::Application for VoxelMeshing {
 
     let volume_mesh_manager = settings.create_volume_mesh_manager();
     let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
-    let mesh_generation = MeshGeneration::new(volume_mesh_manager, &mut debug_renderer, camera_sys.position, &gfx.device);
+    let mesh_generation = MeshGeneration::new(camera_sys.position, volume_mesh_manager, &mut debug_renderer, &gfx.device);
 
     Self {
       settings,
@@ -130,10 +130,7 @@ impl app::Application for VoxelMeshing {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
 
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
-      self.settings.render_gui(ui, &mut self.mesh_generation);
-      if ui.button("Update").clicked() {
-        self.mesh_generation.update(self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
-      }
+      self.settings.render_gui(ui, self.camera_sys.position, &mut self.mesh_generation, &mut self.debug_renderer, &gfx.device);
     });
 
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
@@ -193,6 +190,8 @@ struct Settings {
   marching_cubes_settings: MarchingCubesSettings,
 
   octree_settings: OctreeSettings,
+
+  auto_update: bool,
 }
 
 impl Settings {
@@ -204,7 +203,7 @@ impl Settings {
     }
   }
 
-  fn render_gui(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration) {
+  fn render_gui(&mut self, ui: &mut Ui, position: Vec3, mesh_generation: &mut MeshGeneration, debug_renderer: &mut DebugRenderer, device: &Device) {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
@@ -251,15 +250,12 @@ impl Settings {
           ui.drag_unlabelled_range(&mut self.noise_settings.gain, 0.01, 0.0..=10.0);
           ui.end_row();
           ui.label("Octaves");
-          ui.drag_unlabelled_range(&mut self.noise_settings.octaves, 1, 0..=10);
-          ui.end_row();
-          ui.label("Minimum density");
-          ui.drag_unlabelled(&mut self.noise_settings.min, 0.01);
-          ui.end_row();
-          ui.label("Maximum density");
-          ui.drag_unlabelled(&mut self.noise_settings.max, 0.01);
+          ui.drag_unlabelled_range(&mut self.noise_settings.octaves, 1, 0..=7);
           ui.end_row();
         }
+      }
+      if ui.button("Update").clicked() {
+        mesh_generation.set_volume_mesh_manager(self.create_volume_mesh_manager(), position, debug_renderer, device);
       }
     });
     ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
@@ -277,6 +273,9 @@ impl Settings {
           ui.end_row();
         }
       }
+      if ui.button("Update").clicked() {
+        mesh_generation.set_volume_mesh_manager(self.create_volume_mesh_manager(), position, debug_renderer, device);
+      }
     });
     ui.collapsing_open_with_grid("Volume mesh manager", "Grid", |ui| {
       ui.label("LOD factor");
@@ -291,6 +290,13 @@ impl Settings {
       ui.label("Vertex buffer size");
       ui.monospace(format!("{}", mesh_generation.vertex_buffer.size));
       ui.end_row();
+      if ui.button("Update").clicked() {
+        mesh_generation.update(position, debug_renderer, device);
+      }
+      ui.checkbox(&mut self.auto_update, "Auto update?");
+      if self.auto_update {
+        mesh_generation.update(position, debug_renderer, device);
+      }
     });
   }
 }
@@ -304,17 +310,22 @@ struct MeshGeneration {
 }
 
 impl MeshGeneration {
-  fn new(mut volume_mesh_manager: Box<dyn VolumeMeshManager>, debug_renderer: &mut DebugRenderer, position: Vec3, device: &Device) -> Self {
+  fn new(position: Vec3, mut volume_mesh_manager: Box<dyn VolumeMeshManager>, debug_renderer: &mut DebugRenderer, device: &Device) -> Self {
     let mut vertices = Vec::new();
-    let vertex_buffer = Self::do_update(&mut vertices, debug_renderer, &mut *volume_mesh_manager, position, device);
+    let vertex_buffer = Self::do_update(position, &mut vertices, debug_renderer, &mut *volume_mesh_manager, device);
     Self { volume_mesh_manager, vertices, vertex_buffer }
   }
 
   fn update(&mut self, position: Vec3, debug_renderer: &mut DebugRenderer, device: &Device) {
-    self.vertex_buffer = Self::do_update(&mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, position, device);
+    self.vertex_buffer = Self::do_update(position, &mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, device);
   }
 
-  fn do_update(vertices: &mut Vec<Vertex>, debug_renderer: &mut DebugRenderer, volume_mesh_manager: &mut dyn VolumeMeshManager, position: Vec3, device: &Device) -> GfxBuffer {
+  fn set_volume_mesh_manager(&mut self, volume_mesh_manager: Box<dyn VolumeMeshManager>, position: Vec3, debug_renderer: &mut DebugRenderer, device: &Device) {
+    self.volume_mesh_manager = volume_mesh_manager;
+    self.update(position, debug_renderer, device);
+  }
+
+  fn do_update(position: Vec3, vertices: &mut Vec<Vertex>, debug_renderer: &mut DebugRenderer, volume_mesh_manager: &mut dyn VolumeMeshManager, device: &Device) -> GfxBuffer {
     vertices.clear();
     debug_renderer.clear();
     let color = Vec4::new(0.0, 1.0, 0.0, 0.5);
