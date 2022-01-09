@@ -129,9 +129,16 @@ impl app::Application for VoxelMeshing {
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
 
+    let mut recreate_volume_mesh_manager = false;
+    let mut update_volume_mesh_manager = false;
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
-      self.settings.render_gui(ui, self.camera_sys.position, &mut self.mesh_generation, &mut self.debug_renderer, &gfx.device);
+      self.settings.render_gui(ui, &mut self.mesh_generation, &mut recreate_volume_mesh_manager, &mut update_volume_mesh_manager);
     });
+    if recreate_volume_mesh_manager {
+      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
+    } else if self.settings.auto_update || update_volume_mesh_manager {
+      self.mesh_generation.update(self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
+    }
 
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light_uniform]);
@@ -203,7 +210,7 @@ impl Settings {
     }
   }
 
-  fn render_gui(&mut self, ui: &mut Ui, position: Vec3, mesh_generation: &mut MeshGeneration, debug_renderer: &mut DebugRenderer, device: &Device) {
+  fn render_gui(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration, recreate_volume_mesh_manager: &mut bool, update_volume_mesh_manager: &mut bool) {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
@@ -255,7 +262,7 @@ impl Settings {
         }
       }
       if ui.button("Update").clicked() {
-        mesh_generation.set_volume_mesh_manager(self.create_volume_mesh_manager(), position, debug_renderer, device);
+        *recreate_volume_mesh_manager = true;
       }
     });
     ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
@@ -274,7 +281,7 @@ impl Settings {
         }
       }
       if ui.button("Update").clicked() {
-        mesh_generation.set_volume_mesh_manager(self.create_volume_mesh_manager(), position, debug_renderer, device);
+        *recreate_volume_mesh_manager = true;
       }
     });
     ui.collapsing_open_with_grid("Volume mesh manager", "Grid", |ui| {
@@ -291,12 +298,9 @@ impl Settings {
       ui.monospace(format!("{}", mesh_generation.vertex_buffer.size));
       ui.end_row();
       if ui.button("Update").clicked() {
-        mesh_generation.update(position, debug_renderer, device);
+        *update_volume_mesh_manager = true;
       }
       ui.checkbox(&mut self.auto_update, "Auto update?");
-      if self.auto_update {
-        mesh_generation.update(position, debug_renderer, device);
-      }
     });
   }
 }
