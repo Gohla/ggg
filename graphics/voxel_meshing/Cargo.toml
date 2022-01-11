@@ -12,7 +12,7 @@ gfx = { path = "../../core/gfx" }
 gui_widget = { path = "../../core/gui_widget" }
 app = { path = "../../core/app" }
 graphics = { path = ".." }
-simdnoise = "3.1"
+simdnoise = {  git = "https://github.com/jackmott/rust-simd-noise.git", branch = "master" }
 wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.16.1"
 ultraviolet = { version = "0.8", features = ["bytemuck", "int"] }

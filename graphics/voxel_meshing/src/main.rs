@@ -49,6 +49,8 @@ impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let mut settings = Settings::default();
     settings.light_rotation_y_degree = 270.0;
+    settings.debug_render_octree_nodes = true;
+    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
 
     let viewport = os.window.get_inner_size().physical;
     let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
@@ -80,7 +82,7 @@ impl app::Application for VoxelMeshing {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_default_premultiplied_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Voxel meshing pipeline layout")
@@ -89,7 +91,7 @@ impl app::Application for VoxelMeshing {
 
     let volume_mesh_manager = settings.create_volume_mesh_manager();
     let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
-    let mesh_generation = MeshGeneration::new(camera_sys.position, volume_mesh_manager, &mut debug_renderer, &gfx.device);
+    let mesh_generation = MeshGeneration::new(camera_sys.position, &settings, volume_mesh_manager, &mut debug_renderer, &gfx.device);
 
     Self {
       settings,
@@ -135,9 +137,9 @@ impl app::Application for VoxelMeshing {
       self.settings.render_gui(ui, &mut self.mesh_generation, &mut recreate_volume_mesh_manager, &mut update_volume_mesh_manager);
     });
     if recreate_volume_mesh_manager {
-      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
+      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera_sys.position, &self.settings, &mut self.debug_renderer, &gfx.device);
     } else if self.settings.auto_update || update_volume_mesh_manager {
-      self.mesh_generation.update(self.camera_sys.position, &mut self.debug_renderer, &gfx.device);
+      self.mesh_generation.update(self.camera_sys.position, &self.settings, &mut self.debug_renderer, &gfx.device);
     }
 
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
@@ -198,8 +200,9 @@ struct Settings {
   marching_cubes_settings: MarchingCubesSettings,
 
   octree_settings: OctreeSettings,
-
   auto_update: bool,
+  debug_render_octree_nodes: bool,
+  debug_render_octree_node_color: Vec4,
 }
 
 impl Settings {
@@ -284,10 +287,17 @@ impl Settings {
       ui.label("Vertex buffer size");
       ui.monospace(format!("{}", mesh_generation.vertex_buffer.size));
       ui.end_row();
+      ui.checkbox(&mut self.debug_render_octree_nodes, "Debug render octree nodes?");
+      let mut color = Rgba::from_rgba_premultiplied(self.debug_render_octree_node_color.x, self.debug_render_octree_node_color.y, self.debug_render_octree_node_color.z, self.debug_render_octree_node_color.w).into();
+      color_picker::color_edit_button_srgba(ui, &mut color, Alpha::OnlyBlend);
+      let color: Rgba = color.into();
+      self.debug_render_octree_node_color = Vec4::new(color.r(), color.g(), color.b(), color.a());
+      ui.end_row();
       if ui.button("Update").clicked() {
         *update_volume_mesh_manager = true;
       }
       ui.checkbox(&mut self.auto_update, "Auto update?");
+      ui.end_row();
     });
   }
 
@@ -325,29 +335,56 @@ struct MeshGeneration {
 }
 
 impl MeshGeneration {
-  fn new(position: Vec3, mut volume_mesh_manager: Box<dyn VolumeMeshManager>, debug_renderer: &mut DebugRenderer, device: &Device) -> Self {
+  fn new(
+    position: Vec3,
+    settings: &Settings,
+    mut volume_mesh_manager: Box<dyn VolumeMeshManager>,
+    debug_renderer: &mut DebugRenderer,
+    device: &Device,
+  ) -> Self {
     let mut vertices = Vec::new();
-    let vertex_buffer = Self::do_update(position, &mut vertices, debug_renderer, &mut *volume_mesh_manager, device);
+    let vertex_buffer = Self::do_update(position, settings, &mut vertices, debug_renderer, &mut *volume_mesh_manager, device);
     Self { volume_mesh_manager, vertices, vertex_buffer }
   }
 
-  fn update(&mut self, position: Vec3, debug_renderer: &mut DebugRenderer, device: &Device) {
-    self.vertex_buffer = Self::do_update(position, &mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, device);
+  fn update(
+    &mut self,
+    position: Vec3,
+    settings: &Settings,
+    debug_renderer: &mut DebugRenderer,
+    device: &Device,
+  ) {
+    self.vertex_buffer = Self::do_update(position, settings, &mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, device);
   }
 
-  fn set_volume_mesh_manager(&mut self, volume_mesh_manager: Box<dyn VolumeMeshManager>, position: Vec3, debug_renderer: &mut DebugRenderer, device: &Device) {
+  fn set_volume_mesh_manager(
+    &mut self,
+    volume_mesh_manager: Box<dyn VolumeMeshManager>,
+    position: Vec3,
+    settings: &Settings,
+    debug_renderer: &mut DebugRenderer,
+    device: &Device,
+  ) {
     self.volume_mesh_manager = volume_mesh_manager;
-    self.update(position, debug_renderer, device);
+    self.update(position, settings, debug_renderer, device);
   }
 
-  fn do_update(position: Vec3, vertices: &mut Vec<Vertex>, debug_renderer: &mut DebugRenderer, volume_mesh_manager: &mut dyn VolumeMeshManager, device: &Device) -> GfxBuffer {
+  fn do_update(
+    position: Vec3,
+    settings: &Settings,
+    vertices: &mut Vec<Vertex>,
+    debug_renderer: &mut DebugRenderer,
+    volume_mesh_manager: &mut dyn VolumeMeshManager,
+    device: &Device,
+  ) -> GfxBuffer {
     vertices.clear();
     debug_renderer.clear();
-    let color = Vec4::new(0.0, 1.0, 0.0, 0.5);
     for (aabb, (chunk_vertices, filled)) in volume_mesh_manager.update(position) {
       if *filled {
         vertices.extend(chunk_vertices);
-        debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, color);
+        if settings.debug_render_octree_nodes {
+          debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+        }
       }
     }
     BufferBuilder::new()

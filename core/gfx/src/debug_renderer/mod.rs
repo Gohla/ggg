@@ -171,7 +171,7 @@ impl DebugRendererPipeline {
   ) -> Self {
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_default_premultiplied_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_primitive_topology(primitive_topology)
       .with_polygon_mode(polygon_mode)
