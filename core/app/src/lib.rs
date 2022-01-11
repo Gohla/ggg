@@ -93,7 +93,7 @@ pub struct Options {
 impl Default for Options {
   fn default() -> Self {
     let size = LogicalSize::new(1280.0, 720.0);
-    Options {
+    #[allow(unused_mut)] let mut options = Options {
       name: "GGG application".to_string(),
 
       window_inner_size: size,
@@ -104,8 +104,12 @@ impl Default for Options {
       require_graphics_device_features: Features::empty(),
       request_graphics_device_features: Features::empty(),
       graphics_device_limits: Limits::default(),
-      graphics_swap_chain_present_mode: PresentMode::Mailbox,
+      graphics_swap_chain_present_mode: PresentMode::Immediate,
+    };
+    #[cfg(target_os = "macos")] {
+      options.graphics_swap_chain_present_mode = PresentMode::Mailbox;
     }
+    options
   }
 }
 
