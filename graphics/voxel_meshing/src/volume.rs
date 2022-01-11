@@ -14,6 +14,7 @@ pub struct SphereSettings {
 }
 
 impl Default for SphereSettings {
+  #[inline]
   fn default() -> Self {
     Self { radius: 4096.0 }
   }
@@ -25,6 +26,7 @@ pub struct Sphere {
 }
 
 impl Sphere {
+  #[inline]
   pub fn new(settings: SphereSettings) -> Self {
     Self { radius: settings.radius }
   }
@@ -52,6 +54,7 @@ pub struct NoiseSettings {
 }
 
 impl Default for NoiseSettings {
+  #[inline]
   fn default() -> Self {
     Self {
       size: 17, // Chunk size of 16 + 1 because marching cubes samples on the primal grid.
@@ -69,6 +72,7 @@ pub struct Noise {
 }
 
 impl Noise {
+  #[inline]
   pub fn new(settings: NoiseSettings) -> Self {
     Self { settings }
   }
@@ -84,3 +88,24 @@ impl Volume for Noise {
   }
 }
 
+// Plus
+
+#[derive(Copy, Clone, Debug)]
+pub struct Plus<V1: Volume, V2: Volume> {
+  volume_1: V1,
+  volume_2: V2,
+}
+
+impl<V1: Volume, V2: Volume> Plus<V1, V2> {
+  #[inline]
+  pub fn new(volume_1: V1, volume_2: V2) -> Self {
+    Self { volume_1, volume_2 }
+  }
+}
+
+impl<V1: Volume, V2: Volume> Volume for Plus<V1, V2> {
+  #[inline]
+  fn sample(&self, position: UVec3) -> f32 {
+    self.volume_1.sample(position) + self.volume_2.sample(position)
+  }
+}

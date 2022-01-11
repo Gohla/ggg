@@ -4,6 +4,7 @@ use std::thread;
 use dotenv;
 use egui::{CtxRef, TopBottomPanel, Ui};
 use thiserror::Error;
+use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt};
 use tracing_subscriber::prelude::*;
 use wgpu::{Backends, CommandBuffer, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, RequestAdapterOptions, RequestDeviceError, SurfaceError};
@@ -83,7 +84,8 @@ pub struct Options {
 
   pub graphics_backends: Backends,
   pub graphics_adapter_power_preference: PowerPreference,
-  pub graphics_device_features: Features,
+  pub require_graphics_device_features: Features,
+  pub request_graphics_device_features: Features,
   pub graphics_device_limits: Limits,
   pub graphics_swap_chain_present_mode: PresentMode,
 }
@@ -99,7 +101,8 @@ impl Default for Options {
 
       graphics_backends: Backends::all(),
       graphics_adapter_power_preference: PowerPreference::LowPower,
-      graphics_device_features: Features::empty(),
+      require_graphics_device_features: Features::empty(),
+      request_graphics_device_features: Features::empty(),
       graphics_device_limits: Limits::default(),
       graphics_swap_chain_present_mode: PresentMode::Mailbox,
     }
@@ -159,8 +162,21 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
     compatible_surface: Some(&surface),
     ..RequestAdapterOptions::default()
   }).await.ok_or(CreateError::AdapterRequestFail)?;
+
+  let supported_features = adapter.features();
+  let required_but_unsupported_features = options.require_graphics_device_features.difference(supported_features);
+  if !required_but_unsupported_features.is_empty() {
+    panic!("The following features were required but not supported: {:?}", required_but_unsupported_features);
+  }
+  let requested_but_unsupported_features = options.request_graphics_device_features.difference(supported_features);
+  if !requested_but_unsupported_features.is_empty() {
+    info!("The following features were requested but not supported: {:?}", requested_but_unsupported_features);
+  }
+  let requested_and_supported_features = options.request_graphics_device_features.intersection(supported_features);
+  let requested_features = options.require_graphics_device_features.union(requested_and_supported_features);
+
   let (device, queue) = adapter.request_device(&DeviceDescriptor {
-    features: options.graphics_device_features,
+    features: requested_features,
     limits: options.graphics_device_limits,
     label: Some("Device"),
     ..DeviceDescriptor::default()

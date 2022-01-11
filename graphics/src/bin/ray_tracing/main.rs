@@ -172,7 +172,7 @@ fn main() {
   app::run::<RayTracing>(Options {
     name: "Ray tracing".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
-    graphics_device_features: Features::SPIRV_SHADER_PASSTHROUGH,
+    require_graphics_device_features: Features::SPIRV_SHADER_PASSTHROUGH,
     ..Options::default()
   }).unwrap();
 }

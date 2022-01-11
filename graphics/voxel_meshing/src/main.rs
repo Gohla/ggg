@@ -23,7 +23,7 @@ use gui_widget::UiWidgetsExt;
 use voxel_meshing::marching_cubes::{MarchingCubes, MarchingCubesSettings};
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::vertex::Vertex;
-use voxel_meshing::volume::{Noise, NoiseSettings, Sphere, SphereSettings};
+use voxel_meshing::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
 
 pub struct VoxelMeshing {
   settings: Settings,
@@ -167,6 +167,7 @@ impl app::Application for VoxelMeshing {
 enum VolumeType {
   Sphere,
   Noise,
+  SpherePlusNoise,
 }
 
 impl Default for VolumeType {
@@ -207,6 +208,7 @@ impl Settings {
     match self.volume_type {
       VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm)),
       VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm)),
+      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), meshing_algorithm)),
     }
   }
 
@@ -235,30 +237,15 @@ impl Settings {
         .show_ui(ui, |ui| {
           ui.selectable_value(&mut self.volume_type, VolumeType::Sphere, "Sphere");
           ui.selectable_value(&mut self.volume_type, VolumeType::Noise, "Noise");
+          ui.selectable_value(&mut self.volume_type, VolumeType::SpherePlusNoise, "Sphere + Noise");
         });
       ui.end_row();
       match self.volume_type {
-        VolumeType::Sphere => {
-          ui.label("Radius");
-          ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
-          ui.end_row();
-        }
-        VolumeType::Noise => {
-          ui.label("Seed");
-          ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
-          ui.end_row();
-          ui.label("Lacunarity");
-          ui.drag_unlabelled_range(&mut self.noise_settings.lacunarity, 0.01, 0.0..=10.0);
-          ui.end_row();
-          ui.label("Frequency");
-          ui.drag_unlabelled_range(&mut self.noise_settings.frequency, 0.001, 0.0..=1.0);
-          ui.end_row();
-          ui.label("Gain");
-          ui.drag_unlabelled_range(&mut self.noise_settings.gain, 0.01, 0.0..=10.0);
-          ui.end_row();
-          ui.label("Octaves");
-          ui.drag_unlabelled_range(&mut self.noise_settings.octaves, 1, 0..=7);
-          ui.end_row();
+        VolumeType::Sphere => self.gui_sphere_settings(ui),
+        VolumeType::Noise => self.gui_noise_settings(ui),
+        VolumeType::SpherePlusNoise => {
+          self.gui_sphere_settings(ui);
+          self.gui_noise_settings(ui);
         }
       }
       if ui.button("Update").clicked() {
@@ -302,6 +289,30 @@ impl Settings {
       }
       ui.checkbox(&mut self.auto_update, "Auto update?");
     });
+  }
+
+  fn gui_sphere_settings(&mut self, ui: &mut Ui) {
+    ui.label("Radius");
+    ui.drag_unlabelled(&mut self.sphere_settings.radius, 0.1);
+    ui.end_row();
+  }
+
+  fn gui_noise_settings(&mut self, ui: &mut Ui) {
+    ui.label("Seed");
+    ui.drag_unlabelled(&mut self.noise_settings.seed, 1);
+    ui.end_row();
+    ui.label("Lacunarity");
+    ui.drag_unlabelled_range(&mut self.noise_settings.lacunarity, 0.01, 0.0..=10.0);
+    ui.end_row();
+    ui.label("Frequency");
+    ui.drag_unlabelled_range(&mut self.noise_settings.frequency, 0.001, 0.0..=1.0);
+    ui.end_row();
+    ui.label("Gain");
+    ui.drag_unlabelled_range(&mut self.noise_settings.gain, 0.01, 0.0..=10.0);
+    ui.end_row();
+    ui.label("Octaves");
+    ui.drag_unlabelled_range(&mut self.noise_settings.octaves, 1, 0..=7);
+    ui.end_row();
   }
 }
 
@@ -391,7 +402,7 @@ fn main() {
   app::run::<VoxelMeshing>(Options {
     name: "Voxel meshing".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
-    graphics_device_features: Features::POLYGON_MODE_LINE,
+    request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
     ..Options::default()
   }).unwrap();
 }

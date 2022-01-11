@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, PolygonMode, PrimitiveTopology, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BindGroup, BindGroupLayout, BufferAddress, Features, PolygonMode, PrimitiveTopology, RenderPass, RenderPipeline, ShaderModule, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use crate::{Frame, Gfx, include_shader};
 use crate::bind_group::CombinedBindGroupLayoutBuilder;
@@ -14,18 +14,15 @@ pub struct DebugRenderer {
   uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
 
-  line_list_render_pipeline: RenderPipeline,
-  line_list_vertex_buffer: GfxBuffer,
-  upload_new_line_list_vertex_buffer: bool,
-  line_list_vertices: Vec<Vertex>,
-
-  line_strip_render_pipeline: RenderPipeline,
-  line_strip_vertex_buffer: GfxBuffer,
-  upload_new_line_strip_vertex_buffer: bool,
-  line_strip_vertices: Vec<Vertex>,
+  line_list_render_pipeline: Option<DebugRendererPipeline>,
+  line_strip_render_pipeline: Option<DebugRendererPipeline>,
 }
 
 impl DebugRenderer {
+  pub fn request_features() -> Features {
+    Features::POLYGON_MODE_LINE
+  }
+
   pub fn new(gfx: &Gfx, view_projection: Mat4) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/frag"));
@@ -42,129 +39,175 @@ impl DebugRenderer {
       .with_label("Debug uniform bind group")
       .build(&gfx.device);
 
-    let (_, line_list_render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      .with_primitive_topology(PrimitiveTopology::LineList)
-      .with_polygon_mode(PolygonMode::Line)
-      .with_cull_mode(None)
-      .with_layout_label("Debug line list pipeline layout")
-      .with_label("Debug line list render pipeline")
-      .build(&gfx.device);
-    let line_list_vertices = Vec::new();
-    let line_list_vertex_buffer = BufferBuilder::new()
-      .with_static_vertex_usage()
-      .with_label("Debug line list vertex buffer")
-      .build_with_data(&gfx.device, &line_list_vertices);
-
-    let (_, line_strip_render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      .with_primitive_topology(PrimitiveTopology::LineStrip)
-      .with_polygon_mode(PolygonMode::Line)
-      .with_cull_mode(None)
-      .with_layout_label("Debug line strip pipeline layout")
-      .with_label("Debug line strip render pipeline")
-      .build(&gfx.device);
-    let line_strip_vertices = Vec::new();
-    let line_strip_vertex_buffer = BufferBuilder::new()
-      .with_static_vertex_usage()
-      .with_label("Debug line strip vertex buffer")
-      .build_with_data(&gfx.device, &line_strip_vertices);
+    let has_polygon_mode_line_feature = gfx.adapter.features().contains(Features::POLYGON_MODE_LINE);
+    let line_list_render_pipeline = has_polygon_mode_line_feature.then(|| DebugRendererPipeline::new(
+      gfx,
+      &vertex_shader_module,
+      &fragment_shader_module,
+      &uniform_bind_group_layout,
+      PrimitiveTopology::LineList,
+      PolygonMode::Line,
+      "line list",
+    ));
+    let line_strip_render_pipeline = has_polygon_mode_line_feature.then(|| DebugRendererPipeline::new(
+      gfx,
+      &vertex_shader_module,
+      &fragment_shader_module,
+      &uniform_bind_group_layout,
+      PrimitiveTopology::LineStrip,
+      PolygonMode::Line,
+      "line strip",
+    ));
 
     Self {
       uniform_buffer,
       uniform_bind_group,
-
       line_list_render_pipeline,
-      line_list_vertex_buffer,
-      upload_new_line_list_vertex_buffer: false,
-      line_list_vertices,
-
       line_strip_render_pipeline,
-      line_strip_vertex_buffer,
-      upload_new_line_strip_vertex_buffer: false,
-      line_strip_vertices,
     }
   }
 
   pub fn draw_line(&mut self, start_pos: Vec3, end_pos: Vec3, start_col: Vec4, end_col: Vec4) {
-    self.line_list_vertices.push(Vertex::new(start_pos, start_col));
-    self.line_list_vertices.push(Vertex::new(end_pos, end_col));
-    self.upload_new_line_list_vertex_buffer = true;
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.vertices.push(Vertex::new(start_pos, start_col));
+      pipeline.vertices.push(Vertex::new(end_pos, end_col));
+      pipeline.upload_new_vertex_buffer = true;
+    }
   }
 
   pub fn draw_cube(&mut self, min: Vec3, size: f32, col: Vec4) {
-    self.line_list_vertices.push(Vertex::new(min, col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min, col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min, col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.vertices.push(Vertex::new(min, col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min, col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min, col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
 
-    let max = min + Vec3::new(size, size, size);
-    self.line_list_vertices.push(Vertex::new(max, col));
-    self.line_list_vertices.push(Vertex::new(max + Vec3::new(-size, 0.0, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(max, col));
-    self.line_list_vertices.push(Vertex::new(max + Vec3::new(0.0, -size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(max, col));
-    self.line_list_vertices.push(Vertex::new(max + Vec3::new(0.0, 0.0, -size), col));
+      let max = min + Vec3::new(size, size, size);
+      pipeline.vertices.push(Vertex::new(max, col));
+      pipeline.vertices.push(Vertex::new(max + Vec3::new(-size, 0.0, 0.0), col));
+      pipeline.vertices.push(Vertex::new(max, col));
+      pipeline.vertices.push(Vertex::new(max + Vec3::new(0.0, -size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(max, col));
+      pipeline.vertices.push(Vertex::new(max + Vec3::new(0.0, 0.0, -size), col));
 
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, size, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, size, size), col));
 
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, 0.0, size), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(0.0, size, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, 0.0, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, 0.0, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(0.0, size, size), col));
 
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, size, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-    self.line_list_vertices.push(Vertex::new(min + Vec3::new(size, 0.0, size), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, size, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, 0.0, 0.0), col));
+      pipeline.vertices.push(Vertex::new(min + Vec3::new(size, 0.0, size), col));
 
-    self.upload_new_line_list_vertex_buffer = true;
+      pipeline.upload_new_vertex_buffer = true;
+    }
   }
 
   pub fn clear(&mut self) {
-    self.line_list_vertices.clear();
-    self.upload_new_line_list_vertex_buffer = true;
-    self.line_strip_vertices.clear();
-    self.upload_new_line_strip_vertex_buffer = true;
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.vertices.clear();
+      pipeline.upload_new_vertex_buffer = true;
+    }
+    if let Some(pipeline) = &mut self.line_strip_render_pipeline {
+      pipeline.vertices.clear();
+      pipeline.upload_new_vertex_buffer = true;
+    }
   }
 
   pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, view_projection: Mat4) {
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection }]);
-    if self.upload_new_line_list_vertex_buffer {
-      self.line_list_vertex_buffer = BufferBuilder::new()
-        .with_static_vertex_usage()
-        .with_label("Debug vertex buffer")
-        .build_with_data(&gfx.device, &self.line_list_vertices);
+    if self.line_list_render_pipeline.is_none() && self.line_strip_render_pipeline.is_none() {
+      return; // Nothing to do
     }
-    if self.upload_new_line_strip_vertex_buffer {
-      self.line_strip_vertex_buffer = BufferBuilder::new()
-        .with_static_vertex_usage()
-        .with_label("Debug vertex buffer")
-        .build_with_data(&gfx.device, &self.line_strip_vertices);
+
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection }]);
+
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.reupload_vertex_buffer_if_needed(gfx);
+    }
+    if let Some(pipeline) = &mut self.line_strip_render_pipeline {
+      pipeline.reupload_vertex_buffer_if_needed(gfx);
     }
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Debug render pass")
       .begin_render_pass_for_swap_chain_with_load(frame.encoder, &frame.output_texture);
-    render_pass.push_debug_group("Draw debug line list");
-    render_pass.set_pipeline(&self.line_list_render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_vertex_buffer(0, self.line_list_vertex_buffer.slice(..));
-    render_pass.draw(0..self.line_list_vertex_buffer.len as u32, 0..1);
-    render_pass.pop_debug_group();
-    render_pass.push_debug_group("Draw debug line strip");
-    render_pass.set_pipeline(&self.line_strip_render_pipeline);
-    render_pass.set_vertex_buffer(0, self.line_strip_vertex_buffer.slice(..));
-    render_pass.draw(0..self.line_strip_vertex_buffer.len as u32, 0..1);
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.draw(&mut render_pass);
+    }
+    if let Some(pipeline) = &mut self.line_strip_render_pipeline {
+      pipeline.draw(&mut render_pass);
+    }
+  }
+}
+
+// Pipeline
+
+pub struct DebugRendererPipeline {
+  render_pipeline: RenderPipeline,
+  vertex_buffer: GfxBuffer,
+  upload_new_vertex_buffer: bool,
+  vertices: Vec<Vertex>,
+  label: &'static str,
+}
+
+impl DebugRendererPipeline {
+  fn new(
+    gfx: &Gfx,
+    vertex_shader_module: &ShaderModule,
+    fragment_shader_module: &ShaderModule,
+    uniform_bind_group_layout: &BindGroupLayout,
+    primitive_topology: PrimitiveTopology,
+    polygon_mode: PolygonMode,
+    label: &'static str,
+  ) -> Self {
+    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+      .with_bind_group_layouts(&[&uniform_bind_group_layout])
+      .with_default_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .with_primitive_topology(primitive_topology)
+      .with_polygon_mode(polygon_mode)
+      .with_cull_mode(None)
+      .with_layout_label(&format!("Debug {} pipeline layout", label))
+      .with_label(&format!("Debug {} render pipeline", label))
+      .build(&gfx.device);
+    let vertices = Vec::new();
+    let vertex_buffer = BufferBuilder::new()
+      .with_static_vertex_usage()
+      .with_label(&format!("Debug {} vertex buffer", label))
+      .build_with_data(&gfx.device, &vertices);
+    Self {
+      render_pipeline,
+      vertex_buffer,
+      upload_new_vertex_buffer: false,
+      vertices,
+      label,
+    }
+  }
+
+  fn reupload_vertex_buffer_if_needed(&mut self, gfx: &Gfx) {
+    if self.upload_new_vertex_buffer {
+      self.vertex_buffer = BufferBuilder::new()
+        .with_static_vertex_usage()
+        .with_label(&format!("Debug {} vertex buffer", self.label))
+        .build_with_data(&gfx.device, &self.vertices);
+    }
+    self.upload_new_vertex_buffer = false;
+  }
+
+  fn draw<'a, 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
+    render_pass.push_debug_group(&format!("Debug draw {}", self.label));
+    render_pass.set_pipeline(&self.render_pipeline);
+    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
     render_pass.pop_debug_group();
   }
 }
