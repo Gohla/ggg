@@ -1,5 +1,4 @@
 use std::sync::mpsc::Receiver;
-use std::thread;
 
 use dotenv;
 use egui::{CtxRef, TopBottomPanel, Ui};
@@ -125,18 +124,22 @@ pub enum CreateError {
   ThreadCreateFail(#[from] std::io::Error),
 }
 
-pub fn run_with_defaults<A: Application>(name: &str) -> Result<(), CreateError> {
+pub fn run_with_defaults<A: Application + 'static>(name: &str) -> Result<(), CreateError> {
   run::<A>(Options {
     name: name.into(),
     ..Options::default()
   })
 }
 
-pub fn run<A: Application>(options: Options) -> Result<(), CreateError> {
+pub fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
   futures::executor::block_on(run_async::<A>(options))
 }
 
-pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateError> {
+pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
+  #[cfg(target_arch = "wasm32")] {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+  }
+
   dotenv::dotenv().ok();
 
   let fmt_layer = fmt::layer()
@@ -152,6 +155,7 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
   let window = {
     OsWindow::new(&os_context, options.window_inner_size, options.window_min_inner_size, options.name.clone())?
   };
+
   let (os_event_sys, os_event_rx, os_input_sys) = {
     let (event_sys, input_event_rx, event_rx) = OsEventSys::new(&window);
     let input_sys = OsInputSys::new(input_event_rx);
@@ -190,17 +194,37 @@ pub async fn run_async<A: Application>(options: Options) -> Result<(), CreateErr
   let gui = Gui::new(&device, surface.get_texture_format());
   let gfx = Gfx { instance, adapter, device, queue, surface };
 
-  thread::Builder::new()
-    .name(options.name)
-    .spawn(move || {
-      run_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size);
-    })?;
-  os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
-  Ok(()) // Ignored, but needed to conform to the return type.
+  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size)?;
+
+  Ok(())
 }
 
+// Native codepath
 
-fn run_loop<A: Application>(
+#[cfg(not(target_arch = "wasm32"))]
+fn run_app<A: Application + 'static>(
+  name: String,
+  os_context: OsContext,
+  os_event_sys: OsEventSys,
+  os_event_rx: Receiver<OsEvent>,
+  os_input_sys: OsInputSys,
+  os: Os,
+  gfx: Gfx,
+  gui: Gui,
+  screen_size: ScreenSize,
+) -> Result<(), CreateError> {
+  // Run app loop in a new thread, while Winit takes over the current thread.
+  std::thread::Builder::new()
+    .name(name)
+    .spawn(move || {
+      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size);
+    })?;
+  os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
+  Ok(()) // This is ignored, but required to make the compiler happy.
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_app_in_loop<A: Application>(
   os_event_rx: Receiver<OsEvent>,
   mut os_input_sys: OsInputSys,
   os: Os,
@@ -217,7 +241,7 @@ fn run_loop<A: Application>(
   let mut minimized = false;
 
   loop {
-    let stop = loop_body(
+    let stop = run_app_cycle(
       &os_event_rx,
       &mut os_input_sys,
       &os,
@@ -236,7 +260,50 @@ fn run_loop<A: Application>(
   }
 }
 
-fn loop_body<A: Application>(
+// WASM codepath
+
+#[cfg(target_arch = "wasm32")]
+fn run_app<A: Application + 'static>(
+  _name: String,
+  os_context: OsContext,
+  os_event_sys: OsEventSys,
+  os_event_rx: Receiver<OsEvent>,
+  mut os_input_sys: OsInputSys,
+  os: Os,
+  mut gfx: Gfx,
+  mut gui: Gui,
+  mut screen_size: ScreenSize,
+) -> Result<(), CreateError> {
+  // We do not have control over the loop in WASM, and there are no threads. Let Winit take control and run app cycle
+  // as part of the Winit event loop.
+  let mut app = A::new(&os, &gfx);
+  let mut debug_gui = DebugGui::default();
+  let mut frame_timer = FrameTimer::new();
+  let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
+  let mut timing_stats = TimingStats::new();
+  let mut resized = false;
+  let mut minimized = false;
+  os_event_sys.run(os_context, move || run_app_cycle(
+    &os_event_rx,
+    &mut os_input_sys,
+    &os,
+    &mut gfx,
+    &mut gui,
+    &mut screen_size,
+    &mut app,
+    &mut debug_gui,
+    &mut frame_timer,
+    &mut tick_timer,
+    &mut timing_stats,
+    &mut resized,
+    &mut minimized,
+  ));
+  Ok(()) // This is ignored, but required to make the compiler happy.
+}
+
+// Shared codepath
+
+fn run_app_cycle<A: Application>(
   os_event_rx: &Receiver<OsEvent>,
   os_input_sys: &mut OsInputSys,
   os: &Os,

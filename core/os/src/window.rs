@@ -30,6 +30,15 @@ impl OsWindow {
       .with_min_inner_size(min_inner_size.into_winit())
       .with_title(title)
       .build(&os_context.event_loop)?;
+    #[cfg(target_arch = "wasm32")] {
+      use winit::platform::web::WindowExtWebSys;
+      let canvas = window.canvas();
+      let window = web_sys::window().unwrap();
+      let document = window.document().unwrap();
+      let body = document.body().unwrap();
+      body.append_child(&canvas)
+        .expect("Append canvas to HTML body");
+    }
     Ok(Self { window })
   }
 

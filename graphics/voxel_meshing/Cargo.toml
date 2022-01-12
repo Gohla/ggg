@@ -23,9 +23,11 @@ tracing = "0.1"
 gfxc = { path = "../../core/gfxc" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
-package = "wgpu"
 version = "0.12"
 features = ["spirv", "webgl"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen]
+version = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"

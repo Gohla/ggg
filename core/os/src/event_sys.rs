@@ -60,9 +60,24 @@ impl OsEventSys {
     (os_event_sys, input_event_rx, os_event_rx, )
   }
 
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn run(mut self, os_context: OsContext) {
     os_context.event_loop.run(move |event, _, control_flow| {
       self.event_loop(event, control_flow);
+      *control_flow = ControlFlow::Wait; // Event loop does nothing else, so just wait until the next event.
+    });
+  }
+
+  #[cfg(target_arch = "wasm32")]
+  pub fn run(mut self, os_context: OsContext, mut cycle: impl FnMut() -> bool + 'static) {
+    os_context.event_loop.run(move |event, _, control_flow| {
+      self.event_loop(event, control_flow);
+      let stop = cycle();
+      if stop {
+        *control_flow = ControlFlow::Exit;
+      } else {
+        *control_flow = ControlFlow::Poll; // Event loop does everything, so run as fast as possible.
+      }
     });
   }
 
@@ -178,7 +193,6 @@ impl OsEventSys {
       }
       _ => {}
     }
-    *control_flow = ControlFlow::Wait;
   }
 }
 
