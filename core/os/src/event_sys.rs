@@ -178,6 +178,7 @@ impl OsEventSys {
       }
       _ => {}
     }
+    *control_flow = ControlFlow::Wait;
   }
 }
 

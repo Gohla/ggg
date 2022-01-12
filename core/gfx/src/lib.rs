@@ -28,6 +28,12 @@ pub struct Gfx {
   pub surface: GfxSurface,
 }
 
+impl Gfx {
+  pub fn resize_surface(&mut self, size: ScreenSize) {
+    self.surface.resize(&self.adapter, &self.device, size);
+  }
+}
+
 #[derive(Debug)]
 pub struct Frame<'a> {
   pub screen_size: ScreenSize,

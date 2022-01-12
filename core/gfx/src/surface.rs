@@ -11,14 +11,7 @@ pub struct GfxSurface {
 
 impl GfxSurface {
   pub fn new(surface: Surface, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> GfxSurface {
-    let configuration = SurfaceConfiguration {
-      usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-      format: surface.get_preferred_format(adapter)
-        .unwrap_or_else(|| panic!("surface is incompatible with the adapter")),
-      width: size.physical.width as u32,
-      height: size.physical.height as u32,
-      present_mode,
-    };
+    let configuration = Self::create_configuration(&surface, adapter, present_mode, size);
     surface.configure(device, &configuration);
     GfxSurface { inner: surface, configuration, size }
   }
@@ -35,8 +28,22 @@ impl GfxSurface {
   pub fn get_size(&self) -> ScreenSize { self.size }
 
 
-  pub fn resize(self, adapter: &Adapter, device: &Device, size: ScreenSize) -> GfxSurface {
-    GfxSurface::new(self.inner, adapter, device, self.configuration.present_mode, size)
+  pub fn resize(&mut self, adapter: &Adapter, device: &Device, size: ScreenSize) {
+    let configuration = Self::create_configuration(&self.inner, adapter, self.configuration.present_mode, size);
+    self.inner.configure(device, &configuration);
+    self.size = size;
+  }
+
+
+  fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, size: ScreenSize) -> SurfaceConfiguration {
+    SurfaceConfiguration {
+      usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+      format: surface.get_preferred_format(adapter)
+        .unwrap_or_else(|| panic!("Surface is incompatible with the adapter")),
+      width: size.physical.width as u32,
+      height: size.physical.height as u32,
+      present_mode,
+    }
   }
 }
 

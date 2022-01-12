@@ -216,128 +216,163 @@ fn run_loop<A: Application>(
   let mut resized = false;
   let mut minimized = false;
 
-  'main: loop {
-    // Timing
-    let frame_time = frame_timer.frame();
-    timing_stats.frame(frame_time);
-    tick_timer.update_lag(frame_time.delta);
-
-    // Process OS events
-    for os_event in os_event_rx.try_iter() {
-      match os_event {
-        OsEvent::TerminateRequested => break 'main,
-        OsEvent::WindowResized(_) => resized = true,
-        _ => {}
-      }
-    }
-
-    // Recreate swap chain if needed
-    if resized {
-      let size = os.window.get_inner_size();
-      if size.is_zero() {
-        resized = false;
-        minimized = true;
-      } else {
-        screen_size = size;
-        gfx.surface = gfx.surface.resize(&gfx.adapter, &gfx.device, screen_size);
-        app.screen_resize(&os, &gfx, screen_size);
-        resized = false;
-        minimized = false;
-      }
-    }
-
-    // Get raw input
-    let mut raw_input = os_input_sys.update();
-
-    // Let the GUI process input, letting the application prevent processing keyboard or mouse events if captured.
-    let gui_process_keyboard_events = !app.is_capturing_keyboard();
-    let gui_process_mouse_events = !app.is_capturing_mouse();
-    gui.process_input(&raw_input, gui_process_keyboard_events, gui_process_mouse_events);
-
-    // Then let the GUI prevent the application from processing keyboard or mouse events if captured.
-    if gui_process_keyboard_events && gui.is_capturing_keyboard() {
-      raw_input.remove_keyboard_input();
-    }
-    if gui_process_mouse_events && gui.is_capturing_mouse() {
-      raw_input.remove_mouse_input();
-    }
-
-    // Create GUI frame
-    let gui_frame = if !minimized {
-      let gui_context = gui.begin_frame(screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
-      TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
-        app.add_to_menu(ui);
-        egui::menu::bar(ui, |ui| {
-          debug_gui.add_debug_menu(ui, |ui| app.add_to_debug_menu(ui));
-        })
-      });
-      Some(GuiFrame { context: gui_context })
-    } else {
-      None
-    };
-
-    // Show input debugging GUI if enabled.
-    if let Some(ref gui_frame) = gui_frame {
-      debug_gui.show_input(&gui_frame, &raw_input);
-    }
-
-    // Let the application process input.
-    let input = app.process_input(raw_input);
-
-    // Simulate tick
-    if tick_timer.should_tick() {
-      while tick_timer.should_tick() { // Run simulation.
-        let count = tick_timer.tick_start();
-        let tick = Tick { count, time_target: tick_timer.time_target() };
-        app.simulate(tick, &input);
-        let tick_time = tick_timer.tick_end();
-        timing_stats.tick(tick_time);
-      }
-    }
-    let extrapolation = tick_timer.extrapolation();
-    timing_stats.tick_lag(tick_timer.accumulated_lag(), extrapolation);
-
-    // Skip rendering if minimized.
-    if minimized { continue; }
-
-    // Show timing debugging GUI if enabled.
-    debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
-
-    // Get frame to draw into
-    let surface_texture = match gfx.surface.get_current_texture() {
-      Ok(surface_texture) => surface_texture,
-      Err(e) => {
-        match e {
-          SurfaceError::Outdated => resized = true,
-          SurfaceError::Lost => resized = true,
-          SurfaceError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
-          _ => {}
-        };
-        continue;
-      }
-    };
-    if surface_texture.suboptimal {
-      resized = true;
-    }
-    let output_texture = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-    // Render
-    let mut encoder = gfx.device.create_default_command_encoder();
-    let frame = Frame {
-      screen_size,
-      output_texture: &output_texture,
-      encoder: &mut encoder,
-      extrapolation,
-      time: frame_time,
-    };
-    let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
-    gui.render(screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
-
-    // Submit command buffers
-    let command_buffer = encoder.finish();
-    gfx.queue.submit(std::iter::once(command_buffer).chain(additional_command_buffers));
-
-    // Present
-    surface_texture.present()
+  loop {
+    let stop = loop_body(
+      &os_event_rx,
+      &mut os_input_sys,
+      &os,
+      &mut gfx,
+      &mut gui,
+      &mut screen_size,
+      &mut app,
+      &mut debug_gui,
+      &mut frame_timer,
+      &mut tick_timer,
+      &mut timing_stats,
+      &mut resized,
+      &mut minimized,
+    );
+    if stop { break; }
   }
+}
+
+fn loop_body<A: Application>(
+  os_event_rx: &Receiver<OsEvent>,
+  os_input_sys: &mut OsInputSys,
+  os: &Os,
+  gfx: &mut Gfx,
+  gui: &mut Gui,
+  screen_size: &mut ScreenSize,
+  app: &mut A,
+  debug_gui: &mut DebugGui,
+  frame_timer: &mut FrameTimer,
+  tick_timer: &mut TickTimer,
+  timing_stats: &mut TimingStats,
+  resized: &mut bool,
+  minimized: &mut bool,
+) -> bool {
+  // Timing
+  let frame_time = frame_timer.frame();
+  timing_stats.frame(frame_time);
+  tick_timer.update_lag(frame_time.delta);
+
+  // Process OS events
+  for os_event in os_event_rx.try_iter() {
+    match os_event {
+      OsEvent::TerminateRequested => return true, // Stop the loop.
+      OsEvent::WindowResized(_) => *resized = true,
+      _ => {}
+    }
+  }
+
+  // Recreate swap chain if needed
+  if *resized {
+    let size = os.window.get_inner_size();
+    if size.is_zero() {
+      *resized = false;
+      *minimized = true;
+    } else {
+      *screen_size = size;
+      gfx.resize_surface(*screen_size);
+      app.screen_resize(&os, &gfx, *screen_size);
+      *resized = false;
+      *minimized = false;
+    }
+  }
+
+  // Get raw input
+  let mut raw_input = os_input_sys.update();
+
+  // Let the GUI process input, letting the application prevent processing keyboard or mouse events if captured.
+  let gui_process_keyboard_events = !app.is_capturing_keyboard();
+  let gui_process_mouse_events = !app.is_capturing_mouse();
+  gui.process_input(&raw_input, gui_process_keyboard_events, gui_process_mouse_events);
+
+  // Then let the GUI prevent the application from processing keyboard or mouse events if captured.
+  if gui_process_keyboard_events && gui.is_capturing_keyboard() {
+    raw_input.remove_keyboard_input();
+  }
+  if gui_process_mouse_events && gui.is_capturing_mouse() {
+    raw_input.remove_mouse_input();
+  }
+
+  // Create GUI frame
+  let gui_frame = if !*minimized {
+    let gui_context = gui.begin_frame(*screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+    TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
+      app.add_to_menu(ui);
+      egui::menu::bar(ui, |ui| {
+        debug_gui.add_debug_menu(ui, |ui| app.add_to_debug_menu(ui));
+      })
+    });
+    Some(GuiFrame { context: gui_context })
+  } else {
+    None
+  };
+
+  // Show input debugging GUI if enabled.
+  if let Some(ref gui_frame) = gui_frame {
+    debug_gui.show_input(&gui_frame, &raw_input);
+  }
+
+  // Let the application process input.
+  let input = app.process_input(raw_input);
+
+  // Simulate tick
+  if tick_timer.should_tick() {
+    while tick_timer.should_tick() { // Run simulation.
+      let count = tick_timer.tick_start();
+      let tick = Tick { count, time_target: tick_timer.time_target() };
+      app.simulate(tick, &input);
+      let tick_time = tick_timer.tick_end();
+      timing_stats.tick(tick_time);
+    }
+  }
+  let extrapolation = tick_timer.extrapolation();
+  timing_stats.tick_lag(tick_timer.accumulated_lag(), extrapolation);
+
+  // Skip rendering if minimized.
+  if *minimized { return false; }
+
+  // Show timing debugging GUI if enabled.
+  debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
+
+  // Get frame to draw into
+  let surface_texture = match gfx.surface.get_current_texture() {
+    Ok(surface_texture) => surface_texture,
+    Err(e) => {
+      match e {
+        SurfaceError::Outdated => *resized = true,
+        SurfaceError::Lost => *resized = true,
+        SurfaceError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
+        _ => {}
+      };
+      return false; // Skip rendering.
+    }
+  };
+  if surface_texture.suboptimal {
+    *resized = true;
+  }
+  let output_texture = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+  // Render
+  let mut encoder = gfx.device.create_default_command_encoder();
+  let frame = Frame {
+    screen_size: *screen_size,
+    output_texture: &output_texture,
+    encoder: &mut encoder,
+    extrapolation,
+    time: frame_time,
+  };
+  let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
+  gui.render(*screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
+
+  // Submit command buffers
+  let command_buffer = encoder.finish();
+  gfx.queue.submit(std::iter::once(command_buffer).chain(additional_command_buffers));
+
+  // Present
+  surface_texture.present();
+
+  return false; // Keep looping.
 }
