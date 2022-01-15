@@ -1356,6 +1356,7 @@ dependencies = [
  "common",
  "thiserror",
  "tracing",
+ "wasm-bindgen",
  "web-sys",
  "winit",
 ]

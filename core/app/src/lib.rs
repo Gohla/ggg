@@ -91,7 +91,10 @@ pub struct Options {
 
 impl Default for Options {
   fn default() -> Self {
-    let size = LogicalSize::new(1280.0, 720.0);
+    #[cfg(not(target_arch = "wasm32"))]
+      let size = LogicalSize::new(1280.0, 720.0);
+    #[cfg(target_arch = "wasm32")]
+      let size = os::window::get_browser_inner_size();
     #[allow(unused_mut)] let mut options = Options {
       name: "GGG application".to_string(),
 
@@ -193,11 +196,17 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
     info!("The following features were requested but not supported: {:?}", requested_but_unsupported_features);
   }
   let requested_and_supported_features = options.request_graphics_device_features.intersection(supported_features);
-  let requested_features = options.require_graphics_device_features.union(requested_and_supported_features);
+  let features = options.require_graphics_device_features.union(requested_and_supported_features);
+
+  let supported_limits = adapter.limits();
+  let limits = options.graphics_device_limits
+    .using_resolution(supported_limits.clone())
+    .using_alignment(supported_limits)
+    ;
 
   let (device, queue) = adapter.request_device(&DeviceDescriptor {
-    features: requested_features,
-    limits: options.graphics_device_limits,
+    features,
+    limits,
     label: Some("Device"),
     ..DeviceDescriptor::default()
   }, None).await?;
