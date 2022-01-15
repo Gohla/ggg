@@ -326,16 +326,16 @@ impl Gui {
     struct Draw {
       clip_rect: Rect,
       indices: Range<u32>,
-      base_vertex: i32,
+      base_vertex: u64,
     }
     let mut draws = Vec::with_capacity(clipped_meshes.len());
-    for ClippedMesh(clip_rect, Mesh { indices, vertices, texture_id: _texture_id }) in &clipped_meshes {
+    for ClippedMesh(clip_rect, Mesh { indices, vertices, .. }) in &clipped_meshes {
       index_buffer.write_data(queue, index_buffer_offset, indices);
       vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
-      draws.push(Draw { clip_rect: *clip_rect, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset as i32 });
+      draws.push(Draw { clip_rect: *clip_rect, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
       index_offset += indices.len() as u32;
       index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
-      vertex_offset += vertices.len();
+      vertex_offset += vertices.len() as u64;
       vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
     }
 
@@ -349,7 +349,6 @@ impl Gui {
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
       render_pass.set_bind_group(1, self.font_image_bind_group.as_ref().unwrap(), &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
-      render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
       let scale_factor: f64 = screen_size.scale.into();
       let scale_factor = scale_factor as f32;
       let physical_width = screen_size.physical.width as u32;
@@ -388,7 +387,9 @@ impl Gui {
         }
 
         render_pass.set_scissor_rect(x, y, width, height);
-        render_pass.draw_indexed(indices, base_vertex as i32, 0..1);
+        // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
+        render_pass.set_vertex_buffer(0, vertex_buffer.offset::<Vertex>(base_vertex));
+        render_pass.draw_indexed(indices, 0, 0..1);
       }
       render_pass.pop_debug_group();
     }

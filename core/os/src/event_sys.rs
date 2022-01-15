@@ -63,8 +63,10 @@ impl OsEventSys {
   #[cfg(not(target_arch = "wasm32"))]
   pub fn run(mut self, os_context: OsContext) {
     os_context.event_loop.run(move |event, _, control_flow| {
+      // Event loop does nothing else, so just wait until the next event. Set before `event_loop` as it can override it
+      // to `ControlFlow::Exit`.
+      *control_flow = ControlFlow::Wait;
       self.event_loop(event, control_flow);
-      *control_flow = ControlFlow::Wait; // Event loop does nothing else, so just wait until the next event.
     });
   }
 
@@ -72,6 +74,9 @@ impl OsEventSys {
   pub fn run(mut self, os_context: OsContext, mut cycle: impl FnMut() -> bool + 'static) {
     os_context.event_loop.run(move |event, _, control_flow| {
       self.event_loop(event, control_flow);
+      if *control_flow == ControlFlow::Exit { // Close was requested in `event_loop`.
+        return;
+      }
       let stop = cycle();
       if stop {
         *control_flow = ControlFlow::Exit;

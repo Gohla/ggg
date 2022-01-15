@@ -1,8 +1,5 @@
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
-#[allow(deprecated)]
-use time::precise_time_ns;
-
 use crate::sampler::{EventSampler, ValueSampler};
 
 // Instant
@@ -11,9 +8,24 @@ use crate::sampler::{EventSampler, ValueSampler};
 pub struct Instant(u64);
 
 impl Instant {
-  #[allow(deprecated)]
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn now() -> Instant {
-    Instant(precise_time_ns())
+    use std::time::SystemTime;
+    let instant = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
+      .expect("System clock was before 1970")
+      .as_nanos() as u64;
+    Instant(instant)
+  }
+
+  #[cfg(target_arch = "wasm32")]
+  pub fn now() -> Instant {
+    let window = web_sys::window().expect("should have a window in this context");
+    let performance = window
+      .performance()
+      .expect("performance should be available");
+    let instant_ms = performance.now();
+    let instant_ns = instant_ms * 1000000.0;
+    Instant(instant_ns as u64)
   }
 
   #[inline]
@@ -194,7 +206,7 @@ impl TickTimer {
       time_target: self.time_target,
       accumulated_lag: self.accumulated_lag,
       delta: self.start.to(Instant::now()),
-      count: self.count
+      count: self.count,
     };
     self.count += 1;
     tick_time

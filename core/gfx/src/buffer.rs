@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferUsages, Device, Queue, ShaderStages};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSlice, BufferUsages, Device, Queue, ShaderStages};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 // Buffer builder
@@ -168,6 +168,15 @@ impl<'a> GfxBuffer {
       resource: self.buffer.as_entire_binding(),
     };
     (layout, bind)
+  }
+}
+
+// Slicing
+
+impl GfxBuffer {
+  pub fn offset<T: Sized>(&self, offset: BufferAddress) -> BufferSlice {
+    let offset = offset * std::mem::size_of::<T>() as u64;
+    self.buffer.slice(offset..)
   }
 }
 

@@ -4,7 +4,7 @@ use dotenv;
 use egui::{CtxRef, TopBottomPanel, Ui};
 use thiserror::Error;
 use tracing::info;
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 use wgpu::{Backends, CommandBuffer, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, RequestAdapterOptions, RequestDeviceError, SurfaceError};
 
@@ -102,7 +102,7 @@ impl Default for Options {
       graphics_adapter_power_preference: PowerPreference::LowPower,
       require_graphics_device_features: Features::empty(),
       request_graphics_device_features: Features::empty(),
-      graphics_device_limits: Limits::default(),
+      graphics_device_limits: default_limits(),
       graphics_swap_chain_present_mode: PresentMode::Immediate,
     };
     #[cfg(target_os = "macos")] {
@@ -111,6 +111,12 @@ impl Default for Options {
     options
   }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn default_limits() -> Limits { Limits::default() }
+
+#[cfg(target_arch = "wasm32")]
+fn default_limits() -> Limits { Limits::downlevel_webgl2_defaults() }
 
 #[derive(Error, Debug)]
 pub enum CreateError {
@@ -142,14 +148,20 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
 
   dotenv::dotenv().ok();
 
-  let fmt_layer = fmt::layer()
-    .with_writer(std::io::stderr)
-    ;
   let filter_layer = EnvFilter::from_default_env();
-  tracing_subscriber::registry()
+  let layered = tracing_subscriber::registry()
     .with(filter_layer)
-    .with(fmt_layer)
-    .init();
+    ;
+  #[cfg(not(target_arch = "wasm32"))] {
+    layered
+      .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+      .init();
+  }
+  #[cfg(target_arch = "wasm32")] {
+    layered
+      .with(tracing_wasm::WASMLayer::new(tracing_wasm::WASMLayerConfig::default()))
+      .init();
+  }
 
   let os_context = OsContext::new();
   let window = {
