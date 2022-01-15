@@ -423,13 +423,13 @@ fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]
 struct Uniform {
-  screen_size: [f32; 2],
+  screen_size: [f32; 4],
 }
 
 impl Uniform {
   #[inline]
   pub fn from_screen_size(screen_size: ScreenSize) -> Self {
-    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32] }
+    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32, 0.0, 0.0] }
   }
 }
 
