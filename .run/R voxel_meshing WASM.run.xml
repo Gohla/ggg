@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="R voxel_meshing WASM" type="PowerShellRunType" factoryName="PowerShell" scriptUrl="$PROJECT_DIR$/graphics/voxel_meshing/web/run_web_server.ps1" workingDirectory="C:\Users\Gohla" executablePath="$PROJECT_DIR$/../../Windows/System32/WindowsPowerShell/v1.0/powershell.exe">
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>
