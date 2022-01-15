@@ -5,9 +5,3 @@ try {
 } finally {
   Pop-Location
 }
-Push-Location -Path "$PSScriptRoot"
-try {
-  python serve.py
-} finally {
-  Pop-Location
-}

@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="BWR voxel_meshing" type="PowerShellRunType" factoryName="PowerShell" scriptUrl="$PROJECT_DIR$/graphics/voxel_meshing/web/build_release.ps1" workingDirectory="C:\Users\Gohla" executablePath="$PROJECT_DIR$/../../Windows/System32/WindowsPowerShell/v1.0/powershell.exe">
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>
