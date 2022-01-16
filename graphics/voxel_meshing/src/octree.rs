@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
+use lru::LruCache;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use tracing::debug;
 use ultraviolet::{UVec3, Vec3};
@@ -21,11 +23,12 @@ pub trait VolumeMeshManager {
 
 // Octree settings
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct OctreeSettings {
   pub total_size: u32,
   pub lod_factor: f32,
+  pub thread_pool_threads: usize,
+  pub mesh_cache_size: usize,
 }
 
 impl OctreeSettings {
@@ -41,6 +44,8 @@ impl Default for OctreeSettings {
     Self {
       total_size: 4096,
       lod_factor: 1.0,
+      thread_pool_threads: 5,
+      mesh_cache_size: 1024,
     }
   }
 }
@@ -57,6 +62,9 @@ pub struct Octree<V: Volume> {
 
   active_aabbs: HashSet<AABB>,
   meshes: HashMap<AABB, (Vec<Vertex>, bool)>,
+
+  thread_pool: ThreadPool,
+  mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
 impl<V: Volume> Octree<V> {
@@ -72,6 +80,8 @@ impl<V: Volume> Octree<V> {
       marching_cubes,
       active_aabbs: HashSet::new(),
       meshes: HashMap::new(),
+      thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
+      mesh_cache: LruCache::new(settings.mesh_cache_size),
     }
   }
 
@@ -82,6 +92,7 @@ impl<V: Volume> Octree<V> {
     let prev_active: HashSet<_> = self.active_aabbs.drain().collect();
     self.update_nodes(AABB::from_size(self.total_size), 0, position);
     for removed in prev_active.difference(&self.active_aabbs) {
+      // TODO: put in mesh cache
       if let Some((mesh, filled)) = self.meshes.get_mut(removed) {
         debug!("Removing unused mesh for {:?}", removed);
         mesh.clear();

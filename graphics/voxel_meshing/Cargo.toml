@@ -17,6 +17,8 @@ wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.16.1"
 ultraviolet = { version = "0.8", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
+rayon = "1.5"
+lru = "0.7"
 tracing = "0.1"
 
 [build-dependencies]
