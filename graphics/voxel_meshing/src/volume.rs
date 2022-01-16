@@ -23,12 +23,13 @@ impl Default for SphereSettings {
 #[derive(Copy, Clone, Debug)]
 pub struct Sphere {
   radius: f32,
+  half_radius_vec: Vec3,
 }
 
 impl Sphere {
   #[inline]
   pub fn new(settings: SphereSettings) -> Self {
-    Self { radius: settings.radius }
+    Self { radius: settings.radius, half_radius_vec: Vec3::one() * (settings.radius / 2.0) }
   }
 }
 
@@ -36,7 +37,7 @@ impl Volume for Sphere {
   #[inline]
   fn sample(&self, position: UVec3) -> f32 {
     // Transform position from 0..n to -half_radius..half_radius.
-    let position = Vec3::from(position) - (Vec3::one() * (self.radius / 2.0));
+    let position = Vec3::from(position) - self.half_radius_vec;
     0.5 - position.mag() / self.radius
   }
 }
