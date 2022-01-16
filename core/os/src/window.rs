@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use thiserror::Error;
 use winit::error::OsError;
@@ -12,7 +12,7 @@ use crate::screen_ext::*;
 
 #[derive(Debug)]
 pub struct OsWindow {
-  window: Rc<Window>,
+  window: Arc<Window>,
 }
 
 #[derive(Debug, Error)]
@@ -31,7 +31,7 @@ impl OsWindow {
       .with_min_inner_size(min_inner_size.into_winit())
       .with_title(title)
       .build(&os_context.event_loop)?;
-    let window = Rc::new(window);
+    let window = Arc::new(window);
     #[cfg(target_arch = "wasm32")] {
       use winit::platform::web::WindowExtWebSys;
       let canvas = window.canvas();
