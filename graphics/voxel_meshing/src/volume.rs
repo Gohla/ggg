@@ -45,7 +45,6 @@ impl Volume for Sphere {
 
 #[derive(Copy, Clone, Debug)]
 pub struct NoiseSettings {
-  pub size: usize,
   pub seed: i32,
   pub lacunarity: f32,
   pub frequency: f32,
@@ -57,7 +56,6 @@ impl Default for NoiseSettings {
   #[inline]
   fn default() -> Self {
     Self {
-      size: 17, // Chunk size of 16 + 1 because marching cubes samples on the primal grid.
       seed: 1337,
       lacunarity: 0.5,
       frequency: 0.002,

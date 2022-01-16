@@ -13,10 +13,7 @@ use ultraviolet::{UVec3, Vec3};
 use crate::vertex::Vertex;
 use crate::volume::Volume;
 
-#[derive(Copy, Clone)]
-pub struct MarchingCubes {
-  surface_level: f32,
-}
+pub const CHUNK_SIZE: u32 = 16;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MarchingCubesSettings {
@@ -29,17 +26,21 @@ impl Default for MarchingCubesSettings {
   }
 }
 
+#[derive(Copy, Clone)]
+pub struct MarchingCubes {
+  surface_level: f32,
+}
+
 impl MarchingCubes {
   pub fn new(settings: MarchingCubesSettings) -> Self {
     Self { surface_level: settings.surface_level }
   }
 
-  pub fn generate_into<V: Volume>(&self, start: UVec3, end: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
-    let step_usize = step as usize;
-    for x in (start.x..end.x).step_by(step_usize) {
-      for y in (start.y..end.y).step_by(step_usize) {
-        for z in (start.z..end.z).step_by(step_usize) {
-          let pos = UVec3::new(x, y, z);
+  pub fn generate_into<V: Volume>(&self, start: UVec3, step: u32, volume: &V, vertices: &mut Vec<Vertex>) {
+    for x in 0..CHUNK_SIZE {
+      for y in 0..CHUNK_SIZE {
+        for z in 0..CHUNK_SIZE {
+          let pos = start + UVec3::new(x * step, y * step, z * step);
           self.add_cube_vertices(pos, step, volume, vertices);
         }
       }

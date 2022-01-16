@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use tracing::debug;
 use ultraviolet::{UVec3, Vec3};
 
-use crate::marching_cubes::MarchingCubes;
+use crate::marching_cubes::{CHUNK_SIZE, MarchingCubes};
 use crate::vertex::Vertex;
 use crate::volume::Volume;
 
@@ -21,10 +21,10 @@ pub trait VolumeMeshManager {
 
 // Octree settings
 
+
 #[derive(Copy, Clone, Debug)]
 pub struct OctreeSettings {
   pub total_size: u32,
-  pub chunk_size: u32,
   pub lod_factor: f32,
 }
 
@@ -32,11 +32,7 @@ impl OctreeSettings {
   #[inline]
   pub fn check(&self) {
     assert_ne!(self.total_size, 0, "Total size may not be 0");
-    assert_ne!(self.chunk_size, 0, "Chunk size may not be 0");
-    assert_ne!(self.chunk_size, 1, "Chunk size may not be 1");
     assert!(self.total_size.is_power_of_two(), "Total size {} must be a power of 2", self.total_size);
-    assert!(self.chunk_size.is_power_of_two(), "Chunk size {} must be a power of 2", self.chunk_size);
-    assert!(self.chunk_size <= self.total_size, "Chunk size {} must be less than or equal to total size {}", self.chunk_size, self.total_size);
   }
 }
 
@@ -44,7 +40,6 @@ impl Default for OctreeSettings {
   fn default() -> Self {
     Self {
       total_size: 4096,
-      chunk_size: 16,
       lod_factor: 1.0,
     }
   }
@@ -54,7 +49,6 @@ impl Default for OctreeSettings {
 
 pub struct Octree<V: Volume> {
   total_size: u32,
-  chunk_size: u32,
   lod_factor: f32,
 
   max_lod_level: u32,
@@ -68,11 +62,10 @@ pub struct Octree<V: Volume> {
 impl<V: Volume> Octree<V> {
   pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes) -> Self {
     settings.check();
-    let lod_0_step = settings.total_size / settings.chunk_size;
+    let lod_0_step = settings.total_size / CHUNK_SIZE;
     let max_lod_level = lod_0_step.log2();
     Self {
       total_size: settings.total_size,
-      chunk_size: settings.chunk_size,
       lod_factor: settings.lod_factor,
       max_lod_level,
       volume,
@@ -98,6 +91,15 @@ impl<V: Volume> Octree<V> {
     self.meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
   }
 
+  pub fn clear(&mut self) {
+    self.active_aabbs.clear();
+    for (_, (vertices, filled)) in &mut self.meshes {
+      vertices.clear();
+      *filled = false;
+    }
+  }
+
+
   fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) {
     if self.is_terminal(aabb, lod_level, position) {
       self.active_aabbs.insert(aabb);
@@ -119,9 +121,9 @@ impl<V: Volume> Octree<V> {
     let (vertices, filled) = self.meshes.entry(aabb).or_default();
     if *filled { return; }
     vertices.clear();
-    let step = aabb.size() / self.chunk_size;
+    let step = aabb.size() / CHUNK_SIZE;
     debug!("Running MC for {:?} step {}", aabb, step);
-    self.marching_cubes.generate_into(aabb.min, aabb.max(), step, &self.volume, vertices);
+    self.marching_cubes.generate_into(aabb.min, step, &self.volume, vertices);
     *filled = true;
   }
 }
