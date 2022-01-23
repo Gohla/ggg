@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="D voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin voxel_meshing -Z unstable-options --profile=dbg" />
+  <configuration default="false" name="2.D voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="2. voxel_meshing">
+    <option name="command" value="run --bin voxel_meshing --profile=dbg" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

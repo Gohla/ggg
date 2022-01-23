@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="RW voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="4.R voxel_meshing -- WASM" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="2. voxel_meshing">
     <option name="command" value="run --package voxel_meshing --target wasm32-unknown-unknown --target-dir target_wasm" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

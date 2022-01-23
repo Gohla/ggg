@@ -63,8 +63,8 @@ debug-assertions = false
 lto = true
 panic = "abort"
 
-# Fast iteration release profile: full optimisations, but without LTO. Medium compile-time.
-[profile.fastrelease]
+# Development release profile: full optimisations, but without LTO. Medium compile-time.
+[profile.devrelease]
 inherits = "release"
 incremental = true
 codegen-units = 256
@@ -75,9 +75,9 @@ lto = false
 [profile.bench]
 inherits = "release"
 
-# Fast iteration benchmarking profile = fastrelease. Medium compile-time
-[profile.fastbench]
-inherits = "fastrelease"
+# Development benchmarking profile = fastrelease. Medium compile-time
+[profile.devbench]
+inherits = "devrelease"
 
 
 # Performance profiling profile = release + debug. High compile-time.
@@ -85,7 +85,7 @@ inherits = "fastrelease"
 inherits = "release"
 debug = true
 
-# Fast iteration performance profiling profile = fastrelease + debug. Medium compile-time
-[profile.fastprofile]
-inherits = "fastrelease"
+# Development performance profiling profile = fastrelease + debug. Medium compile-time
+[profile.devprofile]
+inherits = "devrelease"
 debug = true

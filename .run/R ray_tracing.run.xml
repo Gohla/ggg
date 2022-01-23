@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="R ray_tracing" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="R ray_tracing" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="1. graphics">
     <option name="command" value="run --bin ray_tracing" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

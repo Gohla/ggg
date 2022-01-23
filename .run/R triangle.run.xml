@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="R triangle" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="R triangle" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="1. graphics">
     <option name="command" value="run --bin triangle" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

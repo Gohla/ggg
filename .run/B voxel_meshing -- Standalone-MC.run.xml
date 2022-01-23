@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="B voxel_meshing -- Standalone-MC" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="3.Be voxel_meshing -- Standalone-MC" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="2. voxel_meshing">
     <option name="command" value="bench --package voxel_meshing -- Standalone-MC" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

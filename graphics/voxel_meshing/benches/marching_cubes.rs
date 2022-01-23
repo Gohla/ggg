@@ -40,29 +40,29 @@ pub fn marching_cubes_octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-MC-Sphere");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0 }, sphere, marching_cubes), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0, ..OctreeSettings::default() }, sphere, marching_cubes), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-2.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 2.0 }, sphere, marching_cubes), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 2.0, ..OctreeSettings::default() }, sphere, marching_cubes), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-3.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 3.0 }, sphere, marching_cubes), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 3.0, ..OctreeSettings::default() }, sphere, marching_cubes), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-4.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 4.0 }, sphere, marching_cubes), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 4.0, ..OctreeSettings::default() }, sphere, marching_cubes), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.finish();
 }
 
-fn preallocate_octree<V: Volume>(mut octree: Octree<V>, position: Vec3) -> Octree<V> {
+fn preallocate_octree<V: Volume + Clone + Send + 'static>(mut octree: Octree<V>, position: Vec3) -> Octree<V> {
   drop(octree.update(position));
   octree.clear();
   octree

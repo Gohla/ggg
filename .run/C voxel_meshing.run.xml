@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="C voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="check --package voxel_meshing" />
+  <configuration default="false" name="2.R voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package voxel_meshing" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
