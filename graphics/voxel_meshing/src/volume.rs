@@ -66,6 +66,7 @@ impl Default for NoiseSettings {
   }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct Noise {
   settings: NoiseSettings,
 }

@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
+use std::sync::mpsc::{Receiver, Sender};
+
 use lru::LruCache;
 use rayon::{ThreadPool, ThreadPoolBuilder};
-
-use tracing::debug;
 use ultraviolet::{UVec3, Vec3};
 
 use crate::marching_cubes::{CHUNK_SIZE, MarchingCubes};
@@ -52,7 +52,7 @@ impl Default for OctreeSettings {
 
 // Octree
 
-pub struct Octree<V: Volume> {
+pub struct Octree<V> {
   total_size: u32,
   lod_factor: f32,
 
@@ -61,27 +61,40 @@ pub struct Octree<V: Volume> {
   marching_cubes: MarchingCubes,
 
   active_aabbs: HashSet<AABB>,
+  keep_aabbs: HashSet<AABB>,
   meshes: HashMap<AABB, (Vec<Vertex>, bool)>,
 
+  requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
-  mesh_cache: LruCache<AABB, Vec<Vertex>>,
+  tx: Sender<(AABB, Vec<Vertex>)>,
+  rx: Receiver<(AABB, Vec<Vertex>)>,
+
+  //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
-impl<V: Volume> Octree<V> {
+impl<V: Volume + Clone + Send + 'static> Octree<V> {
   pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / CHUNK_SIZE;
     let max_lod_level = lod_0_step.log2();
+    let (tx, rx) = std::sync::mpsc::channel();
     Self {
       total_size: settings.total_size,
       lod_factor: settings.lod_factor,
       max_lod_level,
       volume,
       marching_cubes,
+
       active_aabbs: HashSet::new(),
+      keep_aabbs: HashSet::new(),
       meshes: HashMap::new(),
+
+      requested_aabbs: HashSet::new(),
       thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
-      mesh_cache: LruCache::new(settings.mesh_cache_size),
+      tx,
+      rx,
+
+      //mesh_cache: LruCache::new(settings.mesh_cache_size),
     }
   }
 
@@ -89,20 +102,28 @@ impl<V: Volume> Octree<V> {
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
   pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> {
-    let prev_active: HashSet<_> = self.active_aabbs.drain().collect();
-    self.update_nodes(AABB::from_size(self.total_size), 0, position);
-    for removed in prev_active.difference(&self.active_aabbs) {
-      // TODO: put in mesh cache
+    for (aabb, vertices) in self.rx.try_iter() {
+      self.meshes.insert(aabb, (vertices, true));
+      self.requested_aabbs.remove(&aabb);
+    }
+
+    self.active_aabbs.clear();
+    let prev_keep: HashSet<_> = self.keep_aabbs.drain().collect();
+
+    self.update_root_node(position);
+
+    for removed in prev_keep.difference(&self.keep_aabbs) {
       if let Some((mesh, filled)) = self.meshes.get_mut(removed) {
-        debug!("Removing unused mesh for {:?}", removed);
         mesh.clear();
         *filled = false;
       }
     }
+
     self.meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
   }
 
   pub fn clear(&mut self) {
+    self.keep_aabbs.clear();
     self.active_aabbs.clear();
     for (_, (vertices, filled)) in &mut self.meshes {
       vertices.clear();
@@ -111,13 +132,40 @@ impl<V: Volume> Octree<V> {
   }
 
 
-  fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) {
+  fn update_root_node(&mut self, position: Vec3) {
+    let root = AABB::from_size(self.total_size);
+    let (filled, activated) = self.update_nodes(root, 0, position);
+    if filled && !activated {
+      self.active_aabbs.insert(root);
+    }
+  }
+
+  fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) -> (bool, bool) {
+    self.keep_aabbs.insert(aabb);
+    let self_filled = self.update_chunk(aabb);
     if self.is_terminal(aabb, lod_level, position) {
-      self.active_aabbs.insert(aabb);
-      self.generate_mesh(aabb);
+      (self_filled, false)
     } else { // Subdivide
-      for sub_aabb in aabb.subdivide() {
-        self.update_nodes(sub_aabb, lod_level + 1, position);
+      let mut all_filled = true;
+      let subdivided = aabb.subdivide();
+      let mut activated = [false; 8];
+      for (i, sub_aabb) in subdivided.into_iter().enumerate() {
+        let (sub_filled, sub_activated) = self.update_nodes(sub_aabb, lod_level + 1, position);
+        activated[i] = sub_activated;
+        all_filled &= sub_filled;
+      }
+      if all_filled {
+        for (i, sub_aabb) in subdivided.into_iter().enumerate() {
+          if !activated[i] {
+            self.active_aabbs.insert(sub_aabb);
+          }
+        }
+        (true, true)
+      } else {
+        if self_filled {
+          self.active_aabbs.insert(aabb);
+        }
+        (self_filled, self_filled)
       }
     }
   }
@@ -127,19 +175,31 @@ impl<V: Volume> Octree<V> {
     lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size() as f32
   }
 
-  #[inline]
-  fn generate_mesh(&mut self, aabb: AABB) {
+  fn update_chunk(&mut self, aabb: AABB) -> bool {
     let (vertices, filled) = self.meshes.entry(aabb).or_default();
-    if *filled { return; }
-    vertices.clear();
-    let step = aabb.size() / CHUNK_SIZE;
-    debug!("Running MC for {:?} step {}", aabb, step);
-    self.marching_cubes.generate_into(aabb.min, step, &self.volume, vertices);
-    *filled = true;
+    if *filled { return true; }
+    if self.requested_aabbs.contains(&aabb) { return false; }
+    let vertices = std::mem::take(vertices);
+    self.request_chunk(aabb, vertices);
+    return false;
+  }
+
+  fn request_chunk(&mut self, aabb: AABB, mut vertices: Vec<Vertex>) {
+    self.requested_aabbs.insert(aabb);
+    let marching_cubes = self.marching_cubes.clone();
+    let volume = self.volume.clone();
+    let tx = self.tx.clone();
+    self.thread_pool.spawn(move || {
+      let step = aabb.size() / CHUNK_SIZE;
+      marching_cubes.generate_into(aabb.min, step, &volume, &mut vertices);
+      tx.send((aabb, vertices)).unwrap();
+    })
   }
 }
 
-impl<V: Volume> VolumeMeshManager for Octree<V> {
+// Volume-mesh manager abstraction, to enable using Octree without generic arguments.
+
+impl<V: Volume + Clone + Send + 'static> VolumeMeshManager for Octree<V> {
   #[inline]
   fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
   #[inline]

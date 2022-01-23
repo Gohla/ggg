@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="FB voxel_meshing -- Standalone-Sphere" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="bench --package voxel_meshing --profile fastbench -- Standalone-Sphere" />
+    <option name="command" value="bench --package voxel_meshing --profile=fastbench -- Standalone-Sphere" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
