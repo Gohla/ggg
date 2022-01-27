@@ -51,6 +51,7 @@ impl app::Application for VoxelMeshing {
     settings.light_rotation_y_degree = 270.0;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
+    settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
     let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
