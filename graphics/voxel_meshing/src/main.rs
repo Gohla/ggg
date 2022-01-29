@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Device, Features, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, CommandBuffer, Device, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -20,9 +20,9 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::marching_cubes::{MarchingCubes, MarchingCubesSettings};
+use voxel_meshing::chunk::Vertex;
+use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
-use voxel_meshing::vertex::Vertex;
 use voxel_meshing::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
 
 pub struct VoxelMeshing {
@@ -51,6 +51,7 @@ impl app::Application for VoxelMeshing {
     settings.light_rotation_y_degree = 270.0;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
+    settings.octree_settings.lod_factor = 0.0;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
@@ -154,7 +155,8 @@ impl app::Application for VoxelMeshing {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_vertex_buffer(0, self.mesh_generation.vertex_buffer.slice(..));
-    render_pass.draw(0..self.mesh_generation.vertex_buffer.len as u32, 0..1);
+    render_pass.set_index_buffer(self.mesh_generation.index_buffer.slice(..), IndexFormat::Uint16);
+    render_pass.draw_indexed(0..self.mesh_generation.index_buffer.len as u32, 0, 0..1);
     render_pass.pop_debug_group();
     drop(render_pass);
 
@@ -198,7 +200,6 @@ struct Settings {
   noise_settings: NoiseSettings,
 
   meshing_algorithm_type: MeshingAlgorithmType,
-  marching_cubes_settings: MarchingCubesSettings,
 
   octree_settings: OctreeSettings,
   auto_update: bool,
@@ -208,7 +209,7 @@ struct Settings {
 
 impl Settings {
   fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
-    let meshing_algorithm = MarchingCubes::new(self.marching_cubes_settings);
+    let meshing_algorithm = MarchingCubes;
     match self.volume_type {
       VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm)),
       VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm)),
@@ -265,11 +266,7 @@ impl Settings {
         });
       ui.end_row();
       match self.meshing_algorithm_type {
-        MeshingAlgorithmType::MarchingCubes => {
-          ui.label("Surface level");
-          ui.drag_unlabelled(&mut self.marching_cubes_settings.surface_level, 0.01);
-          ui.end_row();
-        }
+        MeshingAlgorithmType::MarchingCubes => {}
       }
       if ui.button("Update").clicked() {
         *recreate_volume_mesh_manager = true;
@@ -332,7 +329,9 @@ impl Settings {
 struct MeshGeneration {
   volume_mesh_manager: Box<dyn VolumeMeshManager>,
   vertices: Vec<Vertex>,
+  indices: Vec<u16>,
   vertex_buffer: GfxBuffer,
+  index_buffer: GfxBuffer,
 }
 
 impl MeshGeneration {
@@ -344,8 +343,9 @@ impl MeshGeneration {
     device: &Device,
   ) -> Self {
     let mut vertices = Vec::new();
-    let vertex_buffer = Self::do_update(position, settings, &mut vertices, debug_renderer, &mut *volume_mesh_manager, device);
-    Self { volume_mesh_manager, vertices, vertex_buffer }
+    let mut indices = Vec::new();
+    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut vertices, &mut indices, debug_renderer, &mut *volume_mesh_manager, device);
+    Self { volume_mesh_manager, vertices, indices, vertex_buffer, index_buffer }
   }
 
   fn update(
@@ -355,7 +355,9 @@ impl MeshGeneration {
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) {
-    self.vertex_buffer = Self::do_update(position, settings, &mut self.vertices, debug_renderer, &mut *self.volume_mesh_manager, device);
+    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut self.vertices, &mut self.indices, debug_renderer, &mut *self.volume_mesh_manager, device);
+    self.vertex_buffer = vertex_buffer;
+    self.index_buffer = index_buffer;
   }
 
   fn set_volume_mesh_manager(
@@ -374,24 +376,32 @@ impl MeshGeneration {
     position: Vec3,
     settings: &Settings,
     vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u16>,
     debug_renderer: &mut DebugRenderer,
     volume_mesh_manager: &mut dyn VolumeMeshManager,
     device: &Device,
-  ) -> GfxBuffer {
+  ) -> (GfxBuffer, GfxBuffer) {
     vertices.clear();
+    indices.clear();
     debug_renderer.clear();
     for (aabb, (chunk_vertices, filled)) in volume_mesh_manager.update(position) {
       if *filled {
-        vertices.extend(chunk_vertices);
+        vertices.extend(&chunk_vertices.vertices);
+        indices.extend(&chunk_vertices.indices);
         if settings.debug_render_octree_nodes {
           debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
         }
       }
     }
-    BufferBuilder::new()
+    let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
-      .build_with_data(device, &vertices)
+      .build_with_data(device, &vertices);
+    let index_buffer = BufferBuilder::new()
+      .with_index_usage()
+      .with_label("Voxel meshing index buffer")
+      .build_with_data(device, &indices);
+    (vertex_buffer, index_buffer)
   }
 }
 

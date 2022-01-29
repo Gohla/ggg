@@ -1,4 +1,5 @@
 #version 450
+#extension GL_OES_standard_derivatives : enable
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;

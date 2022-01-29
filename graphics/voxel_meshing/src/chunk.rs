@@ -4,6 +4,27 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
+// Chunk
+
+#[derive(Clone, Default, Debug)]
+pub struct Chunk {
+  pub vertices: Vec<Vertex>,
+  pub indices: Vec<u16>,
+}
+
+impl Chunk {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn clear(&mut self) {
+    self.vertices.clear();
+    self.indices.clear();
+  }
+}
+
+// Vertex
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
@@ -29,3 +50,4 @@ impl Vertex {
     Self { pos, nor }
   }
 }
+

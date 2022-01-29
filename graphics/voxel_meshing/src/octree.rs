@@ -6,8 +6,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{UVec3, Vec3};
 
-use crate::marching_cubes::{CHUNK_SIZE, MarchingCubes};
-use crate::vertex::Vertex;
+use crate::chunk::Chunk;
+use crate::CHUNK_SIZE;
+use crate::marching_cubes::MarchingCubes;
 use crate::volume::Volume;
 
 // Trait
@@ -17,7 +18,7 @@ pub trait VolumeMeshManager {
   fn get_lod_factor(&self) -> f32;
   fn get_lod_factor_mut(&mut self) -> &mut f32;
 
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> + '_>;
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Chunk, bool))> + '_>;
 }
 
 // Octree settings
@@ -61,12 +62,12 @@ pub struct Octree<V> {
 
   active_aabbs: HashSet<AABB>,
   keep_aabbs: HashSet<AABB>,
-  meshes: HashMap<AABB, (Vec<Vertex>, bool)>,
+  chunks: HashMap<AABB, (Chunk, bool)>,
 
   requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
-  tx: Sender<(AABB, Vec<Vertex>)>,
-  rx: Receiver<(AABB, Vec<Vertex>)>,
+  tx: Sender<(AABB, Chunk)>,
+  rx: Receiver<(AABB, Chunk)>,
 
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
@@ -86,7 +87,7 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
 
       active_aabbs: HashSet::new(),
       keep_aabbs: HashSet::new(),
-      meshes: HashMap::new(),
+      chunks: HashMap::new(),
 
       requested_aabbs: HashSet::new(),
       thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
@@ -100,9 +101,9 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> {
+  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(Chunk, bool))> {
     for (aabb, vertices) in self.rx.try_iter() {
-      self.meshes.insert(aabb, (vertices, true));
+      self.chunks.insert(aabb, (vertices, true));
       self.requested_aabbs.remove(&aabb);
     }
 
@@ -112,19 +113,19 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     self.update_root_node(position);
 
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      if let Some((mesh, filled)) = self.meshes.get_mut(removed) {
+      if let Some((mesh, filled)) = self.chunks.get_mut(removed) {
         mesh.clear();
         *filled = false;
       }
     }
 
-    self.meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
+    self.chunks.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
   }
 
   pub fn clear(&mut self) {
     self.keep_aabbs.clear();
     self.active_aabbs.clear();
-    for (_, (vertices, filled)) in &mut self.meshes {
+    for (_, (vertices, filled)) in &mut self.chunks {
       vertices.clear();
       *filled = false;
     }
@@ -175,23 +176,23 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
   }
 
   fn update_chunk(&mut self, aabb: AABB) -> bool {
-    let (vertices, filled) = self.meshes.entry(aabb).or_default();
+    let (chunk, filled) = self.chunks.entry(aabb).or_default();
     if *filled { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
-    let vertices = std::mem::take(vertices);
-    self.request_chunk(aabb, vertices);
+    let chunk = std::mem::take(chunk);
+    self.request_chunk(aabb, chunk);
     return false;
   }
 
-  fn request_chunk(&mut self, aabb: AABB, mut vertices: Vec<Vertex>) {
+  fn request_chunk(&mut self, aabb: AABB, mut chunk: Chunk) {
     self.requested_aabbs.insert(aabb);
     let marching_cubes = self.marching_cubes.clone();
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
       let step = aabb.size() / CHUNK_SIZE;
-      marching_cubes.generate_into(aabb.min, step, &volume, &mut vertices);
-      tx.send((aabb, vertices)).unwrap();
+      marching_cubes.extract_chunk(aabb.min, step, &volume, &mut chunk);
+      tx.send((aabb, chunk)).unwrap();
     })
   }
 }
@@ -207,7 +208,7 @@ impl<V: Volume + Clone + Send + 'static> VolumeMeshManager for Octree<V> {
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Vec<Vertex>, bool))> + '_> { Box::new(self.update(position)) }
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Chunk, bool))> + '_> { Box::new(self.update(position)) }
 }
 
 // AABB

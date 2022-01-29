@@ -19,6 +19,7 @@ ultraviolet = { version = "0.8", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
 rayon = "1.5"
 lru = "0.7"
+flagset = "0.4"
 tracing = "0.1"
 
 [build-dependencies]
