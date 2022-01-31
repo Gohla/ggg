@@ -192,7 +192,7 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     self.thread_pool.spawn(move || {
       let step = aabb.size() / CHUNK_SIZE;
       marching_cubes.extract_chunk(aabb.min, step, &volume, &mut chunk);
-      tx.send((aabb, chunk)).unwrap();
+      tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
   }
 }

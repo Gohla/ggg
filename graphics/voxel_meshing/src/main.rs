@@ -1,12 +1,14 @@
 #![feature(int_log)]
 
+use std::ops::Range;
+
 ///! Voxel meshing
 
 use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Device, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, Device, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -51,7 +53,7 @@ impl app::Application for VoxelMeshing {
     settings.light_rotation_y_degree = 270.0;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
-    settings.octree_settings.lod_factor = 0.0;
+    settings.octree_settings.lod_factor = 1.0;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
@@ -154,9 +156,11 @@ impl app::Application for VoxelMeshing {
     render_pass.push_debug_group("Draw voxelized mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_vertex_buffer(0, self.mesh_generation.vertex_buffer.slice(..));
     render_pass.set_index_buffer(self.mesh_generation.index_buffer.slice(..), IndexFormat::Uint16);
-    render_pass.draw_indexed(0..self.mesh_generation.index_buffer.len as u32, 0, 0..1);
+    for draw in &self.mesh_generation.draws {
+      render_pass.set_vertex_buffer(0, self.mesh_generation.vertex_buffer.offset::<Vertex>(draw.base_vertex));
+      render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
+    }
     render_pass.pop_debug_group();
     drop(render_pass);
 
@@ -285,6 +289,15 @@ impl Settings {
       ui.label("Vertex buffer size");
       ui.monospace(format!("{}", mesh_generation.vertex_buffer.size));
       ui.end_row();
+      ui.label("# indices");
+      ui.monospace(format!("{}", mesh_generation.indices.len()));
+      ui.end_row();
+      ui.label("Index buffer size");
+      ui.monospace(format!("{}", mesh_generation.index_buffer.size));
+      ui.end_row();
+      ui.label("# draw commands");
+      ui.monospace(format!("{}", mesh_generation.draws.len()));
+      ui.end_row();
       ui.checkbox(&mut self.debug_render_octree_nodes, "Debug render octree nodes?");
       let mut color = Rgba::from_rgba_premultiplied(self.debug_render_octree_node_color.x, self.debug_render_octree_node_color.y, self.debug_render_octree_node_color.z, self.debug_render_octree_node_color.w).into();
       color_picker::color_edit_button_srgba(ui, &mut color, Alpha::OnlyBlend);
@@ -330,8 +343,14 @@ struct MeshGeneration {
   volume_mesh_manager: Box<dyn VolumeMeshManager>,
   vertices: Vec<Vertex>,
   indices: Vec<u16>,
+  draws: Vec<Draw>,
   vertex_buffer: GfxBuffer,
   index_buffer: GfxBuffer,
+}
+
+struct Draw {
+  pub indices: Range<u32>,
+  pub base_vertex: u64,
 }
 
 impl MeshGeneration {
@@ -344,8 +363,9 @@ impl MeshGeneration {
   ) -> Self {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
-    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut vertices, &mut indices, debug_renderer, &mut *volume_mesh_manager, device);
-    Self { volume_mesh_manager, vertices, indices, vertex_buffer, index_buffer }
+    let mut draws = Vec::new();
+    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut vertices, &mut indices, &mut draws, debug_renderer, &mut *volume_mesh_manager, device);
+    Self { volume_mesh_manager, vertices, indices, draws, vertex_buffer, index_buffer }
   }
 
   fn update(
@@ -355,7 +375,7 @@ impl MeshGeneration {
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) {
-    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut self.vertices, &mut self.indices, debug_renderer, &mut *self.volume_mesh_manager, device);
+    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut self.vertices, &mut self.indices, &mut self.draws, debug_renderer, &mut *self.volume_mesh_manager, device);
     self.vertex_buffer = vertex_buffer;
     self.index_buffer = index_buffer;
   }
@@ -377,22 +397,29 @@ impl MeshGeneration {
     settings: &Settings,
     vertices: &mut Vec<Vertex>,
     indices: &mut Vec<u16>,
+    draws: &mut Vec<Draw>,
     debug_renderer: &mut DebugRenderer,
     volume_mesh_manager: &mut dyn VolumeMeshManager,
     device: &Device,
   ) -> (GfxBuffer, GfxBuffer) {
     vertices.clear();
     indices.clear();
+    draws.clear();
     debug_renderer.clear();
+
     for (aabb, (chunk_vertices, filled)) in volume_mesh_manager.update(position) {
       if *filled {
+        let vertex_offset = vertices.len() as BufferAddress;
+        let index_offset = indices.len() as u32;
         vertices.extend(&chunk_vertices.vertices);
         indices.extend(&chunk_vertices.indices);
+        draws.push(Draw { indices: index_offset..index_offset + chunk_vertices.indices.len() as u32, base_vertex: vertex_offset });
         if settings.debug_render_octree_nodes {
           debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
         }
       }
     }
+
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")

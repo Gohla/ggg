@@ -2,7 +2,6 @@
 #extension GL_OES_standard_derivatives : enable
 
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inNormal;
 
 layout(location = 0) out vec4 outColor;
 
@@ -23,12 +22,14 @@ void main() {
 
   vec3 ambientColor = light.color * light.ambient;
 
-  float diffuse = max(dot(inNormal, lightDirection), 0.0);
+  vec3 normal = normalize(cross (dFdx(inPosition.xyz), dFdy(inPosition.xyz)));
+
+  float diffuse = max(dot(normal, lightDirection), 0.0);
   vec3 diffuseColor = light.color * diffuse;
 
   vec3 viewDirection = normalize(camera.position.xyz - inPosition);
   vec3 halfDirection = normalize(viewDirection + lightDirection);
-  float specular = pow(max(dot(inNormal, halfDirection), 0.0), 32.0);
+  float specular = pow(max(dot(normal, halfDirection), 0.0), 32.0);
   vec3 specularColor = specular * light.color;
 
   vec3 color = (ambientColor + diffuseColor + specularColor) * objectColor;

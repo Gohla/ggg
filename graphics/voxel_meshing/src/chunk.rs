@@ -17,6 +17,10 @@ impl Chunk {
     Self::default()
   }
 
+  pub fn with_vertices_indices(vertices: Vec<Vertex>, indices: Vec<u16>) -> Self {
+    Self { vertices, indices }
+  }
+
   pub fn clear(&mut self) {
     self.vertices.clear();
     self.indices.clear();
@@ -28,15 +32,13 @@ impl Chunk {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
-  pos: Vec3,
-  nor: Vec3,
+  position: Vec3,
 }
 
 impl Vertex {
   pub fn buffer_layout() -> VertexBufferLayout<'static> {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![
       0 => Float32x3,
-      1 => Float32x3,
     ];
     VertexBufferLayout {
       array_stride: size_of::<Vertex>() as BufferAddress,
@@ -46,8 +48,8 @@ impl Vertex {
   }
 
   #[inline]
-  pub fn new(pos: Vec3, nor: Vec3) -> Self {
-    Self { pos, nor }
+  pub fn new(position: Vec3) -> Self {
+    Self { position }
   }
 }
 

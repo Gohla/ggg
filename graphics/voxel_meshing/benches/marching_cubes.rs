@@ -1,7 +1,8 @@
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ultraviolet::{UVec3, Vec3};
 
-use voxel_meshing::marching_cubes::{MarchingCubes};
+use voxel_meshing::chunk::Chunk;
+use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings};
 use voxel_meshing::volume::{Sphere, SphereSettings, Volume};
 
@@ -26,8 +27,8 @@ pub fn marching_cubes_benchmark(c: &mut Criterion) {
   let start = UVec3::new(0, 0, 0);
   let step = 1;
   c.bench_function("Standalone-MC-Sphere", |b| b.iter_batched(
-    || Vec::with_capacity(16 * 16 * 16), // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
-    |mut vertices| marching_cubes.extract_chunk(start, step, &sphere, &mut vertices),
+    || Chunk::with_vertices_indices(Vec::with_capacity(16 * 16 * 16), Vec::with_capacity(16 * 16 * 16)), // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
+    |mut chunk| marching_cubes.extract_chunk(start, step, &sphere, &mut chunk),
     BatchSize::SmallInput,
   ));
 }

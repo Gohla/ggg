@@ -72,47 +72,42 @@ pub const REGULAR_CELL_DATA: [RegularCellData; 16] = [
 pub struct RegularVertexData(pub u16);
 
 impl RegularVertexData {
-  // High byte
-  // High nibble
   #[inline]
-  pub fn reuse_dx(&self) -> i16 {
-    let reuse_info = (self.0 & 0xFF00) >> 8;
-    -(((reuse_info & 0x10) >> 4) as i16)
+  fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
+  #[inline]
+  fn low_byte(&self) -> u8 { self.0 as u8 }
+
+  #[inline]
+  pub fn subtract_x(&self) -> bool {
+    self.high_byte() & 0b0001_0000 != 0
   }
   #[inline]
-  pub fn reuse_dy(&self) -> i16 {
-    let reuse_info = (self.0 & 0xFF00) >> 8;
-    -(((reuse_info & 0x20) >> 5) as i16)
+  pub fn subtract_y(&self) -> bool {
+    self.high_byte() & 0b0010_0000 != 0
   }
   #[inline]
-  pub fn reuse_dz(&self) -> i16 {
-    let reuse_info = (self.0 & 0xFF00) >> 8;
-    -(((reuse_info & 0x40) >> 6) as i16)
+  pub fn subtract_z(&self) -> bool {
+    self.high_byte() & 0b0100_0000 != 0
   }
   #[inline]
   pub fn new_vertex(&self) -> bool {
-    let reuse_info = (self.0 & 0xFF00) >> 8;
-    (reuse_info & 0x80) != 0
-  }
-  // Low nibble
-  #[inline]
-  pub fn reuse_index(&self) -> u16 {
-    let reuse_info = (self.0 & 0xFF00) >> 8;
-    reuse_info & 0x0F
+    self.high_byte() & 0b1000_0000 != 0
   }
 
-  // Low byte
-  // High nibble
   #[inline]
-  pub fn voxel_a_index(&self) -> u16 {
-    let edge_location = self.0 & 0xFF;
-    (edge_location & 0xF0) >> 4
+  pub fn vertex_index(&self) -> u8 {
+    self.high_byte() & 0b0000_1111 // Low nibble
   }
-  // Low nibble
+
+
   #[inline]
-  pub fn voxel_b_index(&self) -> u16 {
-    let edge_location = self.0 & 0xFF;
-    edge_location & 0xF
+  pub fn voxel_a_index(&self) -> u8 {
+    self.low_byte() >> 4 // High nibble
+  }
+
+  #[inline]
+  pub fn voxel_b_index(&self) -> u8 {
+    self.low_byte() & 0b0000_1111 // Low nibble
   }
 }
 
