@@ -22,7 +22,8 @@ void main() {
 
   vec3 ambientColor = light.color * light.ambient;
 
-  vec3 normal = normalize(cross (dFdx(inPosition.xyz), dFdy(inPosition.xyz)));
+  // From: https://stackoverflow.com/a/66206648
+  vec3 normal = normalize(cross(dFdx(inPosition), dFdy(inPosition)));
 
   float diffuse = max(dot(normal, lightDirection), 0.0);
   vec3 diffuseColor = light.color * diffuse;
