@@ -2,7 +2,8 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::RangeInclusive;
 
-use egui::{CollapsingHeader, CollapsingResponse, CtxRef, DragValue, Grid, InnerResponse, Response, Ui, WidgetText, Window};
+use egui::{CollapsingHeader, CollapsingResponse, color_picker, CtxRef, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
+use egui::color_picker::Alpha;
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
 
@@ -49,6 +50,9 @@ pub trait UiWidgetsExt {
 
 
   fn show_mat4(&mut self, mat: &Mat4);
+
+
+  fn edit_color_vec4(&mut self, vec: &mut Vec4, alpha: Alpha);
 }
 
 impl UiWidgetsExt for Ui {
@@ -189,5 +193,14 @@ impl UiWidgetsExt for Ui {
       ui.show_vec4_unlabelled(&mat.cols[2]);
       ui.show_vec4_unlabelled(&mat.cols[3]);
     });
+  }
+
+
+  #[inline]
+  fn edit_color_vec4(&mut self, vec: &mut Vec4, alpha: Alpha) {
+    let mut color = Rgba::from_rgba_premultiplied(vec.x, vec.y, vec.z, vec.w).into();
+    color_picker::color_edit_button_srgba(self, &mut color, alpha);
+    let color: Rgba = color.into();
+    *vec = Vec4::new(color.r(), color.g(), color.b(), color.a());
   }
 }

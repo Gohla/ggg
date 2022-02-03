@@ -8,7 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, Device, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, Device, Face, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -52,7 +52,8 @@ impl app::Application for VoxelMeshing {
     let mut settings = Settings::default();
     settings.light_rotation_y_degree = 270.0;
     settings.debug_render_octree_nodes = true;
-    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
+    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
+    settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
     settings.octree_settings.lod_factor = 1.0;
     settings.auto_update = true;
 
@@ -86,8 +87,9 @@ impl app::Application for VoxelMeshing {
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_premultiplied_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .with_cull_mode(Some(Face::Back))
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Voxel meshing pipeline layout")
       .with_label("Voxel meshing render pipeline")
@@ -209,6 +211,7 @@ struct Settings {
   auto_update: bool,
   debug_render_octree_nodes: bool,
   debug_render_octree_node_color: Vec4,
+  debug_render_octree_node_empty_color: Vec4,
 }
 
 impl Settings {
@@ -299,10 +302,8 @@ impl Settings {
       ui.monospace(format!("{}", mesh_generation.draws.len()));
       ui.end_row();
       ui.checkbox(&mut self.debug_render_octree_nodes, "Debug render octree nodes?");
-      let mut color = Rgba::from_rgba_premultiplied(self.debug_render_octree_node_color.x, self.debug_render_octree_node_color.y, self.debug_render_octree_node_color.z, self.debug_render_octree_node_color.w).into();
-      color_picker::color_edit_button_srgba(ui, &mut color, Alpha::OnlyBlend);
-      let color: Rgba = color.into();
-      self.debug_render_octree_node_color = Vec4::new(color.r(), color.g(), color.b(), color.a());
+      ui.edit_color_vec4(&mut self.debug_render_octree_node_color, Alpha::OnlyBlend);
+      ui.edit_color_vec4(&mut self.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
       ui.end_row();
       if ui.button("Update").clicked() {
         *update_volume_mesh_manager = true;
@@ -407,15 +408,22 @@ impl MeshGeneration {
     draws.clear();
     debug_renderer.clear();
 
-    for (aabb, (chunk_vertices, filled)) in volume_mesh_manager.update(position) {
+    for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
       if *filled {
-        let vertex_offset = vertices.len() as BufferAddress;
-        let index_offset = indices.len() as u32;
-        vertices.extend(&chunk_vertices.vertices);
-        indices.extend(&chunk_vertices.indices);
-        draws.push(Draw { indices: index_offset..index_offset + chunk_vertices.indices.len() as u32, base_vertex: vertex_offset });
+        let is_empty = chunk.is_empty();
+        if !is_empty {
+          let vertex_offset = vertices.len() as BufferAddress;
+          let index_offset = indices.len() as u32;
+          vertices.extend(&chunk.vertices);
+          indices.extend(&chunk.indices);
+          draws.push(Draw { indices: index_offset..index_offset + chunk.indices.len() as u32, base_vertex: vertex_offset });
+        }
         if settings.debug_render_octree_nodes {
-          debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+          if is_empty {
+            debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
+          } else {
+            debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+          }
         }
       }
     }

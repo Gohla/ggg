@@ -7,7 +7,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::Chunk;
-use crate::CHUNK_SIZE;
+use crate::chunk::CELLS_IN_CHUNK_ROW;
 use crate::marching_cubes::MarchingCubes;
 use crate::volume::Volume;
 
@@ -75,7 +75,7 @@ pub struct Octree<V> {
 impl<V: Volume + Clone + Send + 'static> Octree<V> {
   pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes) -> Self {
     settings.check();
-    let lod_0_step = settings.total_size / CHUNK_SIZE;
+    let lod_0_step = settings.total_size / CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
     let (tx, rx) = std::sync::mpsc::channel();
     Self {
@@ -190,8 +190,9 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
-      let step = aabb.size() / CHUNK_SIZE;
-      marching_cubes.extract_chunk(aabb.min, step, &volume, &mut chunk);
+      let step = aabb.size() / CELLS_IN_CHUNK_ROW;
+      let chunk_samples = volume.sample_chunk(aabb.min, step);
+      marching_cubes.extract_chunk(aabb.min, step, &chunk_samples, &mut chunk);
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
   }

@@ -2,7 +2,7 @@
 
 use ultraviolet::{UVec2, UVec3, Vec3};
 
-use crate::CHUNK_SIZE;
+use crate::chunk::CELLS_IN_CHUNK_ROW;
 use crate::chunk::Vertex;
 use crate::volume::Volume;
 
@@ -31,8 +31,8 @@ impl Transvoxel {
     for side in sides.into() {
       match side {
         TransitionSide::LowX => {
-          for cell_y in 0..CHUNK_SIZE {
-            for cell_z in 0..CHUNK_SIZE {
+          for cell_y in 0..CELLS_IN_CHUNK_ROW {
+            for cell_z in 0..CELLS_IN_CHUNK_ROW {
               let cell = start + UVec3::new(start.x, cell_y * step, cell_z * step);
               self.extract_cell(cell, step, side, volume, vertices);
             }

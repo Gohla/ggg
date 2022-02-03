@@ -12,9 +12,7 @@
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::{CHUNK_SIZE, CHUNK_SIZE_USIZE};
-use crate::chunk::{Chunk, Vertex};
-use crate::volume::Volume;
+use crate::chunk::{Chunk, CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, ChunkSampleArray, ChunkSamples, Vertex};
 
 mod tables;
 
@@ -23,52 +21,62 @@ pub struct MarchingCubes;
 
 
 impl MarchingCubes {
-  const SHARED_INDICES_SIZE: usize = 4 * CHUNK_SIZE_USIZE * CHUNK_SIZE_USIZE * CHUNK_SIZE_USIZE;
+  const SHARED_INDICES_SIZE: usize = 4 * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE;
 
-  pub fn extract_chunk<V: Volume>(&self, start: UVec3, step: u32, volume: &V, chunk: &mut Chunk) {
-    let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-    for cell_z in 0..CHUNK_SIZE {
-      for cell_y in 0..CHUNK_SIZE {
-        for cell_x in 0..CHUNK_SIZE {
-          let cell_local = UVec3::new(cell_x, cell_y, cell_z);
-          let cell_global = start + step * cell_local;
-          Self::extract_cell(cell_local, cell_global, step, volume, &mut shared_indices, chunk);
+  pub fn extract_chunk(&self, start: UVec3, step: u32, chunk_samples: &ChunkSamples, chunk: &mut Chunk) {
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+      let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
+      for cell_z in 0..CELLS_IN_CHUNK_ROW {
+        for cell_y in 0..CELLS_IN_CHUNK_ROW {
+          for cell_x in 0..CELLS_IN_CHUNK_ROW {
+            let cell = UVec3::new(cell_x, cell_y, cell_z);
+            Self::extract_cell(cell, start, step, chunk_sample_array, &mut shared_indices, chunk);
+          }
         }
       }
     }
   }
 
   #[inline]
-  fn extract_cell<V: Volume>(
-    cell_local: UVec3,
-    cell_global: UVec3,
+  fn extract_cell(
+    cell: UVec3,
+    start: UVec3,
     step: u32,
-    volume: &V,
+    chunk_sample_array: &ChunkSampleArray,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
     chunk: &mut Chunk,
   ) {
     // Get voxels of the cell.
-    let zero = 0;
-    let voxels = [
-      cell_global + UVec3::new(zero, zero, zero), // 0
-      cell_global + UVec3::new(step, zero, zero), // 1
-      cell_global + UVec3::new(zero, step, zero), // 2
-      cell_global + UVec3::new(step, step, zero), // 3
-      cell_global + UVec3::new(zero, zero, step), // 4
-      cell_global + UVec3::new(step, zero, step), // 5
-      cell_global + UVec3::new(zero, step, step), // 6
-      cell_global + UVec3::new(step, step, step), // 7
+    let voxels_local = [
+      cell + UVec3::new(0, 0, 0), // 0 (0, 0, 0)
+      cell + UVec3::new(1, 0, 0), // 1 (1, 0, 0)
+      cell + UVec3::new(0, 1, 0), // 2 (0, 1, 0)
+      cell + UVec3::new(1, 1, 0), // 3 (1, 1, 0)
+      cell + UVec3::new(0, 0, 1), // 4 (0, 0, 1)
+      cell + UVec3::new(1, 0, 1), // 5 (1, 0, 1)
+      cell + UVec3::new(0, 1, 1), // 6 (0, 1, 1)
+      cell + UVec3::new(1, 1, 1), // 7 (1, 1, 1)
+    ];
+    let voxels_global = [
+      start + step * voxels_local[0],
+      start + step * voxels_local[1],
+      start + step * voxels_local[2],
+      start + step * voxels_local[3],
+      start + step * voxels_local[4],
+      start + step * voxels_local[5],
+      start + step * voxels_local[6],
+      start + step * voxels_local[7],
     ];
     // Sample the volume at each voxel, producing values.
     let values = [
-      volume.sample(voxels[0]),
-      volume.sample(voxels[1]),
-      volume.sample(voxels[2]),
-      volume.sample(voxels[3]),
-      volume.sample(voxels[4]),
-      volume.sample(voxels[5]),
-      volume.sample(voxels[6]),
-      volume.sample(voxels[7]),
+      chunk_sample_array.sample(voxels_local[0]),
+      chunk_sample_array.sample(voxels_local[1]),
+      chunk_sample_array.sample(voxels_local[2]),
+      chunk_sample_array.sample(voxels_local[3]),
+      chunk_sample_array.sample(voxels_local[4]),
+      chunk_sample_array.sample(voxels_local[5]),
+      chunk_sample_array.sample(voxels_local[6]),
+      chunk_sample_array.sample(voxels_local[7]),
     ];
     // Create the case number by packing the sign bits of samples. Positive = inside.
     let case = (values[0].is_sign_positive() as u8) << 0
@@ -98,7 +106,7 @@ impl MarchingCubes {
         break;
       }
       let vertex_data = tables::RegularVertexData(*vd);
-      let index = Self::create_or_reuse_vertex(vertex_data, cell_local, &voxels, &values, shared_indices, chunk);
+      let index = Self::create_or_reuse_vertex(vertex_data, cell, &voxels_global, &values, shared_indices, chunk);
       cell_vertices_indices[i] = index;
     }
 
@@ -181,8 +189,8 @@ impl MarchingCubes {
   #[inline]
   fn shared_index(cell_local: UVec3, vertex_index: usize) -> usize {
     cell_local.x as usize
-      + CHUNK_SIZE_USIZE * cell_local.y as usize
-      + CHUNK_SIZE_USIZE * CHUNK_SIZE_USIZE * cell_local.z as usize
-      + CHUNK_SIZE_USIZE * CHUNK_SIZE_USIZE * CHUNK_SIZE_USIZE * vertex_index
+      + CELLS_IN_CHUNK_ROW_USIZE * cell_local.y as usize
+      + CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * cell_local.z as usize
+      + CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * vertex_index
   }
 }

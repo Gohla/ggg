@@ -1,9 +1,42 @@
 use ultraviolet::{UVec3, Vec3};
 
+use crate::chunk::{ChunkSampleArray, ChunkSamples, VOXELS_IN_CHUNK_ROW, VOXELS_IN_CHUNK_USIZE};
+
 // Trait
 
 pub trait Volume {
+  /// Samples a single position, returning its value.
   fn sample(&self, position: UVec3) -> f32;
+
+  /// Samples an entire chunk, returning a value indicating whether the chunk is all zero, positive, negative, or mixed.
+  fn sample_chunk(&self, start: UVec3, step: u32) -> ChunkSamples {
+    let mut all_zero = true;
+    let mut all_positive = true;
+    let mut all_negative = true;
+    let mut array = [0.0; VOXELS_IN_CHUNK_USIZE];
+    let mut i = 0;
+    for z in 0..VOXELS_IN_CHUNK_ROW {
+      for y in 0..VOXELS_IN_CHUNK_ROW {
+        for x in 0..VOXELS_IN_CHUNK_ROW {
+          let position = start + step * UVec3::new(x, y, z);
+          let value = self.sample(position);
+          if value != 0.0 { all_zero = false; }
+          if value.is_sign_positive() { all_negative = false; } else { all_positive = false; }
+          array[i] = value;
+          i += 1;
+        }
+      }
+    }
+    if all_zero {
+      ChunkSamples::Zero
+    } else if all_positive {
+      ChunkSamples::Positive
+    } else if all_negative {
+      ChunkSamples::Negative
+    } else {
+      ChunkSamples::Mixed(ChunkSampleArray::new(array))
+    }
+  }
 }
 
 // Sphere

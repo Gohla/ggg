@@ -4,8 +4,8 @@ pub use std::path::Path;
 use std::path::PathBuf;
 
 pub use shaderc::{Compiler, ShaderKind};
+use shaderc::{CompileOptions, IncludeType, OptimizationLevel, ResolvedInclude};
 use walkdir::WalkDir;
-use shaderc::{CompileOptions, OptimizationLevel, ResolvedInclude, IncludeType};
 
 pub fn compile_shaders() {
   let mut compiler = Compiler::new()
@@ -17,11 +17,15 @@ pub fn compile_shaders() {
   let root_output_dir = PathBuf::from(std::env::var_os("OUT_DIR")
     .expect("OUT_DIR env variable was not set"))
     .join("shader");
-
+  let optimisation_level = optimisation_level();
+  let generate_debug_info = generate_debug_info();
 
   let compile_options = {
     let mut options = CompileOptions::new().unwrap();
-    options.set_optimization_level(OptimizationLevel::Performance);
+    options.set_optimization_level(optimisation_level);
+    if generate_debug_info {
+      options.set_generate_debug_info();
+    }
     options.set_include_callback(|include, ty, _source, _depth| {
       match ty {
         IncludeType::Relative => {
@@ -106,4 +110,31 @@ fn read_file_to_string(path: impl AsRef<Path>) -> Result<String, std::io::Error>
   reader.read_to_string(&mut string)?;
   println!("cargo:rerun-if-changed={}", path.display());
   Ok(string)
+}
+
+fn optimisation_level() -> OptimizationLevel {
+  if let Some(var) = std::env::var_os("OPT_LEVEL") {
+    if let Some(var) = var.to_str() {
+      match var {
+        "0" | "1" | "2" => return OptimizationLevel::Zero,
+        "3" => return OptimizationLevel::Performance,
+        "s" | "z" => return OptimizationLevel::Size,
+        _ => {}
+      }
+    }
+  }
+  OptimizationLevel::Performance
+}
+
+fn generate_debug_info() -> bool {
+  if let Some(var) = std::env::var_os("DEBUG ") {
+    if let Some(var) = var.to_str() {
+      match var {
+        "0" | "false" => return false,
+        "1" | "2" | "true" => return true,
+        _ => {}
+      }
+    }
+  }
+  false
 }
