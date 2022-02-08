@@ -1,165 +1,15 @@
-#![allow(unused, unused_mut)]
+pub const TRANSITION_VOXEL_CASE_CONTRIBUTION: [u16; 9] = [
+  0x01,
+  0x02,
+  0x04,
+  0x80,
+  0x100,
+  0x08,
+  0x40,
+  0x20,
+  0x10,
+];
 
-use ultraviolet::{UVec2, UVec3, Vec3};
-
-use crate::chunk::CELLS_IN_CHUNK_ROW;
-use crate::chunk::Vertex;
-use crate::volume::Volume;
-
-#[derive(Copy, Clone, Debug)]
-pub struct TransvoxelSettings {
-  pub surface_level: f32,
-}
-
-impl Default for TransvoxelSettings {
-  fn default() -> Self {
-    Self { surface_level: 0.0 }
-  }
-}
-
-#[derive(Copy, Clone)]
-pub struct Transvoxel {
-  surface_level: f32,
-}
-
-impl Transvoxel {
-  pub fn new(settings: TransvoxelSettings) -> Self {
-    Self { surface_level: settings.surface_level }
-  }
-
-  pub fn extract_chunk<V: Volume>(&self, start: UVec3, step: u32, volume: &V, sides: impl Into<TransitionSides>, vertices: &mut Vec<Vertex>) {
-    for side in sides.into() {
-      match side {
-        TransitionSide::LowX => {
-          for cell_y in 0..CELLS_IN_CHUNK_ROW {
-            for cell_z in 0..CELLS_IN_CHUNK_ROW {
-              let cell = start + UVec3::new(start.x, cell_y * step, cell_z * step);
-              self.extract_cell(cell, step, side, volume, vertices);
-            }
-          }
-        }
-        TransitionSide::HighX => {
-          todo!()
-        }
-        TransitionSide::LowY => {
-          todo!()
-        }
-        TransitionSide::HighY => {
-          todo!()
-        }
-        TransitionSide::LowZ => {
-          todo!()
-        }
-        TransitionSide::HighZ => {
-          todo!()
-        }
-      }
-    }
-  }
-
-  #[inline]
-  fn extract_cell<V: Volume>(&self, cell: UVec3, step: u32, side: TransitionSide, volume: &V, vertices: &mut Vec<Vertex>) {
-    let local_transition_voxels = side.get_transition_voxels(cell, step);
-
-    let mut case = 0;
-    for (i, local_transition_voxel) in local_transition_voxels.iter().enumerate() {
-      let value = volume.sample(*local_transition_voxel);
-      if value < self.surface_level {
-        case |= 1 << i;
-      }
-    }
-
-    let raw_cell_class = TRANSITION_CELL_CLASS[case];
-    let cell_class = raw_cell_class & 0x7F;
-    let invert_triangulation = (raw_cell_class & 0x80) != 0;
-    let our_invert_triangulation = !invert_triangulation; // We use LowZ as base case so everything is inverted ?
-    let triangulation_info = TRANSITION_CELL_DATA[cell_class as usize];
-    let vertices_data = TRANSITION_VERTEX_DATA[case as usize];
-
-    let mut cell_vertices_indices: [usize; 12] = [0usize; 12];
-    for (i, vd) in vertices_data.iter().enumerate() {
-      if i >= triangulation_info.get_vertex_count() as usize {
-        break;
-      }
-      // cell_vertices_indices[i] =
-      //   self.transition_vertex(&cell_index, TransitionVertexData(*vd));
-    }
-    for t in 0..triangulation_info.get_triangle_count() {
-      let v1_index_in_cell = triangulation_info.vertex_index[3 * t as usize];
-      let v2_index_in_cell = triangulation_info.vertex_index[3 * t as usize + 1];
-      let v3_index_in_cell = triangulation_info.vertex_index[3 * t as usize + 2];
-      let global_index_1 = cell_vertices_indices[v1_index_in_cell as usize];
-      let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
-      let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
-      // if our_invert_triangulation {
-      //   self.tri_indices.push(global_index_1);
-      //   self.tri_indices.push(global_index_2);
-      //   self.tri_indices.push(global_index_3);
-      // } else {
-      //   self.tri_indices.push(global_index_3);
-      //   self.tri_indices.push(global_index_2);
-      //   self.tri_indices.push(global_index_1);
-      // }
-    }
-
-
-    // TODO: add scaled vertices
-  }
-}
-
-// Transition sides
-
-flagset::flags! {
-   pub enum TransitionSide: u8 {
-        LowX,
-        HighX,
-        LowY,
-        HighY,
-        LowZ,
-        HighZ,
-    }
-}
-pub type TransitionSides = flagset::FlagSet<TransitionSide>;
-
-impl TransitionSide {
-  #[inline]
-  pub fn get_transition_voxels(&self, cell: UVec3, step: u32) -> [UVec3; 9] {
-    let zero = 0;
-    let half = step / 2;
-    match self {
-      TransitionSide::LowX => {
-        [
-          cell + UVec3::new(zero, zero, zero), // 0 & 9
-          cell + UVec3::new(zero, zero, half), // 1
-          cell + UVec3::new(zero, zero, step), // 2 & A
-          cell + UVec3::new(zero, half, zero), // 3
-          cell + UVec3::new(zero, half, half), // 4
-          cell + UVec3::new(zero, half, step), // 5
-          cell + UVec3::new(zero, step, zero), // 6 & B
-          cell + UVec3::new(zero, step, half), // 7
-          cell + UVec3::new(zero, step, step), // 8 & C
-        ]
-      }
-      TransitionSide::HighX => {
-        todo!()
-      }
-      TransitionSide::LowY => {
-        todo!()
-      }
-      TransitionSide::HighY => {
-        todo!()
-      }
-      TransitionSide::LowZ => {
-        todo!()
-      }
-      TransitionSide::HighZ => {
-        todo!()
-      }
-    }
-  }
-}
-
-// Tables
 
 /// Maps a 9-bit transition cell case index to an equivalence class index.
 ///
@@ -293,6 +143,44 @@ pub const TRANSITION_CELL_DATA: [TransitionCellData; 56] = [
   TransitionCellData { geometry_counts: 0xA8, vertex_index: [0, 1, 5, 1, 4, 5, 1, 2, 4, 2, 3, 4, 2, 6, 3, 3, 6, 7, 0, 8, 9, 0, 5, 8, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
 ];
 
+#[derive(Copy, Clone)]
+pub struct TransitionVertexData(pub u16);
+
+impl TransitionVertexData {
+  #[inline]
+  fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
+  #[inline]
+  pub fn subtract_u(&self) -> bool {
+    self.high_byte() & 0b0001_0000 != 0
+  }
+  #[inline]
+  pub fn subtract_v(&self) -> bool {
+    self.high_byte() & 0b0010_0000 != 0
+  }
+  #[inline]
+  pub fn new_interior_vertex(&self) -> bool {
+    self.high_byte() & 0b0100_0000 != 0
+  }
+  #[inline]
+  pub fn new_reusable_vertex(&self) -> bool {
+    self.high_byte() & 0b1000_0000 != 0
+  }
+  #[inline]
+  pub fn vertex_index(&self) -> u8 {
+    self.high_byte() & 0b0000_1111 // Low nibble
+  }
+
+  #[inline]
+  fn low_byte(&self) -> u8 { self.0 as u8 }
+  #[inline]
+  pub fn voxel_a_index(&self) -> u8 {
+    self.low_byte() >> 4 // High nibble
+  }
+  #[inline]
+  pub fn voxel_b_index(&self) -> u8 {
+    self.low_byte() & 0b0000_1111 // Low nibble
+  }
+}
 
 /// Gives the vertex locations for every one of the 512 possible cases in the Transvoxel algorithm.
 ///

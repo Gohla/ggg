@@ -29,6 +29,19 @@ pub enum ChunkSamples {
   Mixed(ChunkSampleArray),
 }
 
+impl ChunkSamples {
+  #[inline]
+  pub fn sample(&self, index: UVec3) -> f32 {
+    use ChunkSamples::*;
+    match self {
+      Zero => 0.0,
+      Positive => 1.0,
+      Negative => -1.0,
+      Mixed(array) => array.sample(index)
+    }
+  }
+}
+
 pub struct ChunkSampleArray {
   array: [f32; VOXELS_IN_CHUNK_USIZE],
 }

@@ -1,6 +1,19 @@
 // The following data originates from Eric Lengyel's Transvoxel Algorithm.
 // http://transvoxel.org/
 
+use ultraviolet::UVec3;
+
+pub const REGULAR_VOXELS: [UVec3; 8] = [
+  UVec3::new(0, 0, 0), // 0 (0, 0, 0)
+  UVec3::new(1, 0, 0), // 1 (1, 0, 0)
+  UVec3::new(0, 1, 0), // 2 (0, 1, 0)
+  UVec3::new(1, 1, 0), // 3 (1, 1, 0)
+  UVec3::new(0, 0, 1), // 4 (0, 0, 1)
+  UVec3::new(1, 0, 1), // 5 (1, 0, 1)
+  UVec3::new(0, 1, 1), // 6 (0, 1, 1)
+  UVec3::new(1, 1, 1), // 7 (1, 1, 1)
+];
+
 /// Holds information about the triangulation used for a single equivalence class in the modified
 /// Marching Cubes algorithm.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -75,9 +88,6 @@ impl RegularVertexData {
   #[inline]
   fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
   #[inline]
-  fn low_byte(&self) -> u8 { self.0 as u8 }
-
-  #[inline]
   pub fn subtract_x(&self) -> bool {
     self.high_byte() & 0b0001_0000 != 0
   }
@@ -93,18 +103,17 @@ impl RegularVertexData {
   pub fn new_vertex(&self) -> bool {
     self.high_byte() & 0b1000_0000 != 0
   }
-
   #[inline]
   pub fn vertex_index(&self) -> u8 {
     self.high_byte() & 0b0000_1111 // Low nibble
   }
 
-
+  #[inline]
+  fn low_byte(&self) -> u8 { self.0 as u8 }
   #[inline]
   pub fn voxel_a_index(&self) -> u8 {
     self.low_byte() >> 4 // High nibble
   }
-
   #[inline]
   pub fn voxel_b_index(&self) -> u8 {
     self.low_byte() & 0b0000_1111 // Low nibble
