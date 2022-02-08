@@ -14,16 +14,17 @@ impl Transvoxel {
   pub fn extract_chunk(
     &self,
     start: UVec3,
-    high_resolution_step: u32,
+    hi_resolution_step: u32,
+    lo_resolution_step: u32,
     side: TransitionSide,
     chunk_samples: &[ChunkSamples; 4],
     chunk: &mut Chunk,
   ) {
     let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-    for cell_u in 0..CELLS_IN_CHUNK_ROW {
-      for cell_v in 0..CELLS_IN_CHUNK_ROW {
+    for cell_v in 0..CELLS_IN_CHUNK_ROW {
+      for cell_u in 0..CELLS_IN_CHUNK_ROW {
         let cell = UVec2::new(cell_u, cell_v);
-        Self::extract_cell(cell, side, start, high_resolution_step, chunk_samples, &mut shared_indices, chunk);
+        Self::extract_cell(cell, side, start, hi_resolution_step, lo_resolution_step, chunk_samples, &mut shared_indices, chunk);
       }
     }
   }
@@ -33,42 +34,74 @@ impl Transvoxel {
     cell: UVec2,
     side: TransitionSide,
     start: UVec3,
-    high_resolution_step: u32,
+    hi_resolution_step: u32,
+    lo_resolution_step: u32,
     chunk_samples: &[ChunkSamples; 4],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
     chunk: &mut Chunk,
   ) {
-    // Get local voxels (i.e., the coordinates of all the 9 corners) of the transition cell.
-    let local_voxels = side.get_transition_voxels(cell);
+    // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
+    let hi_resolution_local_voxels = side.get_high_resolution_local_voxels(cell);
+    let lo_resolution_local_voxels = side.get_low_resolution_local_voxels(cell);
     // Get the global voxels of the cell.
-    let global_voxels = [
-      start + high_resolution_step * local_voxels[0],
-      start + high_resolution_step * local_voxels[1],
-      start + high_resolution_step * local_voxels[2],
-      start + high_resolution_step * local_voxels[3],
-      start + high_resolution_step * local_voxels[4],
-      start + high_resolution_step * local_voxels[5],
-      start + high_resolution_step * local_voxels[6],
-      start + high_resolution_step * local_voxels[7],
-      start + high_resolution_step * local_voxels[8],
-    ];
+    let global_voxels: [Vec3; 13] = {
+      let start: Vec3 = start.into();
+      let hi_resolution_step = hi_resolution_step as f32;
+      let lo_resolution_step = lo_resolution_step as f32;
+      let hi_resolution_local_voxels: [Vec3; 9] = [
+        hi_resolution_local_voxels[0].into(),
+        hi_resolution_local_voxels[1].into(),
+        hi_resolution_local_voxels[2].into(),
+        hi_resolution_local_voxels[3].into(),
+        hi_resolution_local_voxels[4].into(),
+        hi_resolution_local_voxels[5].into(),
+        hi_resolution_local_voxels[6].into(),
+        hi_resolution_local_voxels[7].into(),
+        hi_resolution_local_voxels[8].into(),
+      ];
+      [
+        start + hi_resolution_step * hi_resolution_local_voxels[0], // 0
+        start + hi_resolution_step * hi_resolution_local_voxels[1], // 1
+        start + hi_resolution_step * hi_resolution_local_voxels[2], // 2
+        start + hi_resolution_step * hi_resolution_local_voxels[3], // 3
+        start + hi_resolution_step * hi_resolution_local_voxels[4], // 4
+        start + hi_resolution_step * hi_resolution_local_voxels[5], // 5
+        start + hi_resolution_step * hi_resolution_local_voxels[6], // 6
+        start + hi_resolution_step * hi_resolution_local_voxels[7], // 7
+        start + hi_resolution_step * hi_resolution_local_voxels[8], // 8
+        start + lo_resolution_step * lo_resolution_local_voxels[0], // 9
+        start + lo_resolution_step * lo_resolution_local_voxels[1], // A
+        start + lo_resolution_step * lo_resolution_local_voxels[2], // B
+        start + lo_resolution_step * lo_resolution_local_voxels[3], // C
+      ]
+    };
     // Get which ChunkSamples we have to sample values from.
     let chunk_samples = {
       let chunk_samples_index = (cell.x / 8) + (2 * (cell.y / 8));
       &chunk_samples[chunk_samples_index as usize]
     };
     // Sample the volume at each local voxel, producing values.
-    let values = [ // OPTO: can we make the rest of this code more efficient if an entire chunk is zero/positive/negative?
-      chunk_samples.sample(local_voxels[0]),
-      chunk_samples.sample(local_voxels[1]),
-      chunk_samples.sample(local_voxels[2]),
-      chunk_samples.sample(local_voxels[3]),
-      chunk_samples.sample(local_voxels[4]),
-      chunk_samples.sample(local_voxels[5]),
-      chunk_samples.sample(local_voxels[6]),
-      chunk_samples.sample(local_voxels[7]),
-      chunk_samples.sample(local_voxels[8]),
-    ];
+    let values = { // OPTO: can we make the rest of this code more efficient if an entire chunk is zero/positive/negative?
+      let value_0_and_9 = chunk_samples.sample(hi_resolution_local_voxels[0]);
+      let value_2_and_a = chunk_samples.sample(hi_resolution_local_voxels[2]);
+      let value_6_and_b = chunk_samples.sample(hi_resolution_local_voxels[6]);
+      let value_8_and_c = chunk_samples.sample(hi_resolution_local_voxels[8]);
+      [
+        value_0_and_9,
+        chunk_samples.sample(hi_resolution_local_voxels[1]),
+        value_2_and_a,
+        chunk_samples.sample(hi_resolution_local_voxels[3]),
+        chunk_samples.sample(hi_resolution_local_voxels[4]),
+        chunk_samples.sample(hi_resolution_local_voxels[5]),
+        value_6_and_b,
+        chunk_samples.sample(hi_resolution_local_voxels[7]),
+        value_8_and_c,
+        value_0_and_9,
+        value_2_and_a,
+        value_6_and_b,
+        value_8_and_c,
+      ]
+    };
 
     // Create the case number by summing the contributions.
     let case = {
@@ -137,8 +170,8 @@ impl Transvoxel {
   fn create_or_reuse_vertex(
     vertex_data: TransitionVertexData,
     cell: UVec2,
-    global_voxels: &[UVec3; 9],
-    values: &[f32; 9],
+    global_voxels: &[Vec3; 13],
+    values: &[f32; 13],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
     chunk: &mut Chunk,
   ) -> u16 {
@@ -146,8 +179,8 @@ impl Transvoxel {
       // Create a new vertex and index, and share the index.
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
       let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index() as usize);
-      debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
-      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
+      debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared transition index, at index: {}, position: {:?}", shared_indices_index, cell);
+      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {:?}", shared_indices_index, cell);
       shared_indices[shared_indices_index] = index;
       index
     } else if vertex_data.new_interior_vertex() {
@@ -167,9 +200,9 @@ impl Transvoxel {
           previous_cell_local
         };
         let shared_indices_index = Self::shared_index(previous_cell_local, vertex_data.vertex_index() as usize);
-        debug_assert!(shared_indices_index < shared_indices.len(), "Tried to read out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
+        debug_assert!(shared_indices_index < shared_indices.len(), "Tried to read out of bounds shared transition index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
         let index = shared_indices[shared_indices_index];
-        debug_assert!(index != u16::MAX, "Tried to read unset shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
+        debug_assert!(index != u16::MAX, "Tried to read unset shared transition index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
         index
       } else {
         // Create a new vertex and index, but this vertex will never be shared, as it occurs on the minimal boundary.
@@ -180,10 +213,10 @@ impl Transvoxel {
   }
 
   #[inline]
-  fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[UVec3; 9], values: &[f32; 9], chunk: &mut Chunk) -> u16 {
+  fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[Vec3; 13], values: &[f32; 13], chunk: &mut Chunk) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
-    debug_assert!(voxel_b_index > voxel_a_index);
+    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is higher than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
     let position = Self::vertex_position(
       global_voxels[voxel_a_index as usize],
       values[voxel_a_index as usize],
@@ -196,10 +229,8 @@ impl Transvoxel {
   }
 
   #[inline]
-  fn vertex_position(pos_low: UVec3, value_low: f32, pos_high: UVec3, value_high: f32) -> Vec3 {
+  fn vertex_position(pos_low: Vec3, value_low: f32, pos_high: Vec3, value_high: f32) -> Vec3 {
     let t = value_high / (value_high - value_low);
-    let pos_low = Vec3::from(pos_low);
-    let pos_high = Vec3::from(pos_high);
     t * pos_low + (1.0 - t) * pos_high
   }
 
@@ -227,7 +258,7 @@ pub type TransitionSides = flagset::FlagSet<TransitionSide>;
 
 impl TransitionSide {
   #[inline]
-  pub fn get_transition_voxels(&self, cell: UVec2) -> [UVec3; 9] {
+  pub fn get_high_resolution_local_voxels(&self, cell: UVec2) -> [UVec3; 9] {
     match self {
       TransitionSide::LowX => {
         let cell_3d = UVec3::new(16, (cell.x % 8) * 2, (cell.y % 8) * 2);
@@ -253,7 +284,48 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LowZ => {
+        let cell_3d = UVec3::new((cell.x % 8) * 2, (cell.y % 8) * 2, 0);
+        [
+          cell_3d + UVec3::new(0, 0, 0), // 0 & 9
+          cell_3d + UVec3::new(1, 0, 0), // 1
+          cell_3d + UVec3::new(2, 0, 0), // 2 & A
+          cell_3d + UVec3::new(0, 1, 0), // 3
+          cell_3d + UVec3::new(1, 1, 0), // 4
+          cell_3d + UVec3::new(2, 1, 0), // 5
+          cell_3d + UVec3::new(0, 2, 0), // 6 & B
+          cell_3d + UVec3::new(1, 2, 0), // 7
+          cell_3d + UVec3::new(2, 2, 0), // 8 & C
+        ]
+      }
+      TransitionSide::HighZ => {
         todo!()
+      }
+    }
+  }
+
+  #[inline]
+  pub fn get_low_resolution_local_voxels(&self, cell: UVec2) -> [Vec3; 4] {
+    match self {
+      TransitionSide::LowX => {
+        todo!()
+      }
+      TransitionSide::HighX => {
+        todo!()
+      }
+      TransitionSide::LowY => {
+        todo!()
+      }
+      TransitionSide::HighY => {
+        todo!()
+      }
+      TransitionSide::LowZ => {
+        let cell_3d = Vec3::new(cell.x as f32, cell.y as f32, 0.2);
+        [
+          cell_3d + Vec3::new(0.0, 0.0, 0.0), // 9
+          cell_3d + Vec3::new(1.0, 0.0, 0.0), // A
+          cell_3d + Vec3::new(0.0, 1.0, 0.0), // B
+          cell_3d + Vec3::new(1.0, 1.0, 0.0), // C
+        ]
       }
       TransitionSide::HighZ => {
         todo!()

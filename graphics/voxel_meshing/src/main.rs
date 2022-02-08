@@ -25,6 +25,7 @@ use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::Vertex;
 use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
+use voxel_meshing::transvoxel::Transvoxel;
 use voxel_meshing::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
 
 pub struct VoxelMeshing {
@@ -54,7 +55,7 @@ impl app::Application for VoxelMeshing {
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
-    settings.octree_settings.lod_factor = 1.0;
+    settings.octree_settings.lod_factor = 0.0;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
@@ -216,11 +217,10 @@ struct Settings {
 
 impl Settings {
   fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
-    let meshing_algorithm = MarchingCubes;
     match self.volume_type {
-      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), meshing_algorithm)),
-      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), meshing_algorithm)),
-      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), meshing_algorithm)),
+      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes, Transvoxel)),
+      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes, Transvoxel)),
+      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes, Transvoxel)),
     }
   }
 
@@ -410,13 +410,13 @@ impl MeshGeneration {
 
     for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
       if *filled {
-        let is_empty = chunk.is_empty();
+        let is_empty = chunk.main.is_empty();
         if !is_empty {
           let vertex_offset = vertices.len() as BufferAddress;
           let index_offset = indices.len() as u32;
-          vertices.extend(&chunk.vertices);
-          indices.extend(&chunk.indices);
-          draws.push(Draw { indices: index_offset..index_offset + chunk.indices.len() as u32, base_vertex: vertex_offset });
+          vertices.extend(&chunk.main.vertices);
+          indices.extend(&chunk.main.indices);
+          draws.push(Draw { indices: index_offset..index_offset + chunk.main.indices.len() as u32, base_vertex: vertex_offset });
         }
         if settings.debug_render_octree_nodes {
           if is_empty {

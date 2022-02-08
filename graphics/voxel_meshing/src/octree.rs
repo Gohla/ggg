@@ -6,9 +6,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::Chunk;
-use crate::chunk::CELLS_IN_CHUNK_ROW;
+use crate::chunk::{CELLS_IN_CHUNK_ROW, LodChunk};
 use crate::marching_cubes::MarchingCubes;
+use crate::transvoxel::{TransitionSide, Transvoxel};
 use crate::volume::Volume;
 
 // Trait
@@ -18,7 +18,7 @@ pub trait VolumeMeshManager {
   fn get_lod_factor(&self) -> f32;
   fn get_lod_factor_mut(&mut self) -> &mut f32;
 
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Chunk, bool))> + '_>;
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunk, bool))> + '_>;
 }
 
 // Octree settings
@@ -59,21 +59,22 @@ pub struct Octree<V> {
   max_lod_level: u32,
   volume: V,
   marching_cubes: MarchingCubes,
+  transvoxel: Transvoxel,
 
   active_aabbs: HashSet<AABB>,
   keep_aabbs: HashSet<AABB>,
-  chunks: HashMap<AABB, (Chunk, bool)>,
+  chunks: HashMap<AABB, (LodChunk, bool)>,
 
   requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
-  tx: Sender<(AABB, Chunk)>,
-  rx: Receiver<(AABB, Chunk)>,
+  tx: Sender<(AABB, LodChunk)>,
+  rx: Receiver<(AABB, LodChunk)>,
 
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
 impl<V: Volume + Clone + Send + 'static> Octree<V> {
-  pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes) -> Self {
+  pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes, transvoxel: Transvoxel) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
@@ -84,6 +85,7 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
       max_lod_level,
       volume,
       marching_cubes,
+      transvoxel,
 
       active_aabbs: HashSet::new(),
       keep_aabbs: HashSet::new(),
@@ -101,9 +103,9 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(Chunk, bool))> {
-    for (aabb, vertices) in self.rx.try_iter() {
-      self.chunks.insert(aabb, (vertices, true));
+  pub fn update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(LodChunk, bool))> {
+    for (aabb, lod_chunk) in self.rx.try_iter() {
+      self.chunks.insert(aabb, (lod_chunk, true));
       self.requested_aabbs.remove(&aabb);
     }
 
@@ -184,15 +186,27 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     return false;
   }
 
-  fn request_chunk(&mut self, aabb: AABB, mut chunk: Chunk) {
+  fn request_chunk(&mut self, aabb: AABB, mut chunk: LodChunk) {
     self.requested_aabbs.insert(aabb);
     let marching_cubes = self.marching_cubes.clone();
+    let transvoxel = self.transvoxel.clone();
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
       let step = aabb.size() / CELLS_IN_CHUNK_ROW;
       let chunk_samples = volume.sample_chunk(aabb.min, step);
-      marching_cubes.extract_chunk(aabb.min, step, &chunk_samples, &mut chunk);
+      marching_cubes.extract_chunk(aabb.min, step, &chunk_samples, &mut chunk.main);
+      // HACK: transvoxel
+      if step != 1 { // At max LOD level, no need to create transition cells.
+        let high_resolution_step = step / 2;
+        let chunk_samples = [ // TODO: provide the proper samples.
+          volume.sample_chunk(aabb.min, high_resolution_step),
+          volume.sample_chunk(aabb.min, high_resolution_step),
+          volume.sample_chunk(aabb.min, high_resolution_step),
+          volume.sample_chunk(aabb.min, high_resolution_step),
+        ];
+        transvoxel.extract_chunk(aabb.min, high_resolution_step, step, TransitionSide::LowZ, &chunk_samples, &mut chunk.transition_low_z_chunk);
+      }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
   }
@@ -209,7 +223,7 @@ impl<V: Volume + Clone + Send + 'static> VolumeMeshManager for Octree<V> {
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(Chunk, bool))> + '_> { Box::new(self.update(position)) }
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunk, bool))> + '_> { Box::new(self.update(position)) }
 }
 
 // AABB

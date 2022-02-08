@@ -177,7 +177,7 @@ impl MarchingCubes {
   fn create_vertex(vertex_data: RegularVertexData, global_voxels: &[UVec3; 8], values: &[f32; 8], chunk: &mut Chunk) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
-    debug_assert!(voxel_b_index > voxel_a_index);
+    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is higher than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
     let position = Self::vertex_position(
       global_voxels[voxel_a_index as usize],
       values[voxel_a_index as usize],
