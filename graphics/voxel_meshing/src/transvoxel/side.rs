@@ -1,4 +1,4 @@
-use ultraviolet::{UVec2, UVec3, Vec3};
+use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::CELLS_IN_CHUNK_ROW;
 use crate::octree::AABB;
@@ -59,12 +59,12 @@ impl TransitionSide {
   }
 
   #[inline]
-  pub fn get_hires_local_voxels(&self, cell: UVec2) -> [UVec3; 9] {
-    let x = (cell.x % 8) * 2;
-    let y = (cell.y % 8) * 2;
+  pub fn get_hires_local_voxels(&self, u: u32, v: u32) -> [UVec3; 9] {
+    let u = (u % 8) * 2;
+    let v = (v % 8) * 2;
     match self {
       TransitionSide::LoX => {
-        let cell_3d = UVec3::new(CELLS_IN_CHUNK_ROW, y, x);
+        let cell_3d = UVec3::new(CELLS_IN_CHUNK_ROW, v, u);
         [
           cell_3d + UVec3::new(0, 0, 0), // 0 & 9
           cell_3d + UVec3::new(0, 0, 1), // 1
@@ -87,7 +87,7 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LoZ => {
-        let cell_3d = UVec3::new(x, y, CELLS_IN_CHUNK_ROW);
+        let cell_3d = UVec3::new(u, v, CELLS_IN_CHUNK_ROW);
         [
           cell_3d + UVec3::new(0, 0, 0), // 0 & 9
           cell_3d + UVec3::new(1, 0, 0), // 1
@@ -107,11 +107,13 @@ impl TransitionSide {
   }
 
   #[inline]
-  pub fn get_lores_local_voxels(&self, cell: UVec2) -> [Vec3; 4] {
+  pub fn get_lores_local_voxels(&self, u: u32, v: u32) -> [Vec3; 4] {
+    let u = u as f32;
+    let v = v as f32;
     let transition_width = 0.5; // TODO: determine width of transition cell consistently and based on LOD.
     match self {
       TransitionSide::LoX => {
-        let cell_3d = Vec3::new(transition_width, cell.y as f32, cell.x as f32);
+        let cell_3d = Vec3::new(transition_width, v, u);
         [
           cell_3d + Vec3::new(0.0, 0.0, 0.0), // 9
           cell_3d + Vec3::new(0.0, 0.0, 1.0), // A
@@ -129,7 +131,7 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LoZ => {
-        let cell_3d = Vec3::new(cell.x as f32, cell.y as f32, transition_width);
+        let cell_3d = Vec3::new(u, v, transition_width);
         [
           cell_3d + Vec3::new(0.0, 0.0, 0.0), // 9
           cell_3d + Vec3::new(1.0, 0.0, 0.0), // A

@@ -1,4 +1,4 @@
-use ultraviolet::{UVec2, UVec3, Vec3};
+use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, Chunk, ChunkSamples, Vertex};
 use crate::transvoxel::side::TransitionSide;
@@ -24,12 +24,12 @@ impl Transvoxel {
     chunk: &mut Chunk,
   ) {
     let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-    for cell_y in 0..CELLS_IN_CHUNK_ROW {
-      for cell_x in 0..CELLS_IN_CHUNK_ROW {
-        let cell = UVec2::new(cell_x, cell_y);
+    for cell_v in 0..CELLS_IN_CHUNK_ROW {
+      for cell_u in 0..CELLS_IN_CHUNK_ROW {
         Self::extract_cell(
           side,
-          cell,
+          cell_u,
+          cell_v,
           hires_chunk_mins,
           hires_chunk_samples,
           hires_step,
@@ -45,7 +45,8 @@ impl Transvoxel {
   #[inline]
   fn extract_cell(
     side: TransitionSide,
-    cell: UVec2,
+    u: u32,
+    v: u32,
     hires_chunk_mins: &[UVec3; 4],
     hires_chunk_samples: &[ChunkSamples; 4],
     hires_step: u32,
@@ -55,11 +56,11 @@ impl Transvoxel {
     chunk: &mut Chunk,
   ) {
     // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
-    let hires_local_voxels = side.get_hires_local_voxels(cell);
-    let lores_local_voxels = side.get_lores_local_voxels(cell);
+    let hires_local_voxels = side.get_hires_local_voxels(u, v);
+    let lores_local_voxels = side.get_lores_local_voxels(u, v);
     // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = (cell.x / 8) + (2 * (cell.y / 8)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
+      let idx = (u / 8) + (2 * (v / 8)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
@@ -159,7 +160,7 @@ impl Transvoxel {
         break;
       }
       let vertex_data = TransitionVertexData(*vd);
-      cell_vertices_indices[i] = Self::create_or_reuse_vertex(vertex_data, cell, &global_voxels, &values, shared_indices, chunk);
+      cell_vertices_indices[i] = Self::create_or_reuse_vertex(vertex_data, u, v, &global_voxels, &values, shared_indices, chunk);
     }
 
     // Write the indices that form the triangulation of this transition cell.
@@ -185,7 +186,8 @@ impl Transvoxel {
   #[inline]
   fn create_or_reuse_vertex(
     vertex_data: TransitionVertexData,
-    cell: UVec2,
+    u: u32,
+    v: u32,
     global_voxels: &[Vec3; 13],
     values: &[f32; 13],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
@@ -194,9 +196,9 @@ impl Transvoxel {
     if vertex_data.new_reusable_vertex() {
       // Create a new vertex and index, and share the index.
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
-      let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index() as usize);
-      debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared transition index, at index: {}, position: {:?}", shared_indices_index, cell);
-      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {:?}", shared_indices_index, cell);
+      let shared_indices_index = Self::shared_index(u, v, vertex_data.vertex_index() as usize);
+      debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
+      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
       shared_indices[shared_indices_index] = index;
       index
     } else if vertex_data.new_interior_vertex() {
@@ -204,21 +206,22 @@ impl Transvoxel {
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
       index
     } else {
-      let subtract_x = vertex_data.subtract_x();
-      let subtract_y = vertex_data.subtract_y();
+      let subtract_u = vertex_data.subtract_u();
+      let subtract_v = vertex_data.subtract_v();
       // OPTO: use 3-bit validity mask as proposed in the paper?
-      if (cell.x > 0 || !subtract_x) && (cell.y > 0 || !subtract_y) {
+      if (u > 0 || !subtract_u) && (v > 0 || !subtract_v) {
         // Return index of previous vertex.
-        let previous_cell_local = {
-          let mut previous_cell_local = cell;
-          if subtract_x { previous_cell_local.x -= 1; }
-          if subtract_y { previous_cell_local.y -= 1; }
-          previous_cell_local
+        let (prev_u, prev_v) = {
+          let mut prev_u = u;
+          let mut prev_v = v;
+          if subtract_u { prev_u -= 1; }
+          if subtract_v { prev_v -= 1; }
+          (prev_u, prev_v)
         };
-        let shared_indices_index = Self::shared_index(previous_cell_local, vertex_data.vertex_index() as usize);
-        debug_assert!(shared_indices_index < shared_indices.len(), "Tried to read out of bounds shared transition index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
+        let shared_indices_index = Self::shared_index(prev_u, prev_v, vertex_data.vertex_index() as usize);
+        debug_assert!(shared_indices_index < shared_indices.len(), "Tried to read out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, prev_u, prev_v);
         let index = shared_indices[shared_indices_index];
-        debug_assert!(index != u16::MAX, "Tried to read unset shared transition index, at index: {}, position: {:?}", shared_indices_index, previous_cell_local);
+        debug_assert!(index != u16::MAX, "Tried to read unset shared transition index, at index: {}, position: {}, {}", shared_indices_index, prev_u, prev_v);
         index
       } else {
         // Create a new vertex and index, but this vertex will never be shared, as it occurs on the minimal boundary.
@@ -251,9 +254,9 @@ impl Transvoxel {
   }
 
   #[inline]
-  fn shared_index(cell: UVec2, vertex_index: usize) -> usize {
-    cell.x as usize
-      + CELLS_IN_CHUNK_ROW_USIZE * cell.y as usize
+  fn shared_index(u: u32, v: u32, vertex_index: usize) -> usize {
+    u as usize
+      + CELLS_IN_CHUNK_ROW_USIZE * v as usize
       + CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * vertex_index
   }
 }
