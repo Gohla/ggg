@@ -6,9 +6,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{CELLS_IN_CHUNK_ROW, LodChunk};
+use crate::chunk::{CELLS_IN_CHUNK_ROW, Chunk, LodChunk};
 use crate::marching_cubes::MarchingCubes;
-use crate::transvoxel::{TransitionSide, Transvoxel};
+use crate::transvoxel::Transvoxel;
+use crate::transvoxel::side::TransitionSide;
 use crate::volume::Volume;
 
 // Trait
@@ -197,31 +198,44 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
       let lores_step = aabb.size() / CELLS_IN_CHUNK_ROW;
       let chunk_samples = volume.sample_chunk(lores_min, lores_step);
       marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
-      // HACK: transvoxel
       if lores_step != 1 { // At max LOD level, no need to create transition cells.
         let hires_step = lores_step / 2;
+        if lores_min.x > 0 {
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_x_chunk);
+        }
         if lores_min.z > 0 {
-          let side = TransitionSide::LowZ;
-          let hires_chunk_mins = aabb.subdivided_face_of_side_minimums(side);
-          let hires_chunk_samples = [
-            volume.sample_chunk(hires_chunk_mins[0], hires_step),
-            volume.sample_chunk(hires_chunk_mins[1], hires_step),
-            volume.sample_chunk(hires_chunk_mins[2], hires_step),
-            volume.sample_chunk(hires_chunk_mins[3], hires_step),
-          ];
-          transvoxel.extract_chunk(
-            side,
-            &hires_chunk_mins,
-            &hires_chunk_samples,
-            hires_step,
-            lores_min,
-            lores_step,
-            &mut chunk.transition_low_z_chunk,
-          );
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_z_chunk);
         }
       }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
+  }
+
+  fn extract_transvoxel_chunk(
+    aabb: AABB,
+    side: TransitionSide,
+    volume: &V,
+    hires_step: u32,
+    lores_step: u32,
+    transvoxel: &Transvoxel,
+    chunk: &mut Chunk,
+  ) {
+    let hires_chunk_mins = side.subdivided_face_of_side_minimums(aabb);
+    let hires_chunk_samples = [
+      volume.sample_chunk(hires_chunk_mins[0], hires_step),
+      volume.sample_chunk(hires_chunk_mins[1], hires_step),
+      volume.sample_chunk(hires_chunk_mins[2], hires_step),
+      volume.sample_chunk(hires_chunk_mins[3], hires_step),
+    ];
+    transvoxel.extract_chunk(
+      side,
+      &hires_chunk_mins,
+      &hires_chunk_samples,
+      hires_step,
+      aabb.min,
+      lores_step,
+      chunk,
+    );
   }
 }
 
@@ -311,39 +325,6 @@ impl AABB {
       Self::new_unchecked(UVec3::new(cen.x, min.y, cen.z), extends),
       Self::new_unchecked(cen, extends),
     ]
-  }
-
-  #[inline]
-  pub fn subdivided_face_of_side_minimums(&self, side: TransitionSide) -> [UVec3; 4] {
-    match side {
-      TransitionSide::LowX => {
-        todo!()
-      }
-      TransitionSide::HighX => {
-        todo!()
-      }
-      TransitionSide::LowY => {
-        todo!()
-      }
-      TransitionSide::HighY => {
-        todo!()
-      }
-      TransitionSide::LowZ => {
-        let min = self.min;
-        let cen = self.center();
-        let extends = self.extends();
-        let z = min.z - extends;
-        [
-          UVec3::new(min.x, min.y, z),
-          UVec3::new(cen.x, min.y, z),
-          UVec3::new(min.x, cen.y, z),
-          UVec3::new(cen.x, cen.y, z),
-        ]
-      }
-      TransitionSide::HighZ => {
-        todo!()
-      }
-    }
   }
 
 

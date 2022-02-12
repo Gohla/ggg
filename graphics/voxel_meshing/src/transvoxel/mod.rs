@@ -1,8 +1,10 @@
 use ultraviolet::{UVec2, UVec3, Vec3};
 
 use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, Chunk, ChunkSamples, Vertex};
+use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
+pub mod side;
 mod tables;
 
 #[derive(Copy, Clone)]
@@ -34,7 +36,7 @@ impl Transvoxel {
           lores_min,
           lores_step,
           &mut shared_indices,
-          chunk
+          chunk,
         );
       }
     }
@@ -55,9 +57,9 @@ impl Transvoxel {
     // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
     let hires_local_voxels = side.get_hires_local_voxels(cell);
     let lores_local_voxels = side.get_lores_local_voxels(cell);
-    // Get which ChunkSamples we have to sample values from, and what their starting point it.
+    // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = (cell.x / 8) + (2 * (cell.y / 8));
+      let idx = (cell.x / 8) + (2 * (cell.y / 8)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
@@ -253,97 +255,5 @@ impl Transvoxel {
     cell.x as usize
       + CELLS_IN_CHUNK_ROW_USIZE * cell.y as usize
       + CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * vertex_index
-  }
-}
-
-// Transition sides
-
-flagset::flags! {
-   pub enum TransitionSide: u8 {
-        LowX,
-        HighX,
-        LowY,
-        HighY,
-        LowZ,
-        HighZ,
-    }
-}
-pub type TransitionSides = flagset::FlagSet<TransitionSide>;
-
-impl TransitionSide {
-  #[inline]
-  pub fn get_hires_local_voxels(&self, cell: UVec2) -> [UVec3; 9] {
-    match self {
-      TransitionSide::LowX => {
-        let cell_3d = UVec3::new(CELLS_IN_CHUNK_ROW, (cell.x % 8) * 2, (cell.y % 8) * 2);
-        [
-          cell_3d + UVec3::new(0, 0, 0), // 0 & 9
-          cell_3d + UVec3::new(0, 0, 1), // 1
-          cell_3d + UVec3::new(0, 0, 2), // 2 & A
-          cell_3d + UVec3::new(0, 1, 0), // 3
-          cell_3d + UVec3::new(0, 1, 1), // 4
-          cell_3d + UVec3::new(0, 1, 2), // 5
-          cell_3d + UVec3::new(0, 2, 0), // 6 & B
-          cell_3d + UVec3::new(0, 2, 1), // 7
-          cell_3d + UVec3::new(0, 2, 2), // 8 & C
-        ]
-      }
-      TransitionSide::HighX => {
-        todo!()
-      }
-      TransitionSide::LowY => {
-        todo!()
-      }
-      TransitionSide::HighY => {
-        todo!()
-      }
-      TransitionSide::LowZ => {
-        let cell_3d = UVec3::new((cell.x % 8) * 2, (cell.y % 8) * 2, CELLS_IN_CHUNK_ROW);
-        [
-          cell_3d + UVec3::new(0, 0, 0), // 0 & 9
-          cell_3d + UVec3::new(1, 0, 0), // 1
-          cell_3d + UVec3::new(2, 0, 0), // 2 & A
-          cell_3d + UVec3::new(0, 1, 0), // 3
-          cell_3d + UVec3::new(1, 1, 0), // 4
-          cell_3d + UVec3::new(2, 1, 0), // 5
-          cell_3d + UVec3::new(0, 2, 0), // 6 & B
-          cell_3d + UVec3::new(1, 2, 0), // 7
-          cell_3d + UVec3::new(2, 2, 0), // 8 & C
-        ]
-      }
-      TransitionSide::HighZ => {
-        todo!()
-      }
-    }
-  }
-
-  #[inline]
-  pub fn get_lores_local_voxels(&self, cell: UVec2) -> [Vec3; 4] {
-    match self {
-      TransitionSide::LowX => {
-        todo!()
-      }
-      TransitionSide::HighX => {
-        todo!()
-      }
-      TransitionSide::LowY => {
-        todo!()
-      }
-      TransitionSide::HighY => {
-        todo!()
-      }
-      TransitionSide::LowZ => {
-        let cell_3d = Vec3::new(cell.x as f32, cell.y as f32, 0.5); // TODO: determine width of transition cell consistently.
-        [
-          cell_3d + Vec3::new(0.0, 0.0, 0.0), // 9
-          cell_3d + Vec3::new(1.0, 0.0, 0.0), // A
-          cell_3d + Vec3::new(0.0, 1.0, 0.0), // B
-          cell_3d + Vec3::new(1.0, 1.0, 0.0), // C
-        ]
-      }
-      TransitionSide::HighZ => {
-        todo!()
-      }
-    }
   }
 }

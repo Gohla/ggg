@@ -22,7 +22,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::Vertex;
+use voxel_meshing::chunk::{Chunk, Vertex};
 use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::transvoxel::Transvoxel;
@@ -52,8 +52,13 @@ impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let mut settings = Settings::default();
     settings.light_rotation_y_degree = 270.0;
-    settings.render_regular_cells = true;
-    settings.render_transition_cells = true;
+    settings.render_regular_chunks = true;
+    settings.render_transition_lo_x_chunks = true;
+    settings.render_transition_hi_x_chunks = true;
+    settings.render_transition_lo_y_chunks = true;
+    settings.render_transition_hi_y_chunks = true;
+    settings.render_transition_lo_z_chunks = true;
+    settings.render_transition_hi_z_chunks = true;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
@@ -212,8 +217,13 @@ struct Settings {
 
   octree_settings: OctreeSettings,
   auto_update: bool,
-  render_regular_cells: bool,
-  render_transition_cells: bool,
+  render_regular_chunks: bool,
+  render_transition_lo_x_chunks: bool,
+  render_transition_hi_x_chunks: bool,
+  render_transition_lo_y_chunks: bool,
+  render_transition_hi_y_chunks: bool,
+  render_transition_lo_z_chunks: bool,
+  render_transition_hi_z_chunks: bool,
   debug_render_octree_nodes: bool,
   debug_render_octree_node_color: Vec4,
   debug_render_octree_node_empty_color: Vec4,
@@ -305,13 +315,28 @@ impl Settings {
       ui.label("# draw commands");
       ui.monospace(format!("{}", mesh_generation.draws.len()));
       ui.end_row();
-      ui.checkbox(&mut self.render_regular_cells, "Render regular cells?");
+      ui.label("Render regular chunks?");
+      ui.checkbox(&mut self.render_regular_chunks, "");
       ui.end_row();
-      ui.checkbox(&mut self.render_transition_cells, "Render transition cells?");
+      ui.label("Render transition chunks?");
+      ui.grid("Transition cell rendering", |ui|{
+        ui.checkbox(&mut self.render_transition_lo_x_chunks, "Lo X");
+        ui.checkbox(&mut self.render_transition_hi_x_chunks, "Hi X");
+        ui.end_row();
+        ui.checkbox(&mut self.render_transition_lo_y_chunks, "Lo Y");
+        ui.checkbox(&mut self.render_transition_hi_y_chunks, "Hi Y");
+        ui.end_row();
+        ui.checkbox(&mut self.render_transition_lo_z_chunks, "Lo Z");
+        ui.checkbox(&mut self.render_transition_hi_z_chunks, "Hi Z");
+        ui.end_row();
+      });
       ui.end_row();
-      ui.checkbox(&mut self.debug_render_octree_nodes, "Debug render octree nodes?");
-      ui.edit_color_vec4(&mut self.debug_render_octree_node_color, Alpha::OnlyBlend);
-      ui.edit_color_vec4(&mut self.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
+      ui.label("Debug render octree nodes?");
+      ui.grid("Debug rendering", |ui| {
+        ui.checkbox(&mut self.debug_render_octree_nodes, "");
+        ui.edit_color_vec4(&mut self.debug_render_octree_node_color, Alpha::OnlyBlend);
+        ui.edit_color_vec4(&mut self.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
+      });
       ui.end_row();
       if ui.button("Update").clicked() {
         *update_volume_mesh_manager = true;
@@ -417,29 +442,19 @@ impl MeshGeneration {
     debug_renderer.clear();
 
     for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
+      let is_empty = chunk.regular.is_empty();
       if *filled {
-        let regular_is_empty = chunk.regular.is_empty();
-        if settings.render_regular_cells {
-          if !regular_is_empty {
-            let vertex_offset = vertices.len() as BufferAddress;
-            let index_offset = indices.len() as u32;
-            vertices.extend(&chunk.regular.vertices);
-            indices.extend(&chunk.regular.indices);
-            draws.push(Draw { indices: index_offset..index_offset + chunk.regular.indices.len() as u32, base_vertex: vertex_offset });
-          }
+        if settings.render_regular_chunks {
+          Self::render_chunk(&chunk.regular, vertices, indices, draws);
         }
-        if settings.render_transition_cells {
-          let transition_low_z_is_empty = chunk.transition_low_z_chunk.is_empty();
-          if !transition_low_z_is_empty {
-            let vertex_offset = vertices.len() as BufferAddress;
-            let index_offset = indices.len() as u32;
-            vertices.extend(&chunk.transition_low_z_chunk.vertices);
-            indices.extend(&chunk.transition_low_z_chunk.indices);
-            draws.push(Draw { indices: index_offset..index_offset + chunk.transition_low_z_chunk.indices.len() as u32, base_vertex: vertex_offset });
-          }
+        if settings.render_transition_lo_x_chunks {
+          Self::render_chunk(&chunk.transition_lo_x_chunk, vertices, indices, draws);
+        }
+        if settings.render_transition_lo_z_chunks {
+          Self::render_chunk(&chunk.transition_lo_z_chunk, vertices, indices, draws);
         }
         if settings.debug_render_octree_nodes {
-          if regular_is_empty {
+          if is_empty {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
           } else {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
@@ -457,6 +472,21 @@ impl MeshGeneration {
       .with_label("Voxel meshing index buffer")
       .build_with_data(device, &indices);
     (vertex_buffer, index_buffer)
+  }
+
+  fn render_chunk(
+    chunk: &Chunk,
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u16>,
+    draws: &mut Vec<Draw>,
+  ) {
+    if !chunk.is_empty() {
+      let vertex_offset = vertices.len() as BufferAddress;
+      let index_offset = indices.len() as u32;
+      vertices.extend(&chunk.vertices);
+      indices.extend(&chunk.indices);
+      draws.push(Draw { indices: index_offset..index_offset + chunk.indices.len() as u32, base_vertex: vertex_offset });
+    }
   }
 }
 

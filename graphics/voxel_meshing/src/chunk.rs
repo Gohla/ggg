@@ -93,7 +93,12 @@ impl Chunk {
 #[derive(Clone, Default, Debug)]
 pub struct LodChunk {
   pub regular: Chunk,
-  pub transition_low_z_chunk: Chunk,
+  pub transition_lo_x_chunk: Chunk,
+  pub transition_hi_x_chunk: Chunk,
+  pub transition_lo_y_chunk: Chunk,
+  pub transition_hi_y_chunk: Chunk,
+  pub transition_lo_z_chunk: Chunk,
+  pub transition_hi_z_chunk: Chunk,
 }
 
 impl LodChunk {
@@ -103,14 +108,35 @@ impl LodChunk {
   }
 
   #[inline]
-  pub fn with_chunks(main: Chunk, transition_low_z_chunk: Chunk) -> Self {
-    Self { regular: main, transition_low_z_chunk }
+  pub fn with_chunks(
+    regular: Chunk,
+    transition_lo_x_chunk: Chunk,
+    transition_hi_x_chunk: Chunk,
+    transition_lo_y_chunk: Chunk,
+    transition_hi_y_chunk: Chunk,
+    transition_lo_z_chunk: Chunk,
+    transition_hi_z_chunk: Chunk,
+  ) -> Self {
+    Self {
+      regular,
+      transition_lo_x_chunk,
+      transition_hi_x_chunk,
+      transition_lo_y_chunk,
+      transition_hi_y_chunk,
+      transition_lo_z_chunk,
+      transition_hi_z_chunk,
+    }
   }
 
   #[inline]
   pub fn clear(&mut self) {
     self.regular.clear();
-    self.transition_low_z_chunk.clear();
+    self.transition_lo_x_chunk.clear();
+    self.transition_hi_x_chunk.clear();
+    self.transition_lo_y_chunk.clear();
+    self.transition_hi_y_chunk.clear();
+    self.transition_lo_z_chunk.clear();
+    self.transition_hi_z_chunk.clear();
   }
 }
 
