@@ -7,6 +7,7 @@ use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode};
 // Constants
 
 pub const CELLS_IN_CHUNK_ROW: u32 = 16;
+pub const CELLS_IN_CHUNK_ROW_F32: f32 = CELLS_IN_CHUNK_ROW as f32;
 pub const CELLS_IN_CHUNK_ROW_USIZE: usize = CELLS_IN_CHUNK_ROW as usize;
 pub const CELLS_IN_CHUNK: u32 = CELLS_IN_CHUNK_ROW * CELLS_IN_CHUNK_ROW * CELLS_IN_CHUNK_ROW;
 pub const CELLS_IN_CHUNK_USIZE: usize = CELLS_IN_CHUNK as usize;

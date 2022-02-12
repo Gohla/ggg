@@ -189,12 +189,14 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
 
   fn request_chunk(&mut self, aabb: AABB, mut chunk: LodChunk) {
     self.requested_aabbs.insert(aabb);
+    let total_size = self.total_size;
     let marching_cubes = self.marching_cubes.clone();
     let transvoxel = self.transvoxel.clone();
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
-      let lores_min = aabb.min;
+      let lores_min = aabb.min();
+      let lores_max = aabb.max();
       let lores_step = aabb.size() / CELLS_IN_CHUNK_ROW;
       let chunk_samples = volume.sample_chunk(lores_min, lores_step);
       marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
@@ -203,11 +205,20 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
         if lores_min.x > 0 {
           Self::extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_x_chunk);
         }
+        if lores_max.x < total_size {
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_x_chunk);
+        }
         if lores_min.y > 0 {
           Self::extract_transvoxel_chunk(aabb, TransitionSide::LoY, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_y_chunk);
         }
+        if lores_max.y < total_size {
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiY, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_y_chunk);
+        }
         if lores_min.z > 0 {
           Self::extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_z_chunk);
+        }
+        if lores_max.z < total_size {
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_z_chunk);
         }
       }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
