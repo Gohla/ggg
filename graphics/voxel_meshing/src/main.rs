@@ -8,7 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, Device, Face, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, Device, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
@@ -55,7 +55,7 @@ impl app::Application for VoxelMeshing {
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
-    settings.octree_settings.lod_factor = 0.0;
+    settings.octree_settings.lod_factor = 1.0;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
@@ -90,7 +90,7 @@ impl app::Application for VoxelMeshing {
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      .with_cull_mode(Some(Face::Back))
+      //.with_cull_mode(Some(Face::Back))
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Voxel meshing pipeline layout")
       .with_label("Voxel meshing render pipeline")
@@ -410,16 +410,24 @@ impl MeshGeneration {
 
     for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
       if *filled {
-        let is_empty = chunk.main.is_empty();
-        if !is_empty {
+        let main_is_empty = chunk.main.is_empty();
+        if !main_is_empty {
           let vertex_offset = vertices.len() as BufferAddress;
           let index_offset = indices.len() as u32;
           vertices.extend(&chunk.main.vertices);
           indices.extend(&chunk.main.indices);
           draws.push(Draw { indices: index_offset..index_offset + chunk.main.indices.len() as u32, base_vertex: vertex_offset });
         }
+        let transition_low_z_is_empty = chunk.transition_low_z_chunk.is_empty();
+        if !transition_low_z_is_empty {
+          let vertex_offset = vertices.len() as BufferAddress;
+          let index_offset = indices.len() as u32;
+          vertices.extend(&chunk.transition_low_z_chunk.vertices);
+          indices.extend(&chunk.transition_low_z_chunk.indices);
+          draws.push(Draw { indices: index_offset..index_offset + chunk.transition_low_z_chunk.indices.len() as u32, base_vertex: vertex_offset });
+        }
         if settings.debug_render_octree_nodes {
-          if is_empty {
+          if main_is_empty {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
           } else {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);

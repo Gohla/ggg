@@ -199,13 +199,17 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
       // HACK: transvoxel
       if step != 1 { // At max LOD level, no need to create transition cells.
         let high_resolution_step = step / 2;
-        let chunk_samples = [ // TODO: provide the proper samples.
-          volume.sample_chunk(aabb.min, high_resolution_step),
-          volume.sample_chunk(aabb.min, high_resolution_step),
-          volume.sample_chunk(aabb.min, high_resolution_step),
-          volume.sample_chunk(aabb.min, high_resolution_step),
-        ];
-        transvoxel.extract_chunk(aabb.min, high_resolution_step, step, TransitionSide::LowZ, &chunk_samples, &mut chunk.transition_low_z_chunk);
+        if aabb.min.z > 0 {
+          let side = TransitionSide::LowZ;
+          let subdivided_face_of_side = aabb.subdivided_face_of_side(side);
+          let chunk_samples = [
+            volume.sample_chunk(subdivided_face_of_side[0].min, high_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[1].min, high_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[2].min, high_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[3].min, high_resolution_step),
+          ];
+          transvoxel.extract_chunk(aabb.min, high_resolution_step, step, side, &chunk_samples, &mut chunk.transition_low_z_chunk);
+        }
       }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
@@ -298,6 +302,39 @@ impl AABB {
       Self::new_unchecked(UVec3::new(cen.x, min.y, cen.z), extends),
       Self::new_unchecked(cen, extends),
     ]
+  }
+
+  #[inline]
+  pub fn subdivided_face_of_side(&self, side: TransitionSide) -> [AABB; 4] {
+    match side {
+      TransitionSide::LowX => {
+        todo!()
+      }
+      TransitionSide::HighX => {
+        todo!()
+      }
+      TransitionSide::LowY => {
+        todo!()
+      }
+      TransitionSide::HighY => {
+        todo!()
+      }
+      TransitionSide::LowZ => {
+        let min = self.min;
+        let cen = self.center();
+        let extends = self.extends();
+        let z = min.z - extends;
+        [
+          Self::new_unchecked(UVec3::new(min.x, min.y, z), extends),
+          Self::new_unchecked(UVec3::new(cen.x, min.y, z), extends),
+          Self::new_unchecked(UVec3::new(min.x, cen.y, z), extends),
+          Self::new_unchecked(UVec3::new(cen.x, cen.y, z), extends),
+        ]
+      }
+      TransitionSide::HighZ => {
+        todo!()
+      }
+    }
   }
 
 
