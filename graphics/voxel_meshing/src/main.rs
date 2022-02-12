@@ -52,6 +52,8 @@ impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let mut settings = Settings::default();
     settings.light_rotation_y_degree = 270.0;
+    settings.render_regular_cells = true;
+    settings.render_transition_cells = true;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
@@ -210,6 +212,8 @@ struct Settings {
 
   octree_settings: OctreeSettings,
   auto_update: bool,
+  render_regular_cells: bool,
+  render_transition_cells: bool,
   debug_render_octree_nodes: bool,
   debug_render_octree_node_color: Vec4,
   debug_render_octree_node_empty_color: Vec4,
@@ -300,6 +304,10 @@ impl Settings {
       ui.end_row();
       ui.label("# draw commands");
       ui.monospace(format!("{}", mesh_generation.draws.len()));
+      ui.end_row();
+      ui.checkbox(&mut self.render_regular_cells, "Render regular cells?");
+      ui.end_row();
+      ui.checkbox(&mut self.render_transition_cells, "Render transition cells?");
       ui.end_row();
       ui.checkbox(&mut self.debug_render_octree_nodes, "Debug render octree nodes?");
       ui.edit_color_vec4(&mut self.debug_render_octree_node_color, Alpha::OnlyBlend);
@@ -410,24 +418,28 @@ impl MeshGeneration {
 
     for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
       if *filled {
-        let main_is_empty = chunk.main.is_empty();
-        if !main_is_empty {
-          let vertex_offset = vertices.len() as BufferAddress;
-          let index_offset = indices.len() as u32;
-          vertices.extend(&chunk.main.vertices);
-          indices.extend(&chunk.main.indices);
-          draws.push(Draw { indices: index_offset..index_offset + chunk.main.indices.len() as u32, base_vertex: vertex_offset });
+        let regular_is_empty = chunk.regular.is_empty();
+        if settings.render_regular_cells {
+          if !regular_is_empty {
+            let vertex_offset = vertices.len() as BufferAddress;
+            let index_offset = indices.len() as u32;
+            vertices.extend(&chunk.regular.vertices);
+            indices.extend(&chunk.regular.indices);
+            draws.push(Draw { indices: index_offset..index_offset + chunk.regular.indices.len() as u32, base_vertex: vertex_offset });
+          }
         }
-        let transition_low_z_is_empty = chunk.transition_low_z_chunk.is_empty();
-        if !transition_low_z_is_empty {
-          let vertex_offset = vertices.len() as BufferAddress;
-          let index_offset = indices.len() as u32;
-          vertices.extend(&chunk.transition_low_z_chunk.vertices);
-          indices.extend(&chunk.transition_low_z_chunk.indices);
-          draws.push(Draw { indices: index_offset..index_offset + chunk.transition_low_z_chunk.indices.len() as u32, base_vertex: vertex_offset });
+        if settings.render_transition_cells {
+          let transition_low_z_is_empty = chunk.transition_low_z_chunk.is_empty();
+          if !transition_low_z_is_empty {
+            let vertex_offset = vertices.len() as BufferAddress;
+            let index_offset = indices.len() as u32;
+            vertices.extend(&chunk.transition_low_z_chunk.vertices);
+            indices.extend(&chunk.transition_low_z_chunk.indices);
+            draws.push(Draw { indices: index_offset..index_offset + chunk.transition_low_z_chunk.indices.len() as u32, base_vertex: vertex_offset });
+          }
         }
         if settings.debug_render_octree_nodes {
-          if main_is_empty {
+          if regular_is_empty {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
           } else {
             debug_renderer.draw_cube(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);

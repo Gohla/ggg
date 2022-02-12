@@ -92,7 +92,7 @@ impl Chunk {
 
 #[derive(Clone, Default, Debug)]
 pub struct LodChunk {
-  pub main: Chunk,
+  pub regular: Chunk,
   pub transition_low_z_chunk: Chunk,
 }
 
@@ -104,12 +104,12 @@ impl LodChunk {
 
   #[inline]
   pub fn with_chunks(main: Chunk, transition_low_z_chunk: Chunk) -> Self {
-    Self { main, transition_low_z_chunk }
+    Self { regular: main, transition_low_z_chunk }
   }
 
   #[inline]
   pub fn clear(&mut self) {
-    self.main.clear();
+    self.regular.clear();
     self.transition_low_z_chunk.clear();
   }
 }

@@ -193,22 +193,22 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
-      let step = aabb.size() / CELLS_IN_CHUNK_ROW;
-      let chunk_samples = volume.sample_chunk(aabb.min, step);
-      marching_cubes.extract_chunk(aabb.min, step, &chunk_samples, &mut chunk.main);
+      let lo_resolution_step = aabb.size() / CELLS_IN_CHUNK_ROW;
+      let chunk_samples = volume.sample_chunk(aabb.min, lo_resolution_step);
+      marching_cubes.extract_chunk(aabb.min, lo_resolution_step, &chunk_samples, &mut chunk.regular);
       // HACK: transvoxel
-      if step != 1 { // At max LOD level, no need to create transition cells.
-        let high_resolution_step = step / 2;
+      if lo_resolution_step != 1 { // At max LOD level, no need to create transition cells.
+        let hi_resolution_step = lo_resolution_step / 2;
         if aabb.min.z > 0 {
           let side = TransitionSide::LowZ;
           let subdivided_face_of_side = aabb.subdivided_face_of_side(side);
-          let chunk_samples = [
-            volume.sample_chunk(subdivided_face_of_side[0].min, high_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[1].min, high_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[2].min, high_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[3].min, high_resolution_step),
+          let hi_resolution_chunk_samples = [
+            volume.sample_chunk(subdivided_face_of_side[0].min, hi_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[1].min, hi_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[2].min, hi_resolution_step),
+            volume.sample_chunk(subdivided_face_of_side[3].min, hi_resolution_step),
           ];
-          transvoxel.extract_chunk(aabb.min, high_resolution_step, step, side, &chunk_samples, &mut chunk.transition_low_z_chunk);
+          transvoxel.extract_chunk(aabb.min, side, lo_resolution_step, hi_resolution_step, &hi_resolution_chunk_samples, &mut chunk.transition_low_z_chunk);
         }
       }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.

@@ -150,11 +150,11 @@ impl TransitionVertexData {
   #[inline]
   fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
   #[inline]
-  pub fn subtract_u(&self) -> bool {
+  pub fn subtract_x(&self) -> bool {
     self.high_byte() & 0b0001_0000 != 0
   }
   #[inline]
-  pub fn subtract_v(&self) -> bool {
+  pub fn subtract_y(&self) -> bool {
     self.high_byte() & 0b0010_0000 != 0
   }
   #[inline]
