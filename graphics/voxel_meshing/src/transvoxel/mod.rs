@@ -13,41 +13,56 @@ impl Transvoxel {
 
   pub fn extract_chunk(
     &self,
-    start: UVec3,
     side: TransitionSide,
-    lores_step: u32,
-    hires_step: u32,
+    hires_chunk_mins: &[UVec3; 4],
     hires_chunk_samples: &[ChunkSamples; 4],
+    hires_step: u32,
+    lores_min: UVec3,
+    lores_step: u32,
     chunk: &mut Chunk,
   ) {
     let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
     for cell_y in 0..CELLS_IN_CHUNK_ROW {
       for cell_x in 0..CELLS_IN_CHUNK_ROW {
         let cell = UVec2::new(cell_x, cell_y);
-        Self::extract_cell(cell, start, side, lores_step, hires_step, hires_chunk_samples, &mut shared_indices, chunk);
+        Self::extract_cell(
+          side,
+          cell,
+          hires_chunk_mins,
+          hires_chunk_samples,
+          hires_step,
+          lores_min,
+          lores_step,
+          &mut shared_indices,
+          chunk
+        );
       }
     }
   }
 
   #[inline]
   fn extract_cell(
-    cell: UVec2,
-    start: UVec3,
     side: TransitionSide,
-    lores_step: u32,
-    hires_step: u32,
+    cell: UVec2,
+    hires_chunk_mins: &[UVec3; 4],
     hires_chunk_samples: &[ChunkSamples; 4],
+    hires_step: u32,
+    lores_min: UVec3,
+    lores_step: u32,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
     chunk: &mut Chunk,
   ) {
     // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
     let hires_local_voxels = side.get_hires_local_voxels(cell);
     let lores_local_voxels = side.get_lores_local_voxels(cell);
+    // Get which ChunkSamples we have to sample values from, and what their starting point it.
+    let (hires_min, hires_chunk_samples) = {
+      let idx = (cell.x / 8) + (2 * (cell.y / 8));
+      let idx = idx as usize;
+      (hires_chunk_mins[idx], &hires_chunk_samples[idx])
+    };
     // Get the global voxels of the cell.
     let global_voxels: [Vec3; 13] = {
-      let start: Vec3 = start.into();
-      let hires_step = hires_step as f32;
-      let lores_step = lores_step as f32;
       let hires_local_voxels: [Vec3; 9] = [
         hires_local_voxels[0].into(),
         hires_local_voxels[1].into(),
@@ -59,45 +74,41 @@ impl Transvoxel {
         hires_local_voxels[7].into(),
         hires_local_voxels[8].into(),
       ];
-      // TODO: `hires_local_voxels` are local to the high resolution chunks, whereas `start` is based on the low
-      //       resolution chunk. Therefore, we cannot use `start` here to calculate the global coordinates of the high
-      //       resolution voxels, but must use a separate start for the high resolution chunks!
+      let hires_min: Vec3 = hires_min.into();
+      let hires_step = hires_step as f32;
+      let lores_min: Vec3 = lores_min.into();
+      let lores_step = lores_step as f32;
       [
-        start + hires_step * hires_local_voxels[0], // 0
-        start + hires_step * hires_local_voxels[1], // 1
-        start + hires_step * hires_local_voxels[2], // 2
-        start + hires_step * hires_local_voxels[3], // 3
-        start + hires_step * hires_local_voxels[4], // 4
-        start + hires_step * hires_local_voxels[5], // 5
-        start + hires_step * hires_local_voxels[6], // 6
-        start + hires_step * hires_local_voxels[7], // 7
-        start + hires_step * hires_local_voxels[8], // 8
-        start + lores_step * lores_local_voxels[0], // 9
-        start + lores_step * lores_local_voxels[1], // A
-        start + lores_step * lores_local_voxels[2], // B
-        start + lores_step * lores_local_voxels[3], // C
+        hires_min + hires_step * hires_local_voxels[0], // 0
+        hires_min + hires_step * hires_local_voxels[1], // 1
+        hires_min + hires_step * hires_local_voxels[2], // 2
+        hires_min + hires_step * hires_local_voxels[3], // 3
+        hires_min + hires_step * hires_local_voxels[4], // 4
+        hires_min + hires_step * hires_local_voxels[5], // 5
+        hires_min + hires_step * hires_local_voxels[6], // 6
+        hires_min + hires_step * hires_local_voxels[7], // 7
+        hires_min + hires_step * hires_local_voxels[8], // 8
+        lores_min + lores_step * lores_local_voxels[0], // 9
+        lores_min + lores_step * lores_local_voxels[1], // A
+        lores_min + lores_step * lores_local_voxels[2], // B
+        lores_min + lores_step * lores_local_voxels[3], // C
       ]
-    };
-    // Get which ChunkSamples we have to sample values from.
-    let chunk_samples = {
-      let chunk_samples_index = (cell.x / 8) + (2 * (cell.y / 8));
-      &hires_chunk_samples[chunk_samples_index as usize]
     };
     // Sample the volume at each local voxel, producing values.
     let values = { // OPTO: can we make the rest of this code more efficient if an entire chunk is zero/positive/negative?
-      let value_0_and_9 = chunk_samples.sample(hires_local_voxels[0]);
-      let value_2_and_a = chunk_samples.sample(hires_local_voxels[2]);
-      let value_6_and_b = chunk_samples.sample(hires_local_voxels[6]);
-      let value_8_and_c = chunk_samples.sample(hires_local_voxels[8]);
+      let value_0_and_9 = hires_chunk_samples.sample(hires_local_voxels[0]);
+      let value_2_and_a = hires_chunk_samples.sample(hires_local_voxels[2]);
+      let value_6_and_b = hires_chunk_samples.sample(hires_local_voxels[6]);
+      let value_8_and_c = hires_chunk_samples.sample(hires_local_voxels[8]);
       [
         value_0_and_9,
-        chunk_samples.sample(hires_local_voxels[1]),
+        hires_chunk_samples.sample(hires_local_voxels[1]),
         value_2_and_a,
-        chunk_samples.sample(hires_local_voxels[3]),
-        chunk_samples.sample(hires_local_voxels[4]),
-        chunk_samples.sample(hires_local_voxels[5]),
+        hires_chunk_samples.sample(hires_local_voxels[3]),
+        hires_chunk_samples.sample(hires_local_voxels[4]),
+        hires_chunk_samples.sample(hires_local_voxels[5]),
         value_6_and_b,
-        chunk_samples.sample(hires_local_voxels[7]),
+        hires_chunk_samples.sample(hires_local_voxels[7]),
         value_8_and_c,
         value_0_and_9,
         value_2_and_a,

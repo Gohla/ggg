@@ -193,22 +193,31 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     let volume = self.volume.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
-      let lo_resolution_step = aabb.size() / CELLS_IN_CHUNK_ROW;
-      let chunk_samples = volume.sample_chunk(aabb.min, lo_resolution_step);
-      marching_cubes.extract_chunk(aabb.min, lo_resolution_step, &chunk_samples, &mut chunk.regular);
+      let lores_min = aabb.min;
+      let lores_step = aabb.size() / CELLS_IN_CHUNK_ROW;
+      let chunk_samples = volume.sample_chunk(lores_min, lores_step);
+      marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
       // HACK: transvoxel
-      if lo_resolution_step != 1 { // At max LOD level, no need to create transition cells.
-        let hi_resolution_step = lo_resolution_step / 2;
-        if aabb.min.z > 0 {
+      if lores_step != 1 { // At max LOD level, no need to create transition cells.
+        let hires_step = lores_step / 2;
+        if lores_min.z > 0 {
           let side = TransitionSide::LowZ;
-          let subdivided_face_of_side = aabb.subdivided_face_of_side(side);
-          let hi_resolution_chunk_samples = [
-            volume.sample_chunk(subdivided_face_of_side[0].min, hi_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[1].min, hi_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[2].min, hi_resolution_step),
-            volume.sample_chunk(subdivided_face_of_side[3].min, hi_resolution_step),
+          let hires_chunk_mins = aabb.subdivided_face_of_side_minimums(side);
+          let hires_chunk_samples = [
+            volume.sample_chunk(hires_chunk_mins[0], hires_step),
+            volume.sample_chunk(hires_chunk_mins[1], hires_step),
+            volume.sample_chunk(hires_chunk_mins[2], hires_step),
+            volume.sample_chunk(hires_chunk_mins[3], hires_step),
           ];
-          transvoxel.extract_chunk(aabb.min, side, lo_resolution_step, hi_resolution_step, &hi_resolution_chunk_samples, &mut chunk.transition_low_z_chunk);
+          transvoxel.extract_chunk(
+            side,
+            &hires_chunk_mins,
+            &hires_chunk_samples,
+            hires_step,
+            lores_min,
+            lores_step,
+            &mut chunk.transition_low_z_chunk,
+          );
         }
       }
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
@@ -305,7 +314,7 @@ impl AABB {
   }
 
   #[inline]
-  pub fn subdivided_face_of_side(&self, side: TransitionSide) -> [AABB; 4] {
+  pub fn subdivided_face_of_side_minimums(&self, side: TransitionSide) -> [UVec3; 4] {
     match side {
       TransitionSide::LowX => {
         todo!()
@@ -325,10 +334,10 @@ impl AABB {
         let extends = self.extends();
         let z = min.z - extends;
         [
-          Self::new_unchecked(UVec3::new(min.x, min.y, z), extends),
-          Self::new_unchecked(UVec3::new(cen.x, min.y, z), extends),
-          Self::new_unchecked(UVec3::new(min.x, cen.y, z), extends),
-          Self::new_unchecked(UVec3::new(cen.x, cen.y, z), extends),
+          UVec3::new(min.x, min.y, z),
+          UVec3::new(cen.x, min.y, z),
+          UVec3::new(min.x, cen.y, z),
+          UVec3::new(cen.x, cen.y, z),
         ]
       }
       TransitionSide::HighZ => {
