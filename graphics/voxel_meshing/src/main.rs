@@ -450,6 +450,9 @@ impl MeshGeneration {
         if settings.render_transition_lo_x_chunks {
           Self::render_chunk(&chunk.transition_lo_x_chunk, vertices, indices, draws);
         }
+        if settings.render_transition_lo_y_chunks {
+          Self::render_chunk(&chunk.transition_lo_y_chunk, vertices, indices, draws);
+        }
         if settings.render_transition_lo_z_chunks {
           Self::render_chunk(&chunk.transition_lo_z_chunk, vertices, indices, draws);
         }

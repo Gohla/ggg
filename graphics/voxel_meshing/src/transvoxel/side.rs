@@ -35,7 +35,16 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LoY => {
-        todo!()
+        let min = aabb.min();
+        let cen = aabb.center();
+        let extends = aabb.extends();
+        let y = min.y - extends;
+        [
+          UVec3::new(min.x, y, min.z),
+          UVec3::new(cen.x, y, min.z),
+          UVec3::new(min.x, y, cen.z),
+          UVec3::new(cen.x, y, cen.z),
+        ]
       }
       TransitionSide::HiY => {
         todo!()
@@ -81,7 +90,18 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LoY => {
-        todo!()
+        let cell_3d = UVec3::new(u, CELLS_IN_CHUNK_ROW, v);
+        [
+          cell_3d + UVec3::new(0, 0, 0), // 0 & 9
+          cell_3d + UVec3::new(1, 0, 0), // 1
+          cell_3d + UVec3::new(2, 0, 0), // 2 & A
+          cell_3d + UVec3::new(0, 0, 1), // 3
+          cell_3d + UVec3::new(1, 0, 1), // 4
+          cell_3d + UVec3::new(2, 0, 1), // 5
+          cell_3d + UVec3::new(0, 0, 2), // 6 & B
+          cell_3d + UVec3::new(1, 0, 2), // 7
+          cell_3d + UVec3::new(2, 0, 2), // 8 & C
+        ]
       }
       TransitionSide::HiY => {
         todo!()
@@ -125,7 +145,13 @@ impl TransitionSide {
         todo!()
       }
       TransitionSide::LoY => {
-        todo!()
+        let cell_3d = Vec3::new(u, transition_width, v);
+        [
+          cell_3d + Vec3::new(0.0, 0.0, 0.0), // 9
+          cell_3d + Vec3::new(1.0, 0.0, 0.0), // A
+          cell_3d + Vec3::new(0.0, 0.0, 1.0), // B
+          cell_3d + Vec3::new(1.0, 0.0, 1.0), // C
+        ]
       }
       TransitionSide::HiY => {
         todo!()

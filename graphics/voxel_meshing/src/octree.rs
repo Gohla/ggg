@@ -203,6 +203,9 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
         if lores_min.x > 0 {
           Self::extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_x_chunk);
         }
+        if lores_min.y > 0 {
+          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoY, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_y_chunk);
+        }
         if lores_min.z > 0 {
           Self::extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_z_chunk);
         }
