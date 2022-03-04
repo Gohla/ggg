@@ -53,20 +53,21 @@ function init() {
   origin.scale.z = -1;
   scene.add(origin);
 
-  makeLowResolutionChunkBorders(origin, blackLineMaterial, "Main");
-  const loZChunk = makeHighResolutionChunkBorder(origin, blueLoLineMaterial, "Lo-Z (0, 0)");
-  loZChunk.position.z = -halfSize
-  const hiZChunk00 = makeHighResolutionChunkBorder(origin, blueHiLineMaterial, "Hi-Z (0, 0)");
+  const mainChunk = makeLowResolutionChunkBorders(blackLineMaterial, "Main");
+  origin.add(mainChunk);
+  const loZChunk00 = makeHighResolutionChunkBorder(blueLoLineMaterial, "Lo-Z (0, 0)");
+  loZChunk00.position.z = -halfSize
+  origin.add(loZChunk00);
+  const hiZChunk00 = makeHighResolutionChunkBorder(blueHiLineMaterial, "Hi-Z (0, 0)");
   hiZChunk00.position.z = cellsInChunkRow
+  origin.add(hiZChunk00);
 }
 
 function makeLowResolutionChunkBorders(
-  origin: THREE.Object3D,
   material: THREE.Material,
   name: string
 ): THREE.Object3D {
   const chunk = new THREE.Object3D();
-  origin.add(chunk)
   for(let x = 0; x < cellsInChunkRow; x++) {
     for(let y = 0; y < cellsInChunkRow; y++) {
       for(let z = 0; z < cellsInChunkRow; z++) {
@@ -82,12 +83,10 @@ function makeLowResolutionChunkBorders(
 }
 
 function makeHighResolutionChunkBorder(
-  origin: THREE.Object3D,
   material: THREE.Material,
   name: string
 ): THREE.Object3D {
   const chunk = new THREE.Object3D();
-  origin.add(chunk)
   for(let x = 0; x < cellsInChunkRow; x++) {
     for(let y = 0; y < cellsInChunkRow; y++) {
       makeBox(chunk, material, halfSize, new Vector3(x / 2.0, y / 2.0, 0));
