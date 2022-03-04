@@ -53,16 +53,16 @@ impl app::Application for VoxelMeshing {
     let mut settings = Settings::default();
     settings.light_rotation_y_degree = 270.0;
     settings.render_regular_chunks = true;
-    settings.render_transition_lo_x_chunks = true;
-    settings.render_transition_hi_x_chunks = true;
-    settings.render_transition_lo_y_chunks = true;
-    settings.render_transition_hi_y_chunks = true;
-    settings.render_transition_lo_z_chunks = true;
+    settings.render_transition_lo_x_chunks = false;
+    settings.render_transition_hi_x_chunks = false;
+    settings.render_transition_lo_y_chunks = false;
+    settings.render_transition_hi_y_chunks = false;
+    settings.render_transition_lo_z_chunks = false;
     settings.render_transition_hi_z_chunks = true;
     settings.debug_render_octree_nodes = true;
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
-    settings.octree_settings.lod_factor = 1.0;
+    settings.octree_settings.lod_factor = 2.0;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;
