@@ -25,6 +25,7 @@ impl DebugRenderer {
   }
 
   pub fn new(gfx: &Gfx, view_projection: Mat4) -> Self {
+    let point_vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/point_vert"));
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/frag"));
 
@@ -43,7 +44,7 @@ impl DebugRenderer {
     let has_polygon_mode_point_feature = gfx.adapter.features().contains(Features::POLYGON_MODE_POINT);
     let point_list_render_pipeline = has_polygon_mode_point_feature.then(|| DebugRendererPipeline::new(
       gfx,
-      &vertex_shader_module,
+      &point_vertex_shader_module,
       &fragment_shader_module,
       &uniform_bind_group_layout,
       PrimitiveTopology::PointList,
@@ -271,7 +272,7 @@ impl Vertex for PointVertex {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![
       0 => Float32x3,
       1 => Float32x4,
-      3 => Float32
+      2 => Float32
     ];
     VertexBufferLayout {
       array_stride: size_of::<Self>() as BufferAddress,
