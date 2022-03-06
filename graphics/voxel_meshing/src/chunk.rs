@@ -4,9 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{UVec3, Vec3};
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-// Chunk trait
+// Chunk size
 
-pub trait Chunk: Default + Clone + Send + 'static {
+pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   const CELLS_IN_CHUNK_ROW: u32;
   const CELLS_IN_CHUNK_ROW_F32: f32 = Self::CELLS_IN_CHUNK_ROW as f32;
   const CELLS_IN_CHUNK_ROW_USIZE: usize = Self::CELLS_IN_CHUNK_ROW as usize;
@@ -19,19 +19,18 @@ pub trait Chunk: Default + Clone + Send + 'static {
   const VOXELS_IN_CHUNK_ROW_USIZE: usize = Self::VOXELS_IN_CHUNK_ROW as usize;
   const VOXELS_IN_CHUNK: u32 = Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW;
   const VOXELS_IN_CHUNK_USIZE: usize = Self::VOXELS_IN_CHUNK as usize;
+}
 
-  fn is_empty(&self) -> bool;
-  fn vertices(&self) -> &[Vertex];
-  fn indices(&self) -> &[u16];
+#[derive(Default, Copy, Clone)]
+pub struct ChunkSize16;
 
-  fn add_vertex(&mut self, vertex: Vertex) -> u16;
-  fn add_index(&mut self, index: u16);
-  fn clear(&mut self);
+impl ChunkSize for ChunkSize16 {
+  const CELLS_IN_CHUNK_ROW: u32 = 16;
 }
 
 // Chunk samples
 
-pub enum ChunkSamples<C: Chunk> where
+pub enum ChunkSamples<C: ChunkSize> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:
 {
   /// All sampled values in the chunk are exactly `0.0`.
@@ -44,7 +43,7 @@ pub enum ChunkSamples<C: Chunk> where
   Mixed(ChunkSampleArray<C>),
 }
 
-impl<C: Chunk> ChunkSamples<C> where
+impl<C: ChunkSize> ChunkSamples<C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:
 {
   #[inline]
@@ -59,7 +58,7 @@ impl<C: Chunk> ChunkSamples<C> where
   }
 }
 
-pub struct ChunkSampleArray<C: Chunk> where
+pub struct ChunkSampleArray<C: ChunkSize> where
 // This constraint is stating that an array of this size exists. This apparently is necessary because
 // VOXELS_IN_CHUNK_USIZE is an unknown constant and the compiler cannot be sure that an array of this size can be made.
 // This constraint specifies that the type must exist.
@@ -69,7 +68,7 @@ pub struct ChunkSampleArray<C: Chunk> where
   array: [f32; C::VOXELS_IN_CHUNK_USIZE],
 }
 
-impl<C: Chunk> ChunkSampleArray<C> where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
+impl<C: ChunkSize> ChunkSampleArray<C> where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
   #[inline]
   pub fn new(array: [f32; C::VOXELS_IN_CHUNK_USIZE]) -> Self {
     Self { array }
@@ -82,15 +81,15 @@ impl<C: Chunk> ChunkSampleArray<C> where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
   }
 }
 
-// Chunk
+// Chunk vertices
 
 #[derive(Clone, Default, Debug)]
-pub struct Chunk16 {
-  pub vertices: Vec<Vertex>,
-  pub indices: Vec<u16>,
+pub struct ChunkVertices {
+  vertices: Vec<Vertex>,
+  indices: Vec<u16>,
 }
 
-impl Chunk16 {
+impl ChunkVertices {
   #[inline]
   pub fn new() -> Self {
     Self::default()
@@ -100,38 +99,35 @@ impl Chunk16 {
   pub fn with_vertices_indices(vertices: Vec<Vertex>, indices: Vec<u16>) -> Self {
     Self { vertices, indices }
   }
-}
 
-impl Chunk for Chunk16 {
-  const CELLS_IN_CHUNK_ROW: u32 = 16;
 
   #[inline]
-  fn is_empty(&self) -> bool { self.vertices.is_empty() && self.indices.is_empty() }
+  pub fn is_empty(&self) -> bool { self.vertices.is_empty() && self.indices.is_empty() }
 
   #[inline]
-  fn vertices(&self) -> &[Vertex] {
+  pub fn vertices(&self) -> &[Vertex] {
     &self.vertices
   }
 
   #[inline]
-  fn indices(&self) -> &[u16] {
+  pub fn indices(&self) -> &[u16] {
     &self.indices
   }
 
   #[inline]
-  fn add_vertex(&mut self, vertex: Vertex) -> u16 {
+  pub fn push_vertex(&mut self, vertex: Vertex) -> u16 {
     let index = self.vertices.len();
     self.vertices.push(vertex);
     index as u16
   }
 
   #[inline]
-  fn add_index(&mut self, index: u16) {
+  pub fn push_index(&mut self, index: u16) {
     self.indices.push(index);
   }
 
   #[inline]
-  fn clear(&mut self) {
+  pub fn clear(&mut self) {
     self.vertices.clear();
     self.indices.clear();
   }
@@ -140,31 +136,31 @@ impl Chunk for Chunk16 {
 // LOD chunk
 
 #[derive(Clone, Default, Debug)]
-pub struct LodChunk<C: Chunk> {
-  pub regular: C,
-  pub transition_lo_x_chunk: C,
-  pub transition_hi_x_chunk: C,
-  pub transition_lo_y_chunk: C,
-  pub transition_hi_y_chunk: C,
-  pub transition_lo_z_chunk: C,
-  pub transition_hi_z_chunk: C,
+pub struct LodChunkVertices {
+  pub regular: ChunkVertices,
+  pub transition_lo_x_chunk: ChunkVertices,
+  pub transition_hi_x_chunk: ChunkVertices,
+  pub transition_lo_y_chunk: ChunkVertices,
+  pub transition_hi_y_chunk: ChunkVertices,
+  pub transition_lo_z_chunk: ChunkVertices,
+  pub transition_hi_z_chunk: ChunkVertices,
 }
 
-impl<C: Chunk> LodChunk<C> {
+impl LodChunkVertices {
   #[inline]
   pub fn new() -> Self {
     Self::default()
   }
 
   #[inline]
-  pub fn with_chunks(
-    regular: C,
-    transition_lo_x_chunk: C,
-    transition_hi_x_chunk: C,
-    transition_lo_y_chunk: C,
-    transition_hi_y_chunk: C,
-    transition_lo_z_chunk: C,
-    transition_hi_z_chunk: C,
+  pub fn with_chunk_vertices(
+    regular: ChunkVertices,
+    transition_lo_x_chunk: ChunkVertices,
+    transition_hi_x_chunk: ChunkVertices,
+    transition_lo_y_chunk: ChunkVertices,
+    transition_hi_y_chunk: ChunkVertices,
+    transition_lo_z_chunk: ChunkVertices,
+    transition_hi_z_chunk: ChunkVertices,
   ) -> Self {
     Self {
       regular,

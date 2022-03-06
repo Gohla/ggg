@@ -5,13 +5,13 @@ use wgpu::{BufferAddress, Device};
 
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
-use voxel_meshing::chunk::{Chunk, Vertex};
+use voxel_meshing::chunk::{ChunkVertices, Vertex};
 use voxel_meshing::octree::VolumeMeshManager;
 
 use crate::settings::Settings;
 
-pub struct MeshGeneration<C: Chunk> {
-  pub volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
+pub struct MeshGeneration {
+  pub volume_mesh_manager: Box<dyn VolumeMeshManager>,
   pub vertices: Vec<Vertex>,
   pub indices: Vec<u16>,
   pub draws: Vec<Draw>,
@@ -24,11 +24,11 @@ pub struct Draw {
   pub base_vertex: u64,
 }
 
-impl<C: Chunk> MeshGeneration<C> {
+impl MeshGeneration {
   pub fn new(
     position: Vec3,
     settings: &Settings,
-    mut volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
+    mut volume_mesh_manager: Box<dyn VolumeMeshManager>,
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> Self {
@@ -53,7 +53,7 @@ impl<C: Chunk> MeshGeneration<C> {
 
   pub fn set_volume_mesh_manager(
     &mut self,
-    volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
+    volume_mesh_manager: Box<dyn VolumeMeshManager>,
     position: Vec3,
     settings: &Settings,
     debug_renderer: &mut DebugRenderer,
@@ -70,7 +70,7 @@ impl<C: Chunk> MeshGeneration<C> {
     indices: &mut Vec<u16>,
     draws: &mut Vec<Draw>,
     debug_renderer: &mut DebugRenderer,
-    volume_mesh_manager: &mut dyn VolumeMeshManager<C>,
+    volume_mesh_manager: &mut dyn VolumeMeshManager,
     device: &Device,
   ) -> (GfxBuffer, GfxBuffer) {
     vertices.clear();
@@ -124,17 +124,17 @@ impl<C: Chunk> MeshGeneration<C> {
   }
 
   fn render_chunk(
-    chunk: &C,
+    chunk_vertices: &ChunkVertices,
     vertices: &mut Vec<Vertex>,
     indices: &mut Vec<u16>,
     draws: &mut Vec<Draw>,
   ) {
-    if !chunk.is_empty() {
+    if !chunk_vertices.is_empty() {
       let vertex_offset = vertices.len() as BufferAddress;
       let index_offset = indices.len() as u32;
-      vertices.extend(chunk.vertices());
-      indices.extend(chunk.indices());
-      draws.push(Draw { indices: index_offset..index_offset + chunk.indices().len() as u32, base_vertex: vertex_offset });
+      vertices.extend(chunk_vertices.vertices());
+      indices.extend(chunk_vertices.indices());
+      draws.push(Draw { indices: index_offset..index_offset + chunk_vertices.indices().len() as u32, base_vertex: vertex_offset });
     }
   }
 }

@@ -1,5 +1,5 @@
 use ultraviolet::{UVec3, Vec3};
-use crate::chunk::Chunk;
+use crate::chunk::ChunkSize;
 
 use crate::octree::AABB;
 
@@ -93,7 +93,7 @@ impl TransitionSide {
 
 
   #[inline]
-  pub fn get_hires_local_voxels<C: Chunk>(&self, u: u32, v: u32) -> [UVec3; 9] {
+  pub fn get_hires_local_voxels<C: ChunkSize>(&self, u: u32, v: u32) -> [UVec3; 9] {
     let u = (u % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
     let v = (v % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
     match self {
@@ -169,7 +169,7 @@ impl TransitionSide {
 
 
   #[inline]
-  pub fn get_lores_local_voxels<C: Chunk>(&self, u: u32, v: u32) -> [Vec3; 4] {
+  pub fn get_lores_local_voxels<C: ChunkSize>(&self, u: u32, v: u32) -> [Vec3; 4] {
     let u = u as f32;
     let v = v as f32;
     let transition_width = 1.0; // TODO: determine width of transition cell consistently and based on LOD.

@@ -3,7 +3,7 @@ use egui::color_picker::Alpha;
 use ultraviolet::{Rotor3, Vec3, Vec4};
 
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::{Chunk, Chunk16};
+use voxel_meshing::chunk::ChunkSize16;
 use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::transvoxel::Transvoxel;
@@ -59,15 +59,15 @@ pub struct Settings {
 }
 
 impl Settings {
-  pub fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager<Chunk16>> {
+  pub fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
     match self.volume_type {
-      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes::new(), Transvoxel::new())),
-      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes::new(), Transvoxel::new())),
-      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::new(), Transvoxel::new())),
+      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
+      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
+      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
     }
   }
 
-  pub fn render_gui<C: Chunk>(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration<C>, recreate_volume_mesh_manager: &mut bool, update_volume_mesh_manager: &mut bool) {
+  pub fn render_gui(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration, recreate_volume_mesh_manager: &mut bool, update_volume_mesh_manager: &mut bool) {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();

@@ -4,7 +4,7 @@ use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
-use crate::chunk::{Chunk, ChunkSamples, Vertex};
+use crate::chunk::{ChunkSamples, ChunkSize, ChunkVertices, Vertex};
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
@@ -12,11 +12,11 @@ pub mod side;
 mod tables;
 
 #[derive(Copy, Clone)]
-pub struct Transvoxel<C: Chunk> {
+pub struct Transvoxel<C: ChunkSize> {
   _chunk_phantom: PhantomData<C>,
 }
 
-impl<C: Chunk> Transvoxel<C> {
+impl<C: ChunkSize> Transvoxel<C> {
   pub const SHARED_INDICES_SIZE: usize = 10 * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE;
 
   pub fn new() -> Self {
@@ -31,7 +31,7 @@ impl<C: Chunk> Transvoxel<C> {
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,
-    chunk: &mut C,
+    chunk_vertices: &mut ChunkVertices,
   ) where [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]: {
     if side == TransitionSide::HiZ {
       println!(
@@ -59,7 +59,7 @@ impl<C: Chunk> Transvoxel<C> {
           lores_min,
           lores_step,
           &mut shared_indices,
-          chunk,
+          chunk_vertices,
         );
       }
     }
@@ -76,7 +76,7 @@ impl<C: Chunk> Transvoxel<C> {
     lores_min: UVec3,
     lores_step: u32,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk: &mut C,
+    chunk_vertices: &mut ChunkVertices,
   ) where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
     // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
     let hires_local_voxels = side.get_hires_local_voxels::<C>(u, v);
@@ -221,7 +221,7 @@ impl<C: Chunk> Transvoxel<C> {
       if i >= vertex_count {
         break;
       }
-      cell_vertices_indices[i] = Self::create_or_reuse_vertex(TransitionVertexData(*vd), u, v, &global_voxels, &values, shared_indices, chunk);
+      cell_vertices_indices[i] = Self::create_or_reuse_vertex(TransitionVertexData(*vd), u, v, &global_voxels, &values, shared_indices, chunk_vertices);
     }
 
     // Write the indices that form the triangulation of this transition cell.
@@ -233,13 +233,13 @@ impl<C: Chunk> Transvoxel<C> {
       let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
       let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
       if invert_triangulation {
-        chunk.add_index(global_index_1);
-        chunk.add_index(global_index_2);
-        chunk.add_index(global_index_3);
+        chunk_vertices.push_index(global_index_1);
+        chunk_vertices.push_index(global_index_2);
+        chunk_vertices.push_index(global_index_3);
       } else {
-        chunk.add_index(global_index_3);
-        chunk.add_index(global_index_2);
-        chunk.add_index(global_index_1);
+        chunk_vertices.push_index(global_index_3);
+        chunk_vertices.push_index(global_index_2);
+        chunk_vertices.push_index(global_index_1);
       }
     }
   }
@@ -252,11 +252,11 @@ impl<C: Chunk> Transvoxel<C> {
     global_voxels: &[Vec3; 13],
     values: &[f32; 13],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk: &mut C,
+    chunk_vertices: &mut ChunkVertices,
   ) -> u16 {
     if vertex_data.new_reusable_vertex() {
       // Create a new vertex and index, and share the index.
-      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
+      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_vertices);
       let shared_indices_index = Self::shared_index(u, v, vertex_data.vertex_index() as usize);
       debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
       debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
@@ -264,7 +264,7 @@ impl<C: Chunk> Transvoxel<C> {
       index
     } else if vertex_data.new_interior_vertex() {
       // Create a new vertex and index, but this vertex will never be shared, as it is an interior vertex.
-      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
+      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_vertices);
       index
     } else {
       let subtract_u = vertex_data.subtract_u();
@@ -286,14 +286,19 @@ impl<C: Chunk> Transvoxel<C> {
         index
       } else {
         // Create a new vertex and index, but this vertex will never be shared, as it occurs on the minimal boundary.
-        let index = Self::create_vertex(vertex_data, global_voxels, values, chunk);
+        let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_vertices);
         index
       }
     }
   }
 
   #[inline]
-  fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[Vec3; 13], values: &[f32; 13], chunk: &mut C) -> u16 {
+  fn create_vertex(
+    vertex_data: TransitionVertexData,
+    global_voxels: &[Vec3; 13],
+    values: &[f32; 13],
+    chunk_vertices: &mut ChunkVertices,
+  ) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
     debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is lower than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
@@ -302,7 +307,7 @@ impl<C: Chunk> Transvoxel<C> {
     let pos_high = global_voxels[voxel_b_index as usize];
     let value_high = values[voxel_b_index as usize];
     let position = Self::vertex_position(pos_low, value_low, pos_high, value_high);
-    chunk.add_vertex(Vertex::new(position))
+    chunk_vertices.push_vertex(Vertex::new(position))
   }
 
   #[inline]

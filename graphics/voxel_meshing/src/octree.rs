@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{Chunk, LodChunk};
+use crate::chunk::{ChunkSize, ChunkVertices, LodChunkVertices};
 use crate::marching_cubes::MarchingCubes;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::Transvoxel;
@@ -14,12 +14,12 @@ use crate::volume::Volume;
 
 // Trait
 
-pub trait VolumeMeshManager<C: Chunk> {
+pub trait VolumeMeshManager {
   fn get_max_lod_level(&self) -> u32;
   fn get_lod_factor(&self) -> f32;
   fn get_lod_factor_mut(&mut self) -> &mut f32;
 
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunk<C>, bool))> + '_>;
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>;
 }
 
 // Octree settings
@@ -53,7 +53,7 @@ impl Default for OctreeSettings {
 
 // Octree
 
-pub struct Octree<V, C: Chunk> {
+pub struct Octree<V, C: ChunkSize> {
   total_size: u32,
   lod_factor: f32,
 
@@ -64,17 +64,17 @@ pub struct Octree<V, C: Chunk> {
 
   active_aabbs: HashSet<AABB>,
   keep_aabbs: HashSet<AABB>,
-  chunks: HashMap<AABB, (LodChunk<C>, bool)>,
+  chunks: HashMap<AABB, (LodChunkVertices, bool)>,
 
   requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
-  tx: Sender<(AABB, LodChunk<C>)>,
-  rx: Receiver<(AABB, LodChunk<C>)>,
+  tx: Sender<(AABB, LodChunkVertices)>,
+  rx: Receiver<(AABB, LodChunkVertices)>,
 
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
-impl<V: Volume + Clone + Send + 'static, C: Chunk> Octree<V, C> where
+impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
@@ -108,7 +108,7 @@ impl<V: Volume + Clone + Send + 'static, C: Chunk> Octree<V, C> where
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn do_update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(LodChunk<C>, bool))> {
+  pub fn do_update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(LodChunkVertices, bool))> {
     for (aabb, lod_chunk) in self.rx.try_iter() {
       self.chunks.insert(aabb, (lod_chunk, true));
       self.requested_aabbs.remove(&aabb);
@@ -191,7 +191,7 @@ impl<V: Volume + Clone + Send + 'static, C: Chunk> Octree<V, C> where
     return false;
   }
 
-  fn request_chunk(&mut self, aabb: AABB, mut chunk: LodChunk<C>) {
+  fn request_chunk(&mut self, aabb: AABB, mut chunk: LodChunkVertices) {
     self.requested_aabbs.insert(aabb);
     let total_size = self.total_size;
     let marching_cubes = self.marching_cubes.clone();
@@ -236,7 +236,7 @@ impl<V: Volume + Clone + Send + 'static, C: Chunk> Octree<V, C> where
     hires_step: u32,
     lores_step: u32,
     transvoxel: &Transvoxel<C>,
-    chunk: &mut C,
+    chunk_vertices: &mut ChunkVertices,
   ) {
     let hires_chunk_mins = side.subdivided_face_of_side_minimums(aabb);
     let hires_chunk_samples = [
@@ -252,14 +252,14 @@ impl<V: Volume + Clone + Send + 'static, C: Chunk> Octree<V, C> where
       hires_step,
       aabb.min,
       lores_step,
-      chunk,
+      chunk_vertices,
     );
   }
 }
 
 // Volume-mesh manager abstraction, to enable using Octree without generic arguments.
 
-impl<V: Volume + Clone + Send + 'static, C: Chunk> VolumeMeshManager<C> for Octree<V, C> where
+impl<V: Volume + Clone + Send + 'static, C: ChunkSize> VolumeMeshManager for Octree<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
@@ -272,7 +272,7 @@ impl<V: Volume + Clone + Send + 'static, C: Chunk> VolumeMeshManager<C> for Octr
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunk<C>, bool))> + '_> { Box::new(self.do_update(position)) }
+  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_> { Box::new(self.do_update(position)) }
 }
 
 // AABB
@@ -301,7 +301,7 @@ impl AABB {
   pub fn size(&self) -> u32 { self.size }
 
   #[inline(always)]
-  pub fn step<C: Chunk>(&self) -> u32 { self.size() / C::CELLS_IN_CHUNK_ROW }
+  pub fn step<C: ChunkSize>(&self) -> u32 { self.size() / C::CELLS_IN_CHUNK_ROW }
 
   #[inline(always)]
   pub fn size_3d(&self) -> UVec3 { UVec3::new(self.size, self.size, self.size) }
