@@ -3,7 +3,7 @@ use egui::color_picker::Alpha;
 use ultraviolet::{Rotor3, Vec3, Vec4};
 
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::ChunkSize16;
+use voxel_meshing::chunk::{GenericChunkSize};
 use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::transvoxel::Transvoxel;
@@ -61,9 +61,9 @@ pub struct Settings {
 impl Settings {
   pub fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
     match self.volume_type {
-      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
-      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
-      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::<ChunkSize16>::new(), Transvoxel::<ChunkSize16>::new())),
+      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
+      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
+      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
     }
   }
 

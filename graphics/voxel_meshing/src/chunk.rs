@@ -21,11 +21,11 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   const VOXELS_IN_CHUNK_USIZE: usize = Self::VOXELS_IN_CHUNK as usize;
 }
 
-#[derive(Default, Copy, Clone)]
-pub struct ChunkSize16;
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct GenericChunkSize<const SIZE: u32>;
 
-impl ChunkSize for ChunkSize16 {
-  const CELLS_IN_CHUNK_ROW: u32 = 16;
+impl<const SIZE: u32> ChunkSize for GenericChunkSize<SIZE> {
+  const CELLS_IN_CHUNK_ROW: u32 = SIZE;
 }
 
 // Chunk samples
@@ -133,7 +133,7 @@ impl ChunkVertices {
   }
 }
 
-// LOD chunk
+// LOD chunk vertices
 
 #[derive(Clone, Default, Debug)]
 pub struct LodChunkVertices {
