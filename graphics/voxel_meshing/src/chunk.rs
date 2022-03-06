@@ -116,6 +116,7 @@ impl ChunkVertices {
     &self.indices
   }
 
+
   #[inline]
   pub fn push_vertex(&mut self, vertex: Vertex) -> u16 {
     let index = self.vertices.len();

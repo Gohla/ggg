@@ -37,7 +37,10 @@ impl<C: ChunkSize> MarchingCubes<C> {
     step: u32,
     chunk_samples: &ChunkSamples<C>,
     chunk_vertices: &mut ChunkVertices,
-  ) where [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]: {
+  ) where
+    [f32; C::VOXELS_IN_CHUNK_USIZE]:,
+    [u16; Self::SHARED_INDICES_SIZE]:,
+  {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
       for cell_z in 0..C::CELLS_IN_CHUNK_ROW {
@@ -59,7 +62,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
     chunk_sample_array: &ChunkSampleArray<C>,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
     chunk_vertices: &mut ChunkVertices,
-  ) where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
+  ) where
+    [f32; C::VOXELS_IN_CHUNK_USIZE]:
+  {
     // Get local voxels (i.e., the coordinates of all the 8 corners) of the cell.
     let local_voxels = [
       cell + tables::REGULAR_VOXELS[0],
