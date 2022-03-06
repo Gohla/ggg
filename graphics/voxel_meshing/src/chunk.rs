@@ -28,6 +28,8 @@ impl<const SIZE: u32> ChunkSize for GenericChunkSize<SIZE> {
   const CELLS_IN_CHUNK_ROW: u32 = SIZE;
 }
 
+pub type ChunkSize16 = GenericChunkSize<16>;
+
 // Chunk samples
 
 pub enum ChunkSamples<C: ChunkSize> where
