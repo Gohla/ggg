@@ -1,6 +1,8 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, Chunk, ChunkSamples, Vertex};
+use gfx::prelude::*;
+
+use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, Chunk, ChunkSamples, HALF_CELLS_IN_CHUNK_ROW, Vertex};
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
@@ -23,6 +25,19 @@ impl Transvoxel {
     lores_step: u32,
     chunk: &mut Chunk,
   ) {
+    if side == TransitionSide::HiZ {
+      println!(
+        "{:?} hires_chunk_mins: [0={: >4} 1={: >4} 2={: >4} 3={: >4}], hires_step: {: >4}, lores_min: {: >4}, lores_step: {: >4}",
+        side,
+        hires_chunk_mins[0].display(),
+        hires_chunk_mins[1].display(),
+        hires_chunk_mins[2].display(),
+        hires_chunk_mins[3].display(),
+        hires_step,
+        lores_min.display(),
+        lores_step
+      );
+    }
     let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
     for cell_v in 0..CELLS_IN_CHUNK_ROW {
       for cell_u in 0..CELLS_IN_CHUNK_ROW {
@@ -60,7 +75,7 @@ impl Transvoxel {
     let lores_local_voxels = side.get_lores_local_voxels(u, v);
     // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = (u / 8) + (2 * (v / 8)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
+      let idx = (u / HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / HALF_CELLS_IN_CHUNK_ROW)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
@@ -134,6 +149,44 @@ impl Transvoxel {
       if values[8].is_sign_positive() { case += tables::TRANSITION_VOXEL_CASE_CONTRIBUTION[8] }
       case
     };
+
+    if side == TransitionSide::HiZ {
+      println!(
+        "u:{: >2} v:{: >2} | HR[0={: >4} 1={: >4} 2={: >4} 3={: >4} 4={: >4} 5={: >4} 6={: >4} 7={: >4} 8={: >4}] LR[9={: >4} A={: >4} B={: >4} C={: >4}]",
+        u,
+        v,
+        hires_local_voxels[0].display(),
+        hires_local_voxels[1].display(),
+        hires_local_voxels[2].display(),
+        hires_local_voxels[3].display(),
+        hires_local_voxels[4].display(),
+        hires_local_voxels[5].display(),
+        hires_local_voxels[6].display(),
+        hires_local_voxels[7].display(),
+        hires_local_voxels[8].display(),
+        lores_local_voxels[0].display(),
+        lores_local_voxels[1].display(),
+        lores_local_voxels[2].display(),
+        lores_local_voxels[3].display(),
+      );
+      println!(
+        "{case: <3}       | GV[0={: >4} 1={: >4} 2={: >4} 3={: >4} 4={: >4} 5={: >4} 6={: >4} 7={: >4} 8={: >4}     9={: >4} A={: >4} B={: >4} C={: >4}]",
+        global_voxels[0].display(),
+        global_voxels[1].display(),
+        global_voxels[2].display(),
+        global_voxels[3].display(),
+        global_voxels[4].display(),
+        global_voxels[5].display(),
+        global_voxels[6].display(),
+        global_voxels[7].display(),
+        global_voxels[8].display(),
+        global_voxels[9].display(),
+        global_voxels[10].display(),
+        global_voxels[11].display(),
+        global_voxels[12].display(),
+      );
+    }
+
     if case == 0 || case == 511 { // No triangles // OPTO: use bit twiddling to break it down to 1 comparison?
       return;
     }
@@ -143,7 +196,7 @@ impl Transvoxel {
     let cell_class = raw_cell_class & 0x7F;
     // High bit of the class index indicates that the triangulation is inverted.
     let invert_triangulation = (raw_cell_class & 0x80) != 0;
-    let our_invert_triangulation = !invert_triangulation; // We use LowZ as base case so everything is inverted?
+    let invert_triangulation = !invert_triangulation; // We use LowZ as base case so everything is inverted?
     // Get the triangulation info corresponding to the cell class. This uses `cell_class` instead of `case`, because the
     // triangulation info is equivalent for a class of cells. The full `case` is used along with this info to form the
     // eventual triangles.
@@ -159,8 +212,7 @@ impl Transvoxel {
       if i >= vertex_count {
         break;
       }
-      let vertex_data = TransitionVertexData(*vd);
-      cell_vertices_indices[i] = Self::create_or_reuse_vertex(vertex_data, u, v, &global_voxels, &values, shared_indices, chunk);
+      cell_vertices_indices[i] = Self::create_or_reuse_vertex(TransitionVertexData(*vd), u, v, &global_voxels, &values, shared_indices, chunk);
     }
 
     // Write the indices that form the triangulation of this transition cell.
@@ -171,7 +223,7 @@ impl Transvoxel {
       let global_index_1 = cell_vertices_indices[v1_index_in_cell as usize];
       let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
       let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
-      if our_invert_triangulation {
+      if invert_triangulation {
         chunk.indices.push(global_index_1);
         chunk.indices.push(global_index_2);
         chunk.indices.push(global_index_3);
@@ -235,12 +287,16 @@ impl Transvoxel {
   fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[Vec3; 13], values: &[f32; 13], chunk: &mut Chunk) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
-    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is higher than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
+    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is lower than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
+    let pos_low = global_voxels[voxel_a_index as usize];
+    let value_low = values[voxel_a_index as usize];
+    let pos_high = global_voxels[voxel_b_index as usize];
+    let value_high = values[voxel_b_index as usize];
     let position = Self::vertex_position(
-      global_voxels[voxel_a_index as usize],
-      values[voxel_a_index as usize],
-      global_voxels[voxel_b_index as usize],
-      values[voxel_b_index as usize],
+      pos_low,
+      value_low,
+      pos_high,
+      value_high,
     );
     let index = chunk.vertices.len() as u16;
     chunk.vertices.push(Vertex::new(position));

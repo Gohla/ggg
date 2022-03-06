@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_F32};
+use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_F32, HALF_CELLS_IN_CHUNK_ROW};
 use crate::octree::AABB;
 
 flagset::flags! {
@@ -94,8 +94,8 @@ impl TransitionSide {
 
   #[inline]
   pub fn get_hires_local_voxels(&self, u: u32, v: u32) -> [UVec3; 9] {
-    let u = (u % 8) * 2;
-    let v = (v % 8) * 2;
+    let u = (u % HALF_CELLS_IN_CHUNK_ROW) * 2;
+    let v = (v % HALF_CELLS_IN_CHUNK_ROW) * 2;
     match self {
       TransitionSide::LoX => {
         Self::add_hires_voxels(UVec3::new(CELLS_IN_CHUNK_ROW, v, u), &Self::X_HIRES_VOXELS)
@@ -172,7 +172,7 @@ impl TransitionSide {
   pub fn get_lores_local_voxels(&self, u: u32, v: u32) -> [Vec3; 4] {
     let u = u as f32;
     let v = v as f32;
-    let transition_width = 0.5; // TODO: determine width of transition cell consistently and based on LOD.
+    let transition_width = 1.0; // TODO: determine width of transition cell consistently and based on LOD.
     match self {
       TransitionSide::LoX => {
         Self::add_lores_voxels(Vec3::new(transition_width, v, u), &Self::X_LORES_VOXELS)

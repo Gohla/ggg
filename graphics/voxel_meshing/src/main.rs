@@ -63,6 +63,7 @@ impl app::Application for VoxelMeshing {
     settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
     settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
     settings.octree_settings.lod_factor = 2.0;
+    settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 
     let viewport = os.window.get_inner_size().physical;

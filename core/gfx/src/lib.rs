@@ -18,6 +18,7 @@ pub mod camera;
 pub mod texture_def;
 
 pub mod debug_renderer;
+pub mod display_math;
 
 #[derive(Debug)]
 pub struct Gfx {
