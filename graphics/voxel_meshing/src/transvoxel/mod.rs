@@ -80,6 +80,7 @@ impl Transvoxel {
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
     // Get the global voxels of the cell.
+    // OPTO: don't create global voxels here, as it may not be needed later, so we might be doing unnecessary work.
     let global_voxels: [Vec3; 13] = {
       let hires_local_voxels: [Vec3; 9] = [
         hires_local_voxels[0].into(),
@@ -292,12 +293,7 @@ impl Transvoxel {
     let value_low = values[voxel_a_index as usize];
     let pos_high = global_voxels[voxel_b_index as usize];
     let value_high = values[voxel_b_index as usize];
-    let position = Self::vertex_position(
-      pos_low,
-      value_low,
-      pos_high,
-      value_high,
-    );
+    let position = Self::vertex_position(pos_low, value_low, pos_high, value_high);
     let index = chunk.vertices.len() as u16;
     chunk.vertices.push(Vertex::new(position));
     index

@@ -8,8 +8,8 @@ use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::{CELLS_IN_CHUNK_ROW, Chunk, LodChunk};
 use crate::marching_cubes::MarchingCubes;
-use crate::transvoxel::Transvoxel;
 use crate::transvoxel::side::TransitionSide;
+use crate::transvoxel::Transvoxel;
 use crate::volume::Volume;
 
 // Trait
@@ -197,7 +197,7 @@ impl<V: Volume + Clone + Send + 'static> Octree<V> {
     self.thread_pool.spawn(move || {
       let lores_min = aabb.min();
       let lores_max = aabb.max();
-      let lores_step = aabb.size() / CELLS_IN_CHUNK_ROW;
+      let lores_step = aabb.step();
       let chunk_samples = volume.sample_chunk(lores_min, lores_step);
       marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
       if lores_step != 1 { // At max LOD level, no need to create transition cells.
@@ -291,6 +291,9 @@ impl AABB {
 
   #[inline(always)]
   pub fn size(&self) -> u32 { self.size }
+
+  #[inline(always)]
+  pub fn step(&self) -> u32 { self.size() / CELLS_IN_CHUNK_ROW }
 
   #[inline(always)]
   pub fn size_3d(&self) -> UVec3 { UVec3::new(self.size, self.size, self.size) }

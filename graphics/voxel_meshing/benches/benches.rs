@@ -3,7 +3,8 @@ use ultraviolet::{UVec3, Vec3};
 
 use voxel_meshing::chunk::{CELLS_IN_CHUNK_USIZE, Chunk};
 use voxel_meshing::marching_cubes::MarchingCubes;
-use voxel_meshing::octree::{Octree, OctreeSettings};
+use voxel_meshing::octree::{AABB, Octree, OctreeSettings};
+use voxel_meshing::transvoxel::side::TransitionSide;
 use voxel_meshing::transvoxel::Transvoxel;
 use voxel_meshing::volume::{Sphere, SphereSettings, Volume};
 
@@ -23,25 +24,52 @@ pub fn sphere_benchmark(c: &mut Criterion) {
 }
 
 pub fn marching_cubes_benchmark(c: &mut Criterion) {
-  let sphere = Sphere::new(SphereSettings { radius: 64.0 });
+  let sphere = Sphere::new(SphereSettings { radius: 16.0 });
   let marching_cubes = MarchingCubes;
   let start = UVec3::new(0, 0, 0);
   let step = 1;
   let samples = sphere.sample_chunk(start, step);
-  c.bench_function("Standalone-MC-Sphere", |b| b.iter_batched(
+  c.bench_function("Standalone-MarchingCubes-Sphere-16", |b| b.iter_batched(
     || Chunk::with_vertices_indices(Vec::with_capacity(CELLS_IN_CHUNK_USIZE), Vec::with_capacity(CELLS_IN_CHUNK_USIZE)), // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
     |mut chunk| marching_cubes.extract_chunk(start, step, &samples, &mut chunk),
     BatchSize::SmallInput,
   ));
 }
 
-pub fn marching_cubes_octree_benchmark(c: &mut Criterion) {
+pub fn transvoxel_benchmark(c: &mut Criterion) {
+  let size = 64;
+  let sphere = Sphere::new(SphereSettings { radius: size as f32 });
+  let transvoxel = Transvoxel;
+
+  let aabb = AABB::from_size(size);
+  let aabbs = aabb.subdivide();
+  let lores_aabb = aabbs[4]; // 4th subdivision is at 0,0 with z as center.
+  let lores_min = lores_aabb.min();
+  let lores_step = lores_aabb.step();
+
+  let side = TransitionSide::LoZ;
+  let hires_step = 1;
+  let hires_chunk_mins = side.subdivided_face_of_side_minimums(lores_aabb);
+  let hires_chunk_samples = [
+    sphere.sample_chunk(hires_chunk_mins[0], hires_step),
+    sphere.sample_chunk(hires_chunk_mins[1], hires_step),
+    sphere.sample_chunk(hires_chunk_mins[2], hires_step),
+    sphere.sample_chunk(hires_chunk_mins[3], hires_step),
+  ];
+  c.bench_function("Standalone-Transvoxel-LoZ-Sphere-64", |b| b.iter_batched(
+    || Chunk::with_vertices_indices(Vec::with_capacity(CELLS_IN_CHUNK_USIZE), Vec::with_capacity(CELLS_IN_CHUNK_USIZE)), // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
+    |mut chunk| transvoxel.extract_chunk(side, &hires_chunk_mins, &hires_chunk_samples, hires_step, lores_min, lores_step, &mut chunk),
+    BatchSize::SmallInput,
+  ));
+}
+
+pub fn octree_benchmark(c: &mut Criterion) {
   let total_size = 4096;
   let sphere = Sphere::new(SphereSettings { radius: total_size as f32 });
   let marching_cubes = MarchingCubes;
   let transvoxel = Transvoxel;
 
-  let mut group = c.benchmark_group("Octree-MC-Sphere");
+  let mut group = c.benchmark_group("Octree-Sphere");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
     || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0, ..OctreeSettings::default() }, sphere, marching_cubes, transvoxel), position),
@@ -72,5 +100,6 @@ fn preallocate_octree<V: Volume + Clone + Send + 'static>(mut octree: Octree<V>,
   octree
 }
 
-criterion_group!(benches, sphere_benchmark, marching_cubes_benchmark, marching_cubes_octree_benchmark);
+criterion_group!(benches, sphere_benchmark, marching_cubes_benchmark, transvoxel_benchmark, octree_benchmark);
 criterion_main!(benches);
+

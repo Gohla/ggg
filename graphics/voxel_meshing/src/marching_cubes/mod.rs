@@ -23,14 +23,14 @@ pub struct MarchingCubes;
 impl MarchingCubes {
   const SHARED_INDICES_SIZE: usize = 4 * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE;
 
-  pub fn extract_chunk(&self, start: UVec3, step: u32, chunk_samples: &ChunkSamples, chunk: &mut Chunk) {
+  pub fn extract_chunk(&self, min: UVec3, step: u32, chunk_samples: &ChunkSamples, chunk: &mut Chunk) {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
       for cell_z in 0..CELLS_IN_CHUNK_ROW {
         for cell_y in 0..CELLS_IN_CHUNK_ROW {
           for cell_x in 0..CELLS_IN_CHUNK_ROW {
             let cell = UVec3::new(cell_x, cell_y, cell_z);
-            Self::extract_cell(cell, start, step, chunk_sample_array, &mut shared_indices, chunk);
+            Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk);
           }
         }
       }
@@ -40,7 +40,7 @@ impl MarchingCubes {
   #[inline]
   fn extract_cell(
     cell: UVec3,
-    start: UVec3,
+    min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
@@ -59,14 +59,14 @@ impl MarchingCubes {
     ];
     // Get the global voxels of the cell.
     let global_voxels = [
-      start + step * local_voxels[0],
-      start + step * local_voxels[1],
-      start + step * local_voxels[2],
-      start + step * local_voxels[3],
-      start + step * local_voxels[4],
-      start + step * local_voxels[5],
-      start + step * local_voxels[6],
-      start + step * local_voxels[7],
+      min + step * local_voxels[0],
+      min + step * local_voxels[1],
+      min + step * local_voxels[2],
+      min + step * local_voxels[3],
+      min + step * local_voxels[4],
+      min + step * local_voxels[5],
+      min + step * local_voxels[6],
+      min + step * local_voxels[7],
     ];
     // Sample the volume at each local voxel, producing values.
     let values = [
@@ -177,13 +177,12 @@ impl MarchingCubes {
   fn create_vertex(vertex_data: RegularVertexData, global_voxels: &[UVec3; 8], values: &[f32; 8], chunk: &mut Chunk) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
-    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is higher than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
-    let position = Self::vertex_position(
-      global_voxels[voxel_a_index as usize],
-      values[voxel_a_index as usize],
-      global_voxels[voxel_b_index as usize],
-      values[voxel_b_index as usize],
-    );
+    debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is lower than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
+    let pos_low = global_voxels[voxel_a_index as usize];
+    let value_low = values[voxel_a_index as usize];
+    let pos_high = global_voxels[voxel_b_index as usize];
+    let value_high = values[voxel_b_index as usize];
+    let position = Self::vertex_position(pos_low, value_low, pos_high, value_high);
     let index = chunk.vertices.len() as u16;
     chunk.vertices.push(Vertex::new(position));
     index
