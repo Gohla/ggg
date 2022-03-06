@@ -18,7 +18,7 @@ use gfx::debug_renderer::DebugRenderer;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel_meshing::chunk::Vertex;
+use voxel_meshing::chunk::{Chunk16, Vertex};
 
 use crate::mesh_generation::MeshGeneration;
 use crate::settings::Settings;
@@ -37,7 +37,7 @@ pub struct VoxelMeshing {
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
 
-  mesh_generation: MeshGeneration,
+  mesh_generation: MeshGeneration<Chunk16>,
   debug_renderer: DebugRenderer,
 }
 

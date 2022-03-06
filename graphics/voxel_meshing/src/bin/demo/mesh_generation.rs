@@ -10,8 +10,8 @@ use voxel_meshing::octree::VolumeMeshManager;
 
 use crate::settings::Settings;
 
-pub struct MeshGeneration {
-  pub volume_mesh_manager: Box<dyn VolumeMeshManager>,
+pub struct MeshGeneration<C: Chunk> {
+  pub volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
   pub vertices: Vec<Vertex>,
   pub indices: Vec<u16>,
   pub draws: Vec<Draw>,
@@ -24,11 +24,11 @@ pub struct Draw {
   pub base_vertex: u64,
 }
 
-impl MeshGeneration {
+impl<C: Chunk> MeshGeneration<C> {
   pub fn new(
     position: Vec3,
     settings: &Settings,
-    mut volume_mesh_manager: Box<dyn VolumeMeshManager>,
+    mut volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> Self {
@@ -53,7 +53,7 @@ impl MeshGeneration {
 
   pub fn set_volume_mesh_manager(
     &mut self,
-    volume_mesh_manager: Box<dyn VolumeMeshManager>,
+    volume_mesh_manager: Box<dyn VolumeMeshManager<C>>,
     position: Vec3,
     settings: &Settings,
     debug_renderer: &mut DebugRenderer,
@@ -70,7 +70,7 @@ impl MeshGeneration {
     indices: &mut Vec<u16>,
     draws: &mut Vec<Draw>,
     debug_renderer: &mut DebugRenderer,
-    volume_mesh_manager: &mut dyn VolumeMeshManager,
+    volume_mesh_manager: &mut dyn VolumeMeshManager<C>,
     device: &Device,
   ) -> (GfxBuffer, GfxBuffer) {
     vertices.clear();
@@ -124,7 +124,7 @@ impl MeshGeneration {
   }
 
   fn render_chunk(
-    chunk: &Chunk,
+    chunk: &C,
     vertices: &mut Vec<Vertex>,
     indices: &mut Vec<u16>,
     draws: &mut Vec<Draw>,
@@ -132,9 +132,9 @@ impl MeshGeneration {
     if !chunk.is_empty() {
       let vertex_offset = vertices.len() as BufferAddress;
       let index_offset = indices.len() as u32;
-      vertices.extend(&chunk.vertices);
-      indices.extend(&chunk.indices);
-      draws.push(Draw { indices: index_offset..index_offset + chunk.indices.len() as u32, base_vertex: vertex_offset });
+      vertices.extend(chunk.vertices());
+      indices.extend(chunk.indices());
+      draws.push(Draw { indices: index_offset..index_offset + chunk.indices().len() as u32, base_vertex: vertex_offset });
     }
   }
 }

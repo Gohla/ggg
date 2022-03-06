@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
+use crate::chunk::Chunk;
 
-use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_F32, HALF_CELLS_IN_CHUNK_ROW};
 use crate::octree::AABB;
 
 flagset::flags! {
@@ -93,24 +93,24 @@ impl TransitionSide {
 
 
   #[inline]
-  pub fn get_hires_local_voxels(&self, u: u32, v: u32) -> [UVec3; 9] {
-    let u = (u % HALF_CELLS_IN_CHUNK_ROW) * 2;
-    let v = (v % HALF_CELLS_IN_CHUNK_ROW) * 2;
+  pub fn get_hires_local_voxels<C: Chunk>(&self, u: u32, v: u32) -> [UVec3; 9] {
+    let u = (u % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
+    let v = (v % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
     match self {
       TransitionSide::LoX => {
-        Self::add_hires_voxels(UVec3::new(CELLS_IN_CHUNK_ROW, v, u), &Self::X_HIRES_VOXELS)
+        Self::add_hires_voxels(UVec3::new(C::CELLS_IN_CHUNK_ROW, v, u), &Self::X_HIRES_VOXELS)
       }
       TransitionSide::HiX => {
         Self::add_hires_voxels(UVec3::new(0, v, u), &Self::X_HIRES_VOXELS)
       }
       TransitionSide::LoY => {
-        Self::add_hires_voxels(UVec3::new(u, CELLS_IN_CHUNK_ROW, v), &Self::Y_HIRES_VOXELS)
+        Self::add_hires_voxels(UVec3::new(u, C::CELLS_IN_CHUNK_ROW, v), &Self::Y_HIRES_VOXELS)
       }
       TransitionSide::HiY => {
         Self::add_hires_voxels(UVec3::new(u, 0, v), &Self::Y_HIRES_VOXELS)
       }
       TransitionSide::LoZ => {
-        Self::add_hires_voxels(UVec3::new(u, v, CELLS_IN_CHUNK_ROW), &Self::Z_HIRES_VOXELS)
+        Self::add_hires_voxels(UVec3::new(u, v, C::CELLS_IN_CHUNK_ROW), &Self::Z_HIRES_VOXELS)
       }
       TransitionSide::HiZ => {
         Self::add_hires_voxels(UVec3::new(u, v, 0), &Self::Z_HIRES_VOXELS)
@@ -169,7 +169,7 @@ impl TransitionSide {
 
 
   #[inline]
-  pub fn get_lores_local_voxels(&self, u: u32, v: u32) -> [Vec3; 4] {
+  pub fn get_lores_local_voxels<C: Chunk>(&self, u: u32, v: u32) -> [Vec3; 4] {
     let u = u as f32;
     let v = v as f32;
     let transition_width = 1.0; // TODO: determine width of transition cell consistently and based on LOD.
@@ -178,19 +178,19 @@ impl TransitionSide {
         Self::add_lores_voxels(Vec3::new(transition_width, v, u), &Self::X_LORES_VOXELS)
       }
       TransitionSide::HiX => {
-        Self::add_lores_voxels(Vec3::new(CELLS_IN_CHUNK_ROW_F32 - transition_width, v, u), &Self::X_LORES_VOXELS)
+        Self::add_lores_voxels(Vec3::new(C::CELLS_IN_CHUNK_ROW_F32 - transition_width, v, u), &Self::X_LORES_VOXELS)
       }
       TransitionSide::LoY => {
         Self::add_lores_voxels(Vec3::new(u, transition_width, v), &Self::Y_LORES_VOXELS)
       }
       TransitionSide::HiY => {
-        Self::add_lores_voxels(Vec3::new(u, CELLS_IN_CHUNK_ROW_F32 - transition_width, v), &Self::Y_LORES_VOXELS)
+        Self::add_lores_voxels(Vec3::new(u, C::CELLS_IN_CHUNK_ROW_F32 - transition_width, v), &Self::Y_LORES_VOXELS)
       }
       TransitionSide::LoZ => {
         Self::add_lores_voxels(Vec3::new(u, v, transition_width), &Self::Z_LORES_VOXELS)
       }
       TransitionSide::HiZ => {
-        Self::add_lores_voxels(Vec3::new(u, v, CELLS_IN_CHUNK_ROW_F32 - transition_width), &Self::Z_LORES_VOXELS)
+        Self::add_lores_voxels(Vec3::new(u, v, C::CELLS_IN_CHUNK_ROW_F32 - transition_width), &Self::Z_LORES_VOXELS)
       }
     }
   }

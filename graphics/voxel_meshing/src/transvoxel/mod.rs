@@ -1,8 +1,10 @@
+use std::marker::PhantomData;
+
 use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
-use crate::chunk::{CELLS_IN_CHUNK_ROW, CELLS_IN_CHUNK_ROW_USIZE, Chunk, ChunkSamples, HALF_CELLS_IN_CHUNK_ROW, Vertex};
+use crate::chunk::{Chunk, ChunkSamples, Vertex};
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
@@ -10,21 +12,27 @@ pub mod side;
 mod tables;
 
 #[derive(Copy, Clone)]
-pub struct Transvoxel;
+pub struct Transvoxel<C: Chunk> {
+  _chunk_phantom: PhantomData<C>,
+}
 
-impl Transvoxel {
-  const SHARED_INDICES_SIZE: usize = 10 * CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE;
+impl<C: Chunk> Transvoxel<C> {
+  pub const SHARED_INDICES_SIZE: usize = 10 * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE;
+
+  pub fn new() -> Self {
+    Self { _chunk_phantom: PhantomData::default() }
+  }
 
   pub fn extract_chunk(
     &self,
     side: TransitionSide,
     hires_chunk_mins: &[UVec3; 4],
-    hires_chunk_samples: &[ChunkSamples; 4],
+    hires_chunk_samples: &[ChunkSamples<C>; 4],
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,
-    chunk: &mut Chunk,
-  ) {
+    chunk: &mut C,
+  ) where [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]: {
     if side == TransitionSide::HiZ {
       println!(
         "{:?} hires_chunk_mins: [0={: >4} 1={: >4} 2={: >4} 3={: >4}], hires_step: {: >4}, lores_min: {: >4}, lores_step: {: >4}",
@@ -39,8 +47,8 @@ impl Transvoxel {
       );
     }
     let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-    for cell_v in 0..CELLS_IN_CHUNK_ROW {
-      for cell_u in 0..CELLS_IN_CHUNK_ROW {
+    for cell_v in 0..C::CELLS_IN_CHUNK_ROW {
+      for cell_u in 0..C::CELLS_IN_CHUNK_ROW {
         Self::extract_cell(
           side,
           cell_u,
@@ -63,19 +71,19 @@ impl Transvoxel {
     u: u32,
     v: u32,
     hires_chunk_mins: &[UVec3; 4],
-    hires_chunk_samples: &[ChunkSamples; 4],
+    hires_chunk_samples: &[ChunkSamples<C>; 4],
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk: &mut Chunk,
-  ) {
+    chunk: &mut C,
+  ) where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
     // Get local voxels (i.e., the coordinates of all the 9 corners) of the high-resolution side of the transition cell.
-    let hires_local_voxels = side.get_hires_local_voxels(u, v);
-    let lores_local_voxels = side.get_lores_local_voxels(u, v);
+    let hires_local_voxels = side.get_hires_local_voxels::<C>(u, v);
+    let lores_local_voxels = side.get_lores_local_voxels::<C>(u, v);
     // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = (u / HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / HALF_CELLS_IN_CHUNK_ROW)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
+      let idx = (u / C::HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / C::HALF_CELLS_IN_CHUNK_ROW)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
@@ -225,13 +233,13 @@ impl Transvoxel {
       let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
       let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
       if invert_triangulation {
-        chunk.indices.push(global_index_1);
-        chunk.indices.push(global_index_2);
-        chunk.indices.push(global_index_3);
+        chunk.add_index(global_index_1);
+        chunk.add_index(global_index_2);
+        chunk.add_index(global_index_3);
       } else {
-        chunk.indices.push(global_index_3);
-        chunk.indices.push(global_index_2);
-        chunk.indices.push(global_index_1);
+        chunk.add_index(global_index_3);
+        chunk.add_index(global_index_2);
+        chunk.add_index(global_index_1);
       }
     }
   }
@@ -244,7 +252,7 @@ impl Transvoxel {
     global_voxels: &[Vec3; 13],
     values: &[f32; 13],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk: &mut Chunk,
+    chunk: &mut C,
   ) -> u16 {
     if vertex_data.new_reusable_vertex() {
       // Create a new vertex and index, and share the index.
@@ -285,7 +293,7 @@ impl Transvoxel {
   }
 
   #[inline]
-  fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[Vec3; 13], values: &[f32; 13], chunk: &mut Chunk) -> u16 {
+  fn create_vertex(vertex_data: TransitionVertexData, global_voxels: &[Vec3; 13], values: &[f32; 13], chunk: &mut C) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
     debug_assert!(voxel_b_index > voxel_a_index, "Voxel B index {} is lower than voxel A index {}, which leads to inconsistencies", voxel_b_index, voxel_a_index);
@@ -294,9 +302,7 @@ impl Transvoxel {
     let pos_high = global_voxels[voxel_b_index as usize];
     let value_high = values[voxel_b_index as usize];
     let position = Self::vertex_position(pos_low, value_low, pos_high, value_high);
-    let index = chunk.vertices.len() as u16;
-    chunk.vertices.push(Vertex::new(position));
-    index
+    chunk.add_vertex(Vertex::new(position))
   }
 
   #[inline]
@@ -308,7 +314,7 @@ impl Transvoxel {
   #[inline]
   fn shared_index(u: u32, v: u32, vertex_index: usize) -> usize {
     u as usize
-      + CELLS_IN_CHUNK_ROW_USIZE * v as usize
-      + CELLS_IN_CHUNK_ROW_USIZE * CELLS_IN_CHUNK_ROW_USIZE * vertex_index
+      + C::CELLS_IN_CHUNK_ROW_USIZE * v as usize
+      + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * vertex_index
   }
 }
