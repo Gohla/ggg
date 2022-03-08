@@ -1,10 +1,5 @@
-#![feature(int_log)]
-
-///! Voxel meshing
-
-use bytemuck::{Pod, Zeroable};
 use egui::Ui;
-use ultraviolet::{Mat4, Vec3, Vec4};
+use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
@@ -18,7 +13,8 @@ use gfx::debug_renderer::DebugRenderer;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel_meshing::chunk::{Vertex};
+use voxel_meshing::chunk::Vertex;
+use voxel_meshing::uniform::{CameraUniform, ModelUniform};
 
 use crate::mesh_generation::MeshGeneration;
 use crate::settings::Settings;
@@ -27,18 +23,20 @@ pub mod settings;
 pub mod mesh_generation;
 
 pub struct VoxelMeshing {
-  settings: Settings,
-
   camera_sys: CameraSys,
+  debug_renderer: DebugRenderer,
+
+  camera_uniform: CameraUniform,
+  settings: Settings,
 
   camera_uniform_buffer: GfxBuffer,
   light_uniform_buffer: GfxBuffer,
+  model_uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
 
   mesh_generation: MeshGeneration,
-  debug_renderer: DebugRenderer,
 }
 
 #[derive(Default)]
@@ -48,8 +46,19 @@ pub struct Input {
 
 impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
+    let viewport = os.window.get_inner_size().physical;
+
+    let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
+    camera_sys.position = Vec3::new(0.0, 0.0, -200.0);
+    camera_sys.panning_speed = 2000.0;
+    camera_sys.far = 10000.0;
+    let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+
+    let camera_uniform = CameraUniform::from_camera_sys(&camera_sys);
     let mut settings = Settings::default();
-    settings.light_rotation_y_degree = 270.0;
+    settings.light.rotation_y_degree = 270.0;
+    let extends = 4096.0 / 2.0;
+    settings.octree_transform = Isometry3::new(Vec3::new(-extends, -extends, extends), Rotor3::identity());
     settings.render_regular_chunks = true;
     settings.render_transition_lo_x_chunks = false;
     settings.render_transition_hi_x_chunks = false;
@@ -64,12 +73,6 @@ impl app::Application for VoxelMeshing {
     settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 
-    let viewport = os.window.get_inner_size().physical;
-    let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
-    camera_sys.position = Vec3::new(4096.0 / 2.0, 4096.0 / 2.0, -(4096.0 / 2.0) - 200.0);
-    camera_sys.panning_speed = 2000.0;
-    camera_sys.far = 10000.0;
-
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
@@ -78,16 +81,21 @@ impl app::Application for VoxelMeshing {
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Camera uniform buffer")
-      .build_with_data(&gfx.device, &[CameraUniform::from_camera_sys(&camera_sys)]);
+      .build_with_data(&gfx.device, &[camera_uniform]);
     let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let light_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
-      .build_with_data(&gfx.device, &[settings.light_uniform]);
+      .build_with_data(&gfx.device, &[settings.light.uniform]);
     let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
+    let model_uniform_buffer = BufferBuilder::new()
+      .with_uniform_usage()
+      .with_label("Model uniform buffer")
+      .build_with_data(&gfx.device, &[ModelUniform::identity()]);
+    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry])
-      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry])
+      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
+      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
       .with_layout_label("Voxel meshing uniform bind group layout")
       .with_label("Voxel meshing uniform bind group")
       .build(&gfx.device);
@@ -103,22 +111,24 @@ impl app::Application for VoxelMeshing {
       .build(&gfx.device);
 
     let volume_mesh_manager = settings.create_volume_mesh_manager();
-    let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+
     let mesh_generation = MeshGeneration::new(camera_sys.position, &settings, volume_mesh_manager, &mut debug_renderer, &gfx.device);
 
     Self {
-      settings,
-
       camera_sys,
+      debug_renderer,
+
+      camera_uniform,
+      settings,
 
       camera_uniform_buffer,
       light_uniform_buffer,
+      model_uniform_buffer,
       uniform_bind_group,
       depth_texture,
       render_pipeline,
 
       mesh_generation,
-      debug_renderer,
     }
   }
 
@@ -143,6 +153,7 @@ impl app::Application for VoxelMeshing {
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera_uniform.update_from_camera_sys(&self.camera_sys);
 
     let mut recreate_volume_mesh_manager = false;
     let mut update_volume_mesh_manager = false;
@@ -155,8 +166,10 @@ impl app::Application for VoxelMeshing {
       self.mesh_generation.update(self.camera_sys.position, &self.settings, &mut self.debug_renderer, &gfx.device);
     }
 
-    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[CameraUniform::from_camera_sys(&self.camera_sys)]);
-    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light_uniform]);
+    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
+    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light.uniform]);
+    let model = self.mesh_generation.model;
+    self.model_uniform_buffer.write_whole_data(&gfx.queue, &[ModelUniform::new(model)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
@@ -173,52 +186,11 @@ impl app::Application for VoxelMeshing {
     render_pass.pop_debug_group();
     drop(render_pass);
 
-    self.debug_renderer.render(gfx, &mut frame, self.camera_sys.get_view_projection_matrix());
+    self.debug_renderer.render(gfx, &mut frame, self.camera_sys.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())
   }
 }
-
-// Uniform data
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable, Debug)]
-pub struct CameraUniform {
-  pub position: Vec4,
-  pub view_projection: Mat4,
-}
-
-impl CameraUniform {
-  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
-    Self {
-      position: camera_sys.position.into_homogeneous_point(),
-      view_projection: camera_sys.get_view_projection_matrix(),
-    }
-  }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable, Debug)]
-pub struct LightUniform {
-  pub color: Vec3,
-  pub ambient: f32,
-  pub direction: Vec3,
-  _dummy: f32, // TODO: replace with crevice crate?
-}
-
-impl LightUniform {
-  pub fn new(color: Vec3, ambient: f32, direction: Vec3) -> Self {
-    Self { color, ambient, direction, _dummy: 0.0 }
-  }
-}
-
-impl Default for LightUniform {
-  fn default() -> Self {
-    Self::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5))
-  }
-}
-
-// Main
 
 fn main() {
   app::run::<VoxelMeshing>(Options {

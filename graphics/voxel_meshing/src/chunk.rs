@@ -60,6 +60,7 @@ impl<C: ChunkSize> ChunkSamples<C> where
   }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct ChunkSampleArray<C: ChunkSize> where
 // This constraint is stating that an array of this size exists. This apparently is necessary because
 // VOXELS_IN_CHUNK_USIZE is an unknown constant and the compiler cannot be sure that an array of this size can be made.
@@ -67,19 +68,33 @@ pub struct ChunkSampleArray<C: ChunkSize> where
 // From: https://stackoverflow.com/questions/66361365/unconstrained-generic-constant-when-adding-const-generics
   [f32; C::VOXELS_IN_CHUNK_USIZE]:
 {
-  array: [f32; C::VOXELS_IN_CHUNK_USIZE],
+  pub array: [f32; C::VOXELS_IN_CHUNK_USIZE],
 }
 
-impl<C: ChunkSize> ChunkSampleArray<C> where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
+impl<C: ChunkSize> ChunkSampleArray<C> where
+  [f32; C::VOXELS_IN_CHUNK_USIZE]:
+{
   #[inline]
   pub fn new(array: [f32; C::VOXELS_IN_CHUNK_USIZE]) -> Self {
     Self { array }
   }
 
   #[inline]
-  pub fn sample(&self, index: UVec3) -> f32 {
-    let index = (index.x + C::VOXELS_IN_CHUNK_ROW * index.y + C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * index.z) as usize;
-    self.array[index]
+  pub fn new_zeroed() -> Self {
+    Self::new([0.0; C::VOXELS_IN_CHUNK_USIZE])
+  }
+
+  #[inline]
+  fn index(position: UVec3) -> usize { (position.x + C::VOXELS_IN_CHUNK_ROW * position.y + C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * position.z) as usize }
+
+  #[inline]
+  pub fn sample(&self, position: UVec3) -> f32 {
+    self.array[Self::index(position)]
+  }
+
+  #[inline]
+  pub fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
+    &mut self.array[Self::index(position)]
   }
 }
 

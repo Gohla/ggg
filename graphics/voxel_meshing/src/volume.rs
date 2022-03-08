@@ -9,7 +9,9 @@ pub trait Volume {
   fn sample(&self, position: UVec3) -> f32;
 
   /// Samples an entire chunk, returning a value indicating whether the chunk is all zero, positive, negative, or mixed.
-  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> ChunkSamples<C> where [f32; C::VOXELS_IN_CHUNK_USIZE]: {
+  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> ChunkSamples<C> where
+    [f32; C::VOXELS_IN_CHUNK_USIZE]:
+  {
     let mut all_zero = true;
     let mut all_positive = true;
     let mut all_negative = true;

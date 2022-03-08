@@ -7,3 +7,4 @@ pub mod transvoxel;
 pub mod volume;
 pub mod octree;
 pub mod chunk;
+pub mod uniform;

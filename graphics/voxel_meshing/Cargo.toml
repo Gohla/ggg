@@ -33,6 +33,11 @@ name = "demo"
 test = false
 bench = false
 
+[[bin]]
+name = "marching_cubes"
+test = false
+bench = false
+
 [[bench]]
 name = "benches"
 harness = false

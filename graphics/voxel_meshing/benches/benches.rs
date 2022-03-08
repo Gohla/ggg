@@ -2,7 +2,7 @@
 #![allow(incomplete_features)]
 
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
-use ultraviolet::{UVec3, Vec3};
+use ultraviolet::{Isometry3, UVec3, Vec3};
 
 use voxel_meshing::chunk::{ChunkSize, ChunkSize16, ChunkVertices};
 use voxel_meshing::marching_cubes::MarchingCubes;
@@ -75,6 +75,7 @@ fn preallocate_chunk_vertices<C: ChunkSize>() -> ChunkVertices {
 
 pub fn octree_benchmark(c: &mut Criterion) {
   let total_size = 4096;
+  let transform = Isometry3::identity();
   let sphere = Sphere::new(SphereSettings { radius: total_size as f32 });
   let marching_cubes = MarchingCubes::<C>::new();
   let transvoxel = Transvoxel::<C>::new();
@@ -82,22 +83,22 @@ pub fn octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-Sphere");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0, ..OctreeSettings::default() }, sphere, marching_cubes.clone(), transvoxel.clone()), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-2.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 2.0, ..OctreeSettings::default() }, sphere, marching_cubes.clone(), transvoxel.clone()), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 2.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-3.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 3.0, ..OctreeSettings::default() }, sphere, marching_cubes.clone(), transvoxel.clone()), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 3.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-4.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 4.0, ..OctreeSettings::default() }, sphere, marching_cubes.clone(), transvoxel.clone()), position),
+    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 4.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));

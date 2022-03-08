@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, Sender};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use ultraviolet::{UVec3, Vec3};
+use ultraviolet::{Isometry3, UVec3, Vec3};
 
 use crate::chunk::{ChunkSize, ChunkVertices, LodChunkVertices};
 use crate::marching_cubes::MarchingCubes;
@@ -19,7 +19,7 @@ pub trait VolumeMeshManager {
   fn get_lod_factor(&self) -> f32;
   fn get_lod_factor_mut(&mut self) -> &mut f32;
 
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>;
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>);
 }
 
 // Octree settings
@@ -57,6 +57,9 @@ pub struct Octree<V, C: ChunkSize> {
   total_size: u32,
   lod_factor: f32,
 
+  transform: Isometry3,
+  transform_inversed: Isometry3,
+
   max_lod_level: u32,
   volume: V,
   marching_cubes: MarchingCubes<C>,
@@ -79,7 +82,7 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
 {
-  pub fn new(settings: OctreeSettings, volume: V, marching_cubes: MarchingCubes<C>, transvoxel: Transvoxel<C>) -> Self {
+  pub fn new(settings: OctreeSettings, transform: Isometry3, volume: V, marching_cubes: MarchingCubes<C>, transvoxel: Transvoxel<C>) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
@@ -87,6 +90,10 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
     Self {
       total_size: settings.total_size,
       lod_factor: settings.lod_factor,
+
+      transform,
+      transform_inversed: transform.inversed(),
+
       max_lod_level,
       volume,
       marching_cubes,
@@ -108,7 +115,9 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn do_update(&mut self, position: Vec3) -> impl Iterator<Item=(&AABB, &(LodChunkVertices, bool))> {
+  pub fn do_update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(LodChunkVertices, bool))>) {
+    let position = self.transform_inversed.transform_vec(position);
+
     for (aabb, lod_chunk) in self.rx.try_iter() {
       self.chunks.insert(aabb, (lod_chunk, true));
       self.requested_aabbs.remove(&aabb);
@@ -126,7 +135,8 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
       }
     }
 
-    self.chunks.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb))
+    let chunks = self.chunks.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
+    (self.transform, chunks)
   }
 
   pub fn clear(&mut self) {
@@ -272,7 +282,10 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> VolumeMeshManager for Oct
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_> { Box::new(self.do_update(position)) }
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>) {
+    let (transform, chunks) = self.do_update(position);
+    (transform, Box::new(chunks))
+  }
 }
 
 // AABB

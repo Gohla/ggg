@@ -1,15 +1,16 @@
-use egui::{color_picker, ComboBox, DragValue, Rgba, Ui};
+use egui::{ComboBox, Ui};
 use egui::color_picker::Alpha;
-use ultraviolet::{Rotor3, Vec3, Vec4};
+use ultraviolet::{Isometry3, Vec4};
 
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::{GenericChunkSize};
+use voxel_meshing::chunk::GenericChunkSize;
 use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
 use voxel_meshing::transvoxel::Transvoxel;
+use voxel_meshing::uniform::LightSettings;
 use voxel_meshing::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
 
-use crate::{LightUniform, MeshGeneration};
+use crate::MeshGeneration;
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum VolumeType {
@@ -33,10 +34,7 @@ impl Default for MeshingAlgorithmType {
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Settings {
-  pub light_rotation_x_degree: f32,
-  pub light_rotation_y_degree: f32,
-  pub light_rotation_z_degree: f32,
-  pub light_uniform: LightUniform,
+  pub light: LightSettings,
 
   pub volume_type: VolumeType,
   pub sphere_settings: SphereSettings,
@@ -45,6 +43,7 @@ pub struct Settings {
   pub meshing_algorithm_type: MeshingAlgorithmType,
 
   pub octree_settings: OctreeSettings,
+  pub octree_transform: Isometry3,
   pub auto_update: bool,
   pub render_regular_chunks: bool,
   pub render_transition_lo_x_chunks: bool,
@@ -61,30 +60,14 @@ pub struct Settings {
 impl Settings {
   pub fn create_volume_mesh_manager(&self) -> Box<dyn VolumeMeshManager> {
     match self.volume_type {
-      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, Sphere::new(self.sphere_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
-      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, Noise::new(self.noise_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
-      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
+      VolumeType::Sphere => Box::new(Octree::new(self.octree_settings, self.octree_transform, Sphere::new(self.sphere_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
+      VolumeType::Noise => Box::new(Octree::new(self.octree_settings, self.octree_transform, Noise::new(self.noise_settings), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
+      VolumeType::SpherePlusNoise => Box::new(Octree::new(self.octree_settings, self.octree_transform, Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)), MarchingCubes::<GenericChunkSize<16>>::new(), Transvoxel::<GenericChunkSize<16>>::new())),
     }
   }
 
   pub fn render_gui(&mut self, ui: &mut Ui, mesh_generation: &mut MeshGeneration, recreate_volume_mesh_manager: &mut bool, update_volume_mesh_manager: &mut bool) {
-    ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
-      ui.label("Color");
-      let mut color = Rgba::from_rgba_premultiplied(self.light_uniform.color.x, self.light_uniform.color.y, self.light_uniform.color.z, 0.0).into();
-      color_picker::color_edit_button_srgba(&mut ui, &mut color, Alpha::Opaque);
-      let color: Rgba = color.into();
-      self.light_uniform.color = Vec3::new(color.r(), color.g(), color.b());
-      ui.end_row();
-      ui.label("Ambient");
-      ui.add(DragValue::new(&mut self.light_uniform.ambient).speed(0.001).clamp_range(0.0..=1.0));
-      ui.end_row();
-      ui.label("Direction");
-      ui.drag("x: ", &mut self.light_rotation_x_degree, 0.5);
-      ui.drag("y: ", &mut self.light_rotation_y_degree, 0.5);
-      ui.drag("z: ", &mut self.light_rotation_z_degree, 0.5);
-      self.light_uniform.direction = Rotor3::from_euler_angles((self.light_rotation_z_degree % 360.0).to_radians(), (self.light_rotation_x_degree % 360.0).to_radians(), (self.light_rotation_y_degree % 360.0).to_radians()) * Vec3::one();
-      ui.end_row();
-    });
+    self.light.render_gui(ui);
     ui.collapsing_open_with_grid("Volume", "Grid", |ui| {
       ui.label("Type");
       ComboBox::from_id_source("Type")

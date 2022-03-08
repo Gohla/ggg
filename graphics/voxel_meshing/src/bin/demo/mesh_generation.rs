@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use ultraviolet::Vec3;
+use ultraviolet::{Mat4, Vec3};
 use wgpu::{BufferAddress, Device};
 
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -17,6 +17,7 @@ pub struct MeshGeneration {
   pub draws: Vec<Draw>,
   pub vertex_buffer: GfxBuffer,
   pub index_buffer: GfxBuffer,
+  pub model: Mat4,
 }
 
 pub struct Draw {
@@ -35,8 +36,8 @@ impl MeshGeneration {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let mut draws = Vec::new();
-    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut vertices, &mut indices, &mut draws, debug_renderer, &mut *volume_mesh_manager, device);
-    Self { volume_mesh_manager, vertices, indices, draws, vertex_buffer, index_buffer }
+    let (vertex_buffer, index_buffer, model) = Self::do_update(position, settings, &mut vertices, &mut indices, &mut draws, debug_renderer, &mut *volume_mesh_manager, device);
+    Self { volume_mesh_manager, vertices, indices, draws, vertex_buffer, index_buffer, model }
   }
 
   pub fn update(
@@ -46,9 +47,10 @@ impl MeshGeneration {
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) {
-    let (vertex_buffer, index_buffer) = Self::do_update(position, settings, &mut self.vertices, &mut self.indices, &mut self.draws, debug_renderer, &mut *self.volume_mesh_manager, device);
+    let (vertex_buffer, index_buffer, model) = Self::do_update(position, settings, &mut self.vertices, &mut self.indices, &mut self.draws, debug_renderer, &mut *self.volume_mesh_manager, device);
     self.vertex_buffer = vertex_buffer;
     self.index_buffer = index_buffer;
+    self.model = model;
   }
 
   pub fn set_volume_mesh_manager(
@@ -72,13 +74,14 @@ impl MeshGeneration {
     debug_renderer: &mut DebugRenderer,
     volume_mesh_manager: &mut dyn VolumeMeshManager,
     device: &Device,
-  ) -> (GfxBuffer, GfxBuffer) {
+  ) -> (GfxBuffer, GfxBuffer, Mat4) {
     vertices.clear();
     indices.clear();
     draws.clear();
     debug_renderer.clear();
 
-    for (aabb, (chunk, filled)) in volume_mesh_manager.update(position) {
+    let (transform, chunks) = volume_mesh_manager.update(position);
+    for (aabb, (chunk, filled)) in chunks {
       let is_empty = chunk.regular.is_empty();
       if *filled {
         if settings.render_regular_chunks {
@@ -120,7 +123,7 @@ impl MeshGeneration {
       .with_index_usage()
       .with_label("Voxel meshing index buffer")
       .build_with_data(device, &indices);
-    (vertex_buffer, index_buffer)
+    (vertex_buffer, index_buffer, transform.into_homogeneous_matrix())
   }
 
   fn render_chunk(

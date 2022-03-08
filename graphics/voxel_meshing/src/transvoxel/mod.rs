@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use tracing::trace;
 use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
@@ -36,7 +37,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]:
   {
     if side == TransitionSide::HiZ {
-      println!(
+      trace!(
         "{:?} hires_chunk_mins: [0={: >4} 1={: >4} 2={: >4} 3={: >4}], hires_step: {: >4}, lores_min: {: >4}, lores_step: {: >4}",
         side,
         hires_chunk_mins[0].display(),
@@ -164,7 +165,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     };
 
     if side == TransitionSide::HiZ {
-      println!(
+      trace!(
         "u:{: >2} v:{: >2} | HR[0={: >4} 1={: >4} 2={: >4} 3={: >4} 4={: >4} 5={: >4} 6={: >4} 7={: >4} 8={: >4}] LR[9={: >4} A={: >4} B={: >4} C={: >4}]",
         u,
         v,
@@ -182,7 +183,7 @@ impl<C: ChunkSize> Transvoxel<C> {
         lores_local_voxels[2].display(),
         lores_local_voxels[3].display(),
       );
-      println!(
+      trace!(
         "{case: <3}       | GV[0={: >4} 1={: >4} 2={: >4} 3={: >4} 4={: >4} 5={: >4} 6={: >4} 7={: >4} 8={: >4}     9={: >4} A={: >4} B={: >4} C={: >4}]",
         global_voxels[0].display(),
         global_voxels[1].display(),

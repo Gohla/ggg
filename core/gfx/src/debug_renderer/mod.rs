@@ -32,7 +32,7 @@ impl DebugRenderer {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Debug uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform { view_projection }]);
+      .build_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -147,12 +147,12 @@ impl DebugRenderer {
     }
   }
 
-  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, view_projection: Mat4) {
+  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, model_view_projection: Mat4) {
     if self.line_list_render_pipeline.is_none() && self.line_strip_render_pipeline.is_none() {
       return; // Nothing to do
     }
 
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection }]);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
       pipeline.reupload_vertex_buffer_if_needed(gfx);
@@ -248,7 +248,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
-  view_projection: Mat4,
+  model_view_projection: Mat4,
 }
 
 // Vertex data
