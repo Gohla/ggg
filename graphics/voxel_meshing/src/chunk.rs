@@ -80,8 +80,18 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
   }
 
   #[inline]
-  pub fn new_zeroed() -> Self {
-    Self::new([0.0; C::VOXELS_IN_CHUNK_USIZE])
+  pub fn new_with(default: f32) -> Self {
+    Self::new([default; C::VOXELS_IN_CHUNK_USIZE])
+  }
+
+  #[inline]
+  pub fn new_positive_zeroed() -> Self {
+    Self::new_with(0.0)
+  }
+
+  #[inline]
+  pub fn new_negative_zeroed() -> Self {
+    Self::new_with(-0.0)
   }
 
   #[inline]

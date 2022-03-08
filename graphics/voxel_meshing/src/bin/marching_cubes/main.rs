@@ -95,7 +95,7 @@ impl app::Application for MarchingCubesDemo {
       .with_label("Marching cubes render pipeline")
       .build(&gfx.device);
 
-    let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C>::new_zeroed());
+    let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C>::new_with(0.0));
 
     Self {
       camera_sys,
@@ -218,7 +218,7 @@ impl app::Application for MarchingCubesDemo {
           } else {
             Vec4::new(0.1, 0.1, 0.1, 1.0)
           };
-          self.debug_renderer.draw_point(position.into(), point_color, 10.0);
+          self.debug_renderer.draw_point(position.into(), point_color, 15.0);
         }
       }
     }
