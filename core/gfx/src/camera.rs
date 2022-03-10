@@ -1,56 +1,85 @@
-use egui::{ComboBox, CtxRef};
-use ultraviolet::{Mat4, Vec3, Vec4};
+use std::collections::HashSet;
+use std::f32::consts::{FRAC_PI_2, PI};
 
-use common::input::{KeyboardButton, RawInput};
-use common::screen::PhysicalSize;
+use egui::{ComboBox, CtxRef};
+use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
+
+use common::input::{MouseButton, RawInput};
+use common::screen::{PhysicalSize, ScreenDelta};
 use common::timing::Duration;
 use gui_widget::*;
 
 #[derive(Debug)]
 pub struct Camera {
-  pub position: Vec3,
-  pub panning_speed: f32,
-
+  // View
   pub viewport: PhysicalSize,
+  pub movement_type: MovementType,
+  pub arcball: Arcball,
+  pub fly: Fly,
+  pub target: Vec3,
+  // Projection
   pub projection_type: ProjectionType,
-  pub perspective: PerspectiveProjection,
-  pub orthographic: OrthographicProjection,
+  pub perspective: Perspective,
+  pub orthographic: Orthographic,
   pub near: f32,
   pub far: f32,
-
+  // Debug GUI
   pub show_debug_gui: bool,
-
+  // Internals
+  position: Vec3,
   view_projection: Mat4,
   view_projection_inverse: Mat4,
 }
 
 #[derive(Debug)]
-pub struct PerspectiveProjection {
-  pub vertical_fov_radians: f32,
-  pub fov_change_speed: f32,
+pub struct Arcball {
+  pub distance_speed: f32,
+  pub rotation_speed: f32,
+  pub distance: f32,
+  pub rotation_around_x: f32,
+  pub rotation_around_y: f32,
 }
 
-impl Default for PerspectiveProjection {
+impl Default for Arcball {
+  fn default() -> Self {
+    Self {
+      distance_speed: 5.0,
+      rotation_speed: 0.5,
+      distance: -1.0,
+      rotation_around_x: 0.0,
+      rotation_around_y: 0.0,
+    }
+  }
+}
+
+#[derive(Default, Debug)]
+pub struct Fly {}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum MovementType {
+  Arcball,
+  Fly,
+}
+
+#[derive(Debug)]
+pub struct Perspective {
+  pub vertical_fov_radians: f32,
+}
+
+impl Default for Perspective {
   fn default() -> Self {
     Self {
       vertical_fov_radians: 45.0f32.to_radians(),
-      fov_change_speed: 0.1,
     }
   }
 }
 
 #[derive(Debug)]
-pub struct OrthographicProjection {
-  pub zoom: f32,
-  pub zoom_change_speed: f32,
-}
+pub struct Orthographic {}
 
-impl Default for OrthographicProjection {
+impl Default for Orthographic {
   fn default() -> Self {
-    Self {
-      zoom: 1.0,
-      zoom_change_speed: 0.1,
-    }
+    Self {}
   }
 }
 
@@ -62,28 +91,33 @@ pub enum ProjectionType {
 
 impl Camera {
   pub fn new(
-    position: Vec3,
-    panning_speed: f32,
     viewport: PhysicalSize,
+    movement_type: MovementType,
+    arcball: Arcball,
+    fly: Fly,
+    at: Vec3,
     projection_type: ProjectionType,
-    perspective_projection: PerspectiveProjection,
-    orthographic_projection: OrthographicProjection,
+    perspective: Perspective,
+    orthographic: Orthographic,
     near: f32,
     far: f32,
   ) -> Camera {
     Camera {
-      position,
-      panning_speed,
-
       viewport,
+      movement_type,
+      arcball,
+      fly,
+      target: at,
+
       projection_type,
-      perspective: perspective_projection,
-      orthographic: orthographic_projection,
+      perspective,
+      orthographic,
       near,
       far,
 
       show_debug_gui: false,
 
+      position: Vec3::zero(),
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
     }
@@ -91,28 +125,35 @@ impl Camera {
 
   pub fn with_defaults(
     viewport: PhysicalSize,
+    movement_type: MovementType,
     projection_type: ProjectionType,
   ) -> Camera {
     Self::new(
-      Vec3::new(0.0, 0.0, -1.0),
-      10.0,
       viewport,
+      movement_type,
+      Arcball::default(),
+      Fly::default(),
+      Vec3::zero(),
       projection_type,
-      PerspectiveProjection::default(),
-      OrthographicProjection::default(),
+      Perspective::default(),
+      Orthographic::default(),
       0.1,
-      5000.0,
+      1000.0,
     )
   }
 
-  pub fn with_defaults_perspective(viewport: PhysicalSize) -> Self {
-    Self::with_defaults(viewport, ProjectionType::Perspective)
+  pub fn with_defaults_arcball_perspective(viewport: PhysicalSize) -> Self {
+    Self::with_defaults(viewport, MovementType::Arcball, ProjectionType::Perspective)
   }
 
-  pub fn with_defaults_orthographic(viewport: PhysicalSize) -> Self {
-    Self::with_defaults(viewport, ProjectionType::Orthographic)
+  pub fn with_defaults_arcball_orthographic(viewport: PhysicalSize) -> Self {
+    Self::with_defaults(viewport, MovementType::Arcball, ProjectionType::Orthographic)
   }
 
+
+  /// Gets the position of the camera (i.e., the eye of the camera).
+  #[inline]
+  pub fn get_position(&self) -> Vec3 { self.position }
 
   /// Gets the view-projection matrix.
   #[inline]
@@ -143,35 +184,43 @@ impl Camera {
     frame_delta: Duration,
     gui_context: &CtxRef,
   ) {
-    let panning_speed = self.panning_speed * frame_delta.as_s() as f32;
-    if input.move_up { self.position.y += panning_speed };
-    if input.move_right { self.position.x += panning_speed };
-    if input.move_down { self.position.y -= panning_speed };
-    if input.move_left { self.position.x -= panning_speed };
-    match self.projection_type {
-      ProjectionType::Perspective => {
-        self.position.z += input.zoom_delta;
-      }
-      ProjectionType::Orthographic => {
-        self.orthographic.zoom *= 1.0 - input.zoom_delta * self.orthographic.zoom_change_speed;
-      }
-    }
-
     let (width, height): (f64, f64) = self.viewport.into();
     let width = width as f32;
     let height = height as f32;
 
+    self.position = match self.movement_type {
+      MovementType::Arcball => {
+        let frame_delta = frame_delta.as_s() as f32;
+        let distance_speed = self.arcball.distance_speed * frame_delta;
+        self.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
+        if input.mouse_buttons.contains(&MouseButton::Left) {
+          let rotation_speed = self.arcball.rotation_speed * frame_delta;
+          self.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
+          self.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
+        }
+        self.arcball.rotation_around_x = self.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
+        self.arcball.rotation_around_y = self.arcball.rotation_around_y % (PI * 2.0);
+        let mut position = {
+          let mut position = self.target;
+          position.z += self.arcball.distance;
+          position
+        };
+        Rotor3::from_euler_angles(0.0, self.arcball.rotation_around_x, self.arcball.rotation_around_y).rotate_vec(&mut position);
+        position
+      }
+      MovementType::Fly => {
+        Vec3::zero()
+      }
+    };
+
     // View matrix.
-    let eye = Vec3::new(self.position.x, self.position.y, self.position.z);
-    let at = Vec3::new(self.position.x, self.position.y, self.position.z + 1.0);
-    let up = Vec3::unit_y();
-    let view = look_at_lh(eye, at, up);
+    let view = look_at_lh(self.position, self.target, Vec3::unit_y());
 
     // Projection matrix
     let aspect_ratio = width / height;
     let projection = match self.projection_type {
       ProjectionType::Orthographic => {
-        let zoom_factor = self.orthographic.zoom;
+        let zoom_factor = (self.target - self.position).mag().abs();
         let width = aspect_ratio * zoom_factor;
         let height = zoom_factor;
         let left = -width / 2.0;
@@ -191,33 +240,36 @@ impl Camera {
 
     if !self.show_debug_gui { return; }
 
-    gui_context.window("Debug Camera", |ui| {
+    gui_context.window("Camera", |ui| {
       ui.collapsing_open_with_grid("View", "Grid", |ui| {
-        ui.label("Movement");
-        ui.horizontal(|ui| {
-          if input.move_up { ui.label("Up"); }
-          if input.move_right { ui.label("Right"); }
-          if input.move_down { ui.label("Down"); }
-          if input.move_left { ui.label("Left"); }
-        });
+        ui.label("Movement mode");
+        ComboBox::from_id_source("Movement mode")
+          .selected_text(format!("{:?}", self.movement_type))
+          .show_ui(ui, |ui| {
+            ui.selectable_value(&mut self.movement_type, MovementType::Arcball, "Arcball");
+            ui.selectable_value(&mut self.movement_type, MovementType::Fly, "Fly");
+          });
         ui.end_row();
-        ui.label("Panning Speed");
-        ui.horizontal(|ui| {
-          ui.drag_unlabelled(&mut self.panning_speed, 0.1);
-          ui.show_f32_2(panning_speed);
-        });
+        match self.movement_type {
+          MovementType::Arcball => {
+            ui.label("Distance");
+            ui.drag("", &mut self.arcball.distance, 0.01);
+            ui.end_row();
+            ui.label("X rotation");
+            ui.drag("", &mut self.arcball.rotation_around_x, 0.01);
+            ui.end_row();
+            ui.label("Y rotation");
+            ui.drag("", &mut self.arcball.rotation_around_y, 0.01);
+            ui.end_row();
+          }
+          MovementType::Fly => {}
+        }
         ui.end_row();
         ui.label("Position");
-        ui.drag_vec3(0.1, &mut self.position);
+        ui.show_vec3(&self.position);
         ui.end_row();
-        ui.label("Eye");
-        ui.show_vec3(&eye);
-        ui.end_row();
-        ui.label("At");
-        ui.show_vec3(&at);
-        ui.end_row();
-        ui.label("Up");
-        ui.show_vec3(&up);
+        ui.label("Target");
+        ui.drag_vec3(0.1, &mut self.target);
         ui.end_row();
       });
       ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
@@ -238,25 +290,11 @@ impl Camera {
         ui.end_row();
         match self.projection_type {
           ProjectionType::Perspective => {
-            ui.label("Perspective");
-            ui.horizontal(|ui| {
-              ui.horizontal(|ui| {
-                ui.label("Vertical FOV");
-                ui.drag_angle(&mut self.perspective.vertical_fov_radians);
-                ui.drag("change speed: ", &mut self.perspective.fov_change_speed, 0.01);
-              });
-            });
+            ui.label("Vertical FOV");
+            ui.drag_angle(&mut self.perspective.vertical_fov_radians);
             ui.end_row();
           }
-          ProjectionType::Orthographic => {
-            ui.label("Orthographic");
-            ui.horizontal(|ui| {
-              ui.label("Zoom");
-              ui.drag_unlabelled(&mut self.orthographic.zoom, 0.1);
-              ui.drag("change speed: ", &mut self.orthographic.zoom_change_speed, 0.01);
-            });
-            ui.end_row();
-          }
+          ProjectionType::Orthographic => {}
         }
         ui.label("Near/Far");
         ui.horizontal(|ui| {
@@ -283,29 +321,35 @@ impl Camera {
   }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct CameraInput {
-  pub move_up: bool,
-  pub move_right: bool,
-  pub move_down: bool,
-  pub move_left: bool,
-  pub zoom_delta: f32,
+  // up: bool,
+  // right: bool,
+  // down: bool,
+  // left: bool,
+
+  mouse_buttons: HashSet<MouseButton>,
+  mouse_position_delta: ScreenDelta,
+  mouse_wheel_scroll_delta: f32,
 }
 
 impl From<&RawInput> for CameraInput {
   fn from(input: &RawInput) -> Self {
     CameraInput {
-      move_up: input.is_keyboard_button_down(KeyboardButton::W),
-      move_right: input.is_keyboard_button_down(KeyboardButton::D),
-      move_down: input.is_keyboard_button_down(KeyboardButton::S),
-      move_left: input.is_keyboard_button_down(KeyboardButton::A),
-      zoom_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
+      // up: input.is_keyboard_button_down(KeyboardButton::W),
+      // right: input.is_keyboard_button_down(KeyboardButton::D),
+      // down: input.is_keyboard_button_down(KeyboardButton::S),
+      // left: input.is_keyboard_button_down(KeyboardButton::A),
+
+      mouse_buttons: input.mouse_buttons.clone(),
+      mouse_position_delta: input.mouse_position_delta,
+      mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
     }
   }
 }
 
 #[inline]
-pub fn look_at_lh(
+fn look_at_lh(
   position: Vec3,
   target: Vec3,
   up: Vec3,
@@ -323,7 +367,7 @@ pub fn look_at_lh(
 }
 
 #[inline]
-pub fn perspective_lh_yup_wgpu_dx(
+fn perspective_lh_yup_wgpu_dx(
   vertical_fov: f32,
   aspect_ratio: f32,
   near: f32,
@@ -343,7 +387,7 @@ pub fn perspective_lh_yup_wgpu_dx(
 }
 
 #[inline]
-pub fn orthographic_lh_yup_wgpu_dx(
+fn orthographic_lh_yup_wgpu_dx(
   left: f32, right: f32,
   bottom: f32, top: f32,
   near: f32, far: f32,

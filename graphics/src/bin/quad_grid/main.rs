@@ -86,7 +86,7 @@ pub struct QuadGrid {
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let viewport = gfx.surface.get_size().physical;
-    let camera_sys = Camera::with_defaults_perspective(viewport);
+    let camera_sys = Camera::with_defaults_arcball_perspective(viewport);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()

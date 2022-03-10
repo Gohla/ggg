@@ -16,16 +16,16 @@ pub struct CameraUniform {
 }
 
 impl CameraUniform {
-  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
+  pub fn from_camera_sys(camera: &Camera) -> Self {
     Self {
-      position: camera_sys.position.into_homogeneous_point(),
-      view_projection: camera_sys.get_view_projection_matrix(),
+      position: camera.get_position().into_homogeneous_point(),
+      view_projection: camera.get_view_projection_matrix(),
     }
   }
 
-  pub fn update_from_camera_sys(&mut self, camera_sys: &Camera) {
-    self.position = camera_sys.position.into_homogeneous_point();
-    self.view_projection = camera_sys.get_view_projection_matrix();
+  pub fn update_from_camera_sys(&mut self, camera: &Camera) {
+    self.position = camera.get_position().into_homogeneous_point();
+    self.view_projection = camera.get_view_projection_matrix();
   }
 }
 

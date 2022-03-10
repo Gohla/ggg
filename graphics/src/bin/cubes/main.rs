@@ -43,7 +43,7 @@ struct Uniform {
 impl Uniform {
   pub fn from_camera_sys(camera_sys: &Camera) -> Self {
     Self {
-      camera_position: camera_sys.position.into_homogeneous_point(),
+      camera_position: camera_sys.get_position().into_homogeneous_point(),
       view_projection: camera_sys.get_view_projection_matrix(),
     }
   }
@@ -90,8 +90,8 @@ pub struct Input {
 impl app::Application for Cubes {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let mut camera_sys = Camera::with_defaults_perspective(viewport);
-    camera_sys.panning_speed = 100.0;
+    let mut camera_sys = Camera::with_defaults_arcball_perspective(viewport);
+    camera_sys.arcball.distance_speed = 100.0;
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;

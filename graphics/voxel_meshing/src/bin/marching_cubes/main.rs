@@ -21,7 +21,7 @@ use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
-  camera_sys: Camera,
+  camera: Camera,
   debug_renderer: DebugRenderer,
 
   camera_uniform: CameraUniform,
@@ -49,13 +49,14 @@ impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
-    let camera_sys = Camera::with_defaults_perspective(viewport);
-    let debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
+    camera.arcball.distance = -2.0;
+    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
-    let camera_uniform = CameraUniform::from_camera_sys(&camera_sys);
+    let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let light_settings = LightSettings::default();
     let extends = C::CELLS_IN_CHUNK_ROW as f32 / 2.0;
-    let transform = Isometry3::new(Vec3::new(-extends, -extends, extends), Rotor3::identity());
+    let transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
@@ -98,7 +99,7 @@ impl app::Application for MarchingCubesDemo {
     let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C>::new_with(0.0));
 
     Self {
-      camera_sys,
+      camera,
       debug_renderer,
 
       camera_uniform,
@@ -118,7 +119,7 @@ impl app::Application for MarchingCubesDemo {
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
-    self.camera_sys.viewport = viewport;
+    self.camera.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
@@ -130,12 +131,12 @@ impl app::Application for MarchingCubesDemo {
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.camera_uniform.update_from_camera_sys(&self.camera_sys);
+    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera_uniform.update_from_camera_sys(&self.camera);
 
     egui::Window::new("Marching Cubes")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
@@ -258,7 +259,7 @@ impl app::Application for MarchingCubesDemo {
         }
       }
     }
-    self.debug_renderer.render(gfx, &mut frame, self.camera_sys.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }

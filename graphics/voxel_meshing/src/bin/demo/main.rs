@@ -23,7 +23,7 @@ pub mod settings;
 pub mod mesh_generation;
 
 pub struct VoxelMeshing {
-  camera_sys: Camera,
+  camera: Camera,
   debug_renderer: DebugRenderer,
 
   camera_uniform: CameraUniform,
@@ -48,29 +48,29 @@ impl app::Application for VoxelMeshing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
-    let mut camera_sys = Camera::with_defaults_perspective(viewport);
-    camera_sys.position = Vec3::new(0.0, 0.0, -200.0);
-    camera_sys.panning_speed = 2000.0;
-    camera_sys.far = 10000.0;
-    let mut debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
+    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
+    let extends = 4096.0 / 2.0;
+    camera.arcball.distance = -extends * 2.0;
+    camera.arcball.distance_speed = 1000.0;
+    camera.far = 10000.0;
+    let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
-    let camera_uniform = CameraUniform::from_camera_sys(&camera_sys);
+    let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut settings = Settings::default();
     settings.light.rotation_y_degree = 270.0;
-    let extends = 4096.0 / 2.0;
-    settings.octree_transform = Isometry3::new(Vec3::new(-extends, -extends, extends), Rotor3::identity());
+    settings.octree_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     settings.render_regular_chunks = true;
     settings.render_transition_lo_x_chunks = false;
     settings.render_transition_hi_x_chunks = false;
     settings.render_transition_lo_y_chunks = false;
     settings.render_transition_hi_y_chunks = false;
     settings.render_transition_lo_z_chunks = false;
-    settings.render_transition_hi_z_chunks = true;
+    settings.render_transition_hi_z_chunks = false;
     settings.debug_render_octree_nodes = true;
-    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.75);
-    settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.1);
-    settings.octree_settings.lod_factor = 2.0;
-    settings.octree_settings.thread_pool_threads = 1;
+    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
+    settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.05);
+    settings.octree_settings.lod_factor = 1.0;
+    //settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
@@ -112,10 +112,10 @@ impl app::Application for VoxelMeshing {
 
     let volume_mesh_manager = settings.create_volume_mesh_manager();
 
-    let mesh_generation = MeshGeneration::new(camera_sys.position, &settings, volume_mesh_manager, &mut debug_renderer, &gfx.device);
+    let mesh_generation = MeshGeneration::new(camera.get_position(), &settings, volume_mesh_manager, &mut debug_renderer, &gfx.device);
 
     Self {
-      camera_sys,
+      camera: camera,
       debug_renderer,
 
       camera_uniform,
@@ -135,7 +135,7 @@ impl app::Application for VoxelMeshing {
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
-    self.camera_sys.viewport = viewport;
+    self.camera.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
@@ -148,12 +148,12 @@ impl app::Application for VoxelMeshing {
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.camera_uniform.update_from_camera_sys(&self.camera_sys);
+    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera_uniform.update_from_camera_sys(&self.camera);
 
     let mut recreate_volume_mesh_manager = false;
     let mut update_volume_mesh_manager = false;
@@ -161,9 +161,9 @@ impl app::Application for VoxelMeshing {
       self.settings.render_gui(ui, &mut self.mesh_generation, &mut recreate_volume_mesh_manager, &mut update_volume_mesh_manager);
     });
     if recreate_volume_mesh_manager {
-      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera_sys.position, &self.settings, &mut self.debug_renderer, &gfx.device);
+      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera.get_position(), &self.settings, &mut self.debug_renderer, &gfx.device);
     } else if self.settings.auto_update || update_volume_mesh_manager {
-      self.mesh_generation.update(self.camera_sys.position, &self.settings, &mut self.debug_renderer, &gfx.device);
+      self.mesh_generation.update(self.camera.get_position(), &self.settings, &mut self.debug_renderer, &gfx.device);
     }
 
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
@@ -186,7 +186,7 @@ impl app::Application for VoxelMeshing {
     render_pass.pop_debug_group();
     drop(render_pass);
 
-    self.debug_renderer.render(gfx, &mut frame, self.camera_sys.get_view_projection_matrix() * model);
+    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())
   }
