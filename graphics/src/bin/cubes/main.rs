@@ -16,7 +16,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, CameraSys};
+use gfx::camera::{CameraInput, Camera};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
@@ -41,7 +41,7 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
+  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
     Self {
       camera_position: camera_sys.position.into_homogeneous_point(),
       view_projection: camera_sys.get_view_projection_matrix(),
@@ -64,7 +64,7 @@ impl Instance {
 }
 
 pub struct Cubes {
-  camera_sys: CameraSys,
+  camera_sys: Camera,
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
@@ -90,7 +90,7 @@ pub struct Input {
 impl app::Application for Cubes {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let mut camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let mut camera_sys = Camera::with_defaults_perspective(viewport);
     camera_sys.panning_speed = 100.0;
 
     let num_cubes_to_generate = 100_000;

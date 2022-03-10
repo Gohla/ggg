@@ -10,7 +10,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, CameraSys};
+use gfx::camera::{CameraInput, Camera};
 use gfx::debug_renderer::DebugRenderer;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -21,7 +21,7 @@ use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
-  camera_sys: CameraSys,
+  camera_sys: Camera,
   debug_renderer: DebugRenderer,
 
   camera_uniform: CameraUniform,
@@ -43,13 +43,13 @@ pub struct Input {
   camera: CameraInput,
 }
 
-type C = GenericChunkSize<4>;
+type C = GenericChunkSize<1>;
 
 impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
-    let camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let camera_sys = Camera::with_defaults_perspective(viewport);
     let debug_renderer = DebugRenderer::new(gfx, camera_sys.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera_sys);
@@ -147,6 +147,34 @@ impl app::Application for MarchingCubesDemo {
           panic!();
         };
         ui.collapsing_open("Marching Cubes", |ui| {
+          ui.grid("Buttons", |ui| {
+            if ui.button("Flip").clicked() {
+              for sample in chunk_samples_array.array.iter_mut() {
+                *sample *= -1.0;
+              }
+            }
+            if ui.button("To +0.0").clicked() {
+              for sample in chunk_samples_array.array.iter_mut() {
+                *sample = 0.0;
+              }
+            }
+            if ui.button("To -0.0").clicked() {
+              for sample in chunk_samples_array.array.iter_mut() {
+                *sample = -0.0;
+              }
+            }
+            if ui.button("To +0.5").clicked() {
+              for sample in chunk_samples_array.array.iter_mut() {
+                *sample = 0.5;
+              }
+            }
+            if ui.button("To -0.5").clicked() {
+              for sample in chunk_samples_array.array.iter_mut() {
+                *sample = -0.5;
+              }
+            }
+            ui.end_row();
+          });
           for z in 0..C::VOXELS_IN_CHUNK_ROW {
             ui.collapsing_open_with_grid(format!("Z={}", z), format!("Grid Z={}", z), |ui| {
               ui.label("");

@@ -23,6 +23,7 @@ pub trait UiWidgetsExt {
 
   fn grid<R>(&mut self, id_source: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
 
+  fn collapsing_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
   fn collapsing_open_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
 
 
@@ -68,6 +69,11 @@ impl UiWidgetsExt for Ui {
   #[inline]
   fn grid<R>(&mut self, id_source: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     Grid::new(id_source).striped(true).show(self, add_contents)
+  }
+
+  #[inline]
+  fn collapsing_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>> {
+    self.collapsing(heading, |ui| { ui.grid(grid_id, add_contents) })
   }
 
   #[inline]

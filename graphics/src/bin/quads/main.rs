@@ -13,7 +13,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, CameraSys};
+use gfx::camera::{CameraInput, Camera};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -79,7 +79,7 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 
 pub struct Quads {
-  camera_sys: CameraSys,
+  camera_sys: Camera,
 
   diffuse_bind_group: BindGroup,
 
@@ -102,7 +102,7 @@ pub struct Input {
 impl app::Application for Quads {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let camera_sys = Camera::with_defaults_perspective(viewport);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();

@@ -3,7 +3,7 @@ use egui::{CollapsingResponse, color_picker, DragValue, InnerResponse, Rgba, Ui}
 use egui::color_picker::Alpha;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec3, Vec4};
 
-use gfx::camera::CameraSys;
+use gfx::camera::Camera;
 use gui_widget::UiWidgetsExt;
 
 // Camera
@@ -16,14 +16,14 @@ pub struct CameraUniform {
 }
 
 impl CameraUniform {
-  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
+  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
     Self {
       position: camera_sys.position.into_homogeneous_point(),
       view_projection: camera_sys.get_view_projection_matrix(),
     }
   }
 
-  pub fn update_from_camera_sys(&mut self, camera_sys: &CameraSys) {
+  pub fn update_from_camera_sys(&mut self, camera_sys: &Camera) {
     self.position = camera_sys.position.into_homogeneous_point();
     self.view_projection = camera_sys.get_view_projection_matrix();
   }

@@ -7,7 +7,7 @@ use common::timing::Duration;
 use gui_widget::*;
 
 #[derive(Debug)]
-pub struct CameraSys {
+pub struct Camera {
   pub position: Vec3,
   pub panning_speed: f32,
 
@@ -60,7 +60,7 @@ pub enum ProjectionType {
   Orthographic,
 }
 
-impl CameraSys {
+impl Camera {
   pub fn new(
     position: Vec3,
     panning_speed: f32,
@@ -70,8 +70,8 @@ impl CameraSys {
     orthographic_projection: OrthographicProjection,
     near: f32,
     far: f32,
-  ) -> CameraSys {
-    CameraSys {
+  ) -> Camera {
+    Camera {
       position,
       panning_speed,
 
@@ -92,7 +92,7 @@ impl CameraSys {
   pub fn with_defaults(
     viewport: PhysicalSize,
     projection_type: ProjectionType,
-  ) -> CameraSys {
+  ) -> Camera {
     Self::new(
       Vec3::new(0.0, 0.0, -1.0),
       10.0,
@@ -219,9 +219,6 @@ impl CameraSys {
         ui.label("Up");
         ui.show_vec3(&up);
         ui.end_row();
-        ui.label("View matrix");
-        ui.show_mat4(&view);
-        ui.end_row();
       });
       ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
         ui.label("Viewport");
@@ -239,33 +236,42 @@ impl CameraSys {
             ui.selectable_value(&mut self.projection_type, ProjectionType::Orthographic, "Orthographic");
           });
         ui.end_row();
-        ui.label("Perspective");
-        ui.horizontal(|ui| {
-          ui.horizontal(|ui| {
-            ui.label("Vertical FOV");
-            ui.drag_angle(&mut self.perspective.vertical_fov_radians);
-            ui.drag("change speed: ", &mut self.perspective.fov_change_speed, 0.01);
-          });
-        });
-        ui.end_row();
-        ui.label("Orthographic");
-        ui.horizontal(|ui| {
-          ui.label("Zoom");
-          ui.drag_unlabelled(&mut self.orthographic.zoom, 0.1);
-          ui.drag("change speed: ", &mut self.orthographic.zoom_change_speed, 0.01);
-        });
-        ui.end_row();
+        match self.projection_type {
+          ProjectionType::Perspective => {
+            ui.label("Perspective");
+            ui.horizontal(|ui| {
+              ui.horizontal(|ui| {
+                ui.label("Vertical FOV");
+                ui.drag_angle(&mut self.perspective.vertical_fov_radians);
+                ui.drag("change speed: ", &mut self.perspective.fov_change_speed, 0.01);
+              });
+            });
+            ui.end_row();
+          }
+          ProjectionType::Orthographic => {
+            ui.label("Orthographic");
+            ui.horizontal(|ui| {
+              ui.label("Zoom");
+              ui.drag_unlabelled(&mut self.orthographic.zoom, 0.1);
+              ui.drag("change speed: ", &mut self.orthographic.zoom_change_speed, 0.01);
+            });
+            ui.end_row();
+          }
+        }
         ui.label("Near/Far");
         ui.horizontal(|ui| {
           ui.drag("near: ", &mut self.near, 0.001);
           ui.drag("far: ", &mut self.far, 1.0);
         });
         ui.end_row();
+      });
+      ui.collapsing_with_grid("Matrices", "Grid", |ui| {
+        ui.label("View matrix");
+        ui.show_mat4(&view);
+        ui.end_row();
         ui.label("Projection matrix");
         ui.show_mat4(&projection);
         ui.end_row();
-      });
-      ui.collapsing_open_with_grid("Final", "Grid", |ui| {
         ui.label("View-projection matrix");
         ui.show_mat4(&view_projection);
         ui.end_row();

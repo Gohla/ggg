@@ -15,7 +15,7 @@ use common::input::RawInput;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, CameraSys};
+use gfx::camera::{CameraInput, Camera};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
@@ -37,7 +37,7 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn from_camera_sys(camera_sys: &CameraSys) -> Self {
+  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
     Self {
       view_projection: camera_sys.get_view_projection_matrix(),
     }
@@ -70,7 +70,7 @@ pub struct Input {
 }
 
 pub struct QuadGrid {
-  camera_sys: CameraSys,
+  camera_sys: Camera,
 
   uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
@@ -86,7 +86,7 @@ pub struct QuadGrid {
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let viewport = gfx.surface.get_size().physical;
-    let camera_sys = CameraSys::with_defaults_perspective(viewport);
+    let camera_sys = Camera::with_defaults_perspective(viewport);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
