@@ -1,7 +1,7 @@
 #version 450
 #extension GL_OES_standard_derivatives : enable
 
-layout(location = 0) in vec3 inPosition;
+layout(location = 0) in vec3 inEyeRelativePosition;
 
 layout(location = 0) out vec4 outColor;
 
@@ -22,13 +22,13 @@ void main() {
 
   vec3 ambientColor = light.color * light.ambient;
 
-  // From: https://stackoverflow.com/a/66206648
-  vec3 normal = normalize(cross(dFdx(inPosition), dFdy(inPosition)));
+  // From: https://stackoverflow.com/a/66206648 and https://www.enkisoftware.com/devlogpost-20150131-1-Normal-generation-in-the-pixel-shader
+  vec3 normal = normalize(cross(dFdx(inEyeRelativePosition), dFdy(inEyeRelativePosition)));
 
   float diffuse = max(dot(normal, lightDirection), 0.0);
   vec3 diffuseColor = light.color * diffuse;
 
-  vec3 viewDirection = normalize(camera.position.xyz - inPosition);
+  vec3 viewDirection = normalize(inEyeRelativePosition);
   vec3 halfDirection = normalize(viewDirection + lightDirection);
   float specular = pow(max(dot(normal, halfDirection), 0.0), 32.0);
   vec3 specularColor = specular * light.color;
