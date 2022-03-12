@@ -67,9 +67,9 @@ impl app::Application for VoxelMeshing {
     settings.render_transition_lo_z_chunks = false;
     settings.render_transition_hi_z_chunks = false;
     settings.debug_render_octree_nodes = true;
-    settings.debug_render_octree_node_color = Vec4::new(0.0, 1.0, 0.0, 0.5);
-    settings.debug_render_octree_node_empty_color = Vec4::new(1.0, 0.0, 0.0, 0.05);
-    settings.octree_settings.lod_factor = 1.0;
+    settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
+    settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
+    settings.octree_settings.lod_factor = 2.0;
     //settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 

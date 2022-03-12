@@ -45,7 +45,7 @@ impl Default for OctreeSettings {
     Self {
       total_size: 4096,
       lod_factor: 1.0,
-      thread_pool_threads: 5,
+      thread_pool_threads: 10,
       mesh_cache_size: 1024,
     }
   }
