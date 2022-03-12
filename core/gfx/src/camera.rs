@@ -33,9 +33,11 @@ pub struct Camera {
 
 #[derive(Debug)]
 pub struct Arcball {
-  pub distance_speed: f32,
-  pub rotation_speed: f32,
+  pub mouse_scroll_distance_speed: f32,
+  pub debug_gui_distance_speed: f32,
   pub distance: f32,
+  pub mouse_movement_rotation_speed: f32,
+  pub debug_gui_rotation_speed: f32,
   pub rotation_around_x: f32,
   pub rotation_around_y: f32,
 }
@@ -43,9 +45,11 @@ pub struct Arcball {
 impl Default for Arcball {
   fn default() -> Self {
     Self {
-      distance_speed: 5.0,
-      rotation_speed: 0.5,
+      mouse_scroll_distance_speed: 5.0,
+      debug_gui_distance_speed: 1.0,
       distance: -1.0,
+      mouse_movement_rotation_speed: 0.5,
+      debug_gui_rotation_speed: 0.01,
       rotation_around_x: 0.0,
       rotation_around_y: 0.0,
     }
@@ -191,10 +195,10 @@ impl Camera {
     self.position = match self.movement_type {
       MovementType::Arcball => {
         let frame_delta = frame_delta.as_s() as f32;
-        let distance_speed = self.arcball.distance_speed * frame_delta;
+        let distance_speed = self.arcball.mouse_scroll_distance_speed * frame_delta;
         self.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
         if input.mouse_buttons.contains(&MouseButton::Left) {
-          let rotation_speed = self.arcball.rotation_speed * frame_delta;
+          let rotation_speed = self.arcball.mouse_movement_rotation_speed * frame_delta;
           self.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
           self.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
         }
@@ -253,18 +257,23 @@ impl Camera {
         match self.movement_type {
           MovementType::Arcball => {
             ui.label("Distance");
-            ui.drag("", &mut self.arcball.distance, 0.01);
+            ui.horizontal(|ui| {
+              ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
+              ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
+              ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            });
             ui.end_row();
-            ui.label("X rotation");
-            ui.drag("", &mut self.arcball.rotation_around_x, 0.01);
-            ui.end_row();
-            ui.label("Y rotation");
-            ui.drag("", &mut self.arcball.rotation_around_y, 0.01);
+            ui.label("Rotation");
+            ui.horizontal(|ui| {
+              ui.drag("x: ", &mut self.arcball.rotation_around_x, 0.01);
+              ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
+              ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
+              ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
+            });
             ui.end_row();
           }
           MovementType::Fly => {}
         }
-        ui.end_row();
         ui.label("Position");
         ui.show_vec3(&self.position);
         ui.end_row();
@@ -273,13 +282,6 @@ impl Camera {
         ui.end_row();
       });
       ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
-        ui.label("Viewport");
-        ui.horizontal(|ui| {
-          ui.monospace(format!("width: {:.2}", self.viewport.width));
-          ui.monospace(format!("height: {:.2}", self.viewport.height));
-          ui.monospace(format!("aspect ratio: {:.2}", aspect_ratio));
-        });
-        ui.end_row();
         ui.label("Projection mode");
         ComboBox::from_id_source("Projection mode")
           .selected_text(format!("{:?}", self.projection_type))
@@ -296,7 +298,10 @@ impl Camera {
           }
           ProjectionType::Orthographic => {}
         }
-        ui.label("Near/Far");
+        ui.label("Viewport");
+        ui.monospace(format!("{:.2}x{:.2} ({:.2})", self.viewport.width, self.viewport.height, aspect_ratio));
+        ui.end_row();
+        ui.label("Frustum");
         ui.horizontal(|ui| {
           ui.drag("near: ", &mut self.near, 0.001);
           ui.drag("far: ", &mut self.far, 1.0);

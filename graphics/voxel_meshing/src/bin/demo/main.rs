@@ -51,7 +51,7 @@ impl app::Application for VoxelMeshing {
     let mut camera = Camera::with_defaults_arcball_perspective(viewport);
     let extends = 4096.0 / 2.0;
     camera.arcball.distance = -extends * 2.0;
-    camera.arcball.distance_speed = 1000.0;
+    camera.arcball.mouse_scroll_distance_speed = 1000.0;
     camera.far = 10000.0;
     let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 

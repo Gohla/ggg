@@ -79,7 +79,7 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 
 pub struct Quads {
-  camera_sys: Camera,
+  camera: Camera,
 
   diffuse_bind_group: BindGroup,
 
@@ -102,7 +102,7 @@ pub struct Input {
 impl app::Application for Quads {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let camera_sys = Camera::with_defaults_arcball_perspective(viewport);
+    let camera = Camera::with_defaults_arcball_perspective(viewport);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
@@ -126,7 +126,7 @@ impl app::Application for Quads {
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
-      .build_with_data(&gfx.device, &[Uniform { view_projection: camera_sys.get_view_projection_matrix() }]);
+      .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -176,7 +176,7 @@ impl app::Application for Quads {
       ;
 
     Self {
-      camera_sys,
+      camera,
 
       diffuse_bind_group,
 
@@ -196,7 +196,7 @@ impl app::Application for Quads {
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
-    self.camera_sys.viewport = viewport;
+    self.camera.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
@@ -210,12 +210,12 @@ impl app::Application for Quads {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera_sys.get_view_projection_matrix() }]);
+    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera.get_view_projection_matrix() }]);
 
     egui::Window::new("Quads").show(&gui_frame, |ui| {
       ui.label("Hello, world!");

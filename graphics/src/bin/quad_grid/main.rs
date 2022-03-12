@@ -70,7 +70,7 @@ pub struct Input {
 }
 
 pub struct QuadGrid {
-  camera_sys: Camera,
+  camera: Camera,
 
   uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
@@ -86,12 +86,12 @@ pub struct QuadGrid {
 impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let viewport = gfx.surface.get_size().physical;
-    let camera_sys = Camera::with_defaults_arcball_perspective(viewport);
+    let camera = Camera::with_defaults_arcball_perspective(viewport);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Quad grid uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
@@ -157,7 +157,7 @@ impl app::Application for QuadGrid {
     };
 
     Self {
-      camera_sys,
+      camera,
       uniform_buffer,
       _instance_buffer: instance_buffer,
       bind_group,
@@ -177,12 +177,12 @@ impl app::Application for QuadGrid {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera_sys)]);
+    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Quad grid render pass")

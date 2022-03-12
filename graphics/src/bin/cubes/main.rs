@@ -64,7 +64,7 @@ impl Instance {
 }
 
 pub struct Cubes {
-  camera_sys: Camera,
+  camera: Camera,
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
@@ -90,8 +90,8 @@ pub struct Input {
 impl app::Application for Cubes {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let mut camera_sys = Camera::with_defaults_arcball_perspective(viewport);
-    camera_sys.arcball.distance_speed = 100.0;
+    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
+    camera.arcball.mouse_scroll_distance_speed = 100.0;
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
@@ -100,7 +100,7 @@ impl app::Application for Cubes {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera_sys)]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
@@ -156,7 +156,7 @@ impl app::Application for Cubes {
     };
 
     Self {
-      camera_sys,
+      camera,
 
       uniform_buffer,
       instance_buffer,
@@ -179,7 +179,7 @@ impl app::Application for Cubes {
 
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
-    self.camera_sys.viewport = viewport;
+    self.camera.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
@@ -193,12 +193,12 @@ impl app::Application for Cubes {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera_sys.show_debug_gui, "Camera");
+    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_sys.update(&input.camera, frame.time.delta, &gui_frame);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera_sys)]);
+    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {
       ui.grid("Grid", |ui| {
