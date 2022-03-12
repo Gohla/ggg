@@ -92,12 +92,28 @@ impl DebugRenderer {
     }
   }
 
+
   pub fn draw_point(&mut self, point: Vec3, col: Vec4, size: f32) {
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
-      pipeline.push_vertex_without_index(PointVertex::new(point, col, size));
+      pipeline.push_vertex(PointVertex::new(point, col, size));
       pipeline.upload_buffers = true;
     }
   }
+
+  pub fn draw_points(&mut self, positions: impl IntoIterator<Item=Vec3>, col: Vec4, size: f32) {
+    if let Some(pipeline) = &mut self.point_list_render_pipeline {
+      pipeline.push_vertices(positions.into_iter().map(|pos| PointVertex::new(pos, col, size)));
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_point_vertices(&mut self, vertices: impl IntoIterator<Item=PointVertex>) {
+    if let Some(pipeline) = &mut self.point_list_render_pipeline {
+      pipeline.push_vertices(vertices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
 
   pub fn draw_line(&mut self, start_pos: Vec3, end_pos: Vec3, start_col: Vec4, end_col: Vec4) {
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
@@ -163,6 +179,23 @@ impl DebugRenderer {
       ],
     );
   }
+
+  pub fn draw_axes_lines(&mut self, pos: Vec3, size: f32) {
+    self.draw_line_vertices_indexed(
+      [
+        RegularVertex::new(pos, Vec4::one()),
+        RegularVertex::new(pos + Vec3::unit_x() * size, Vec4::new(1.0, 0.0, 0.0, 1.0)),
+        RegularVertex::new(pos + Vec3::unit_y() * size, Vec4::new(0.0, 1.0, 0.0, 1.0)),
+        RegularVertex::new(pos + Vec3::unit_z() * size, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+      ],
+      [
+        0, 1,
+        0, 2,
+        0, 3,
+      ],
+    );
+  }
+
 
   pub fn draw_triangles_wireframe(&mut self, positions: impl IntoIterator<Item=Vec3>, col: Vec4) {
     if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {

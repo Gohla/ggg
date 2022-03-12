@@ -11,7 +11,7 @@ use gfx::{Frame, Gfx, include_shader};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput};
-use gfx::debug_renderer::{DebugRenderer, RegularVertex};
+use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
@@ -137,9 +137,11 @@ impl app::Application for MarchingCubesDemo {
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    // Update camera
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
+    // Debug GUI
     egui::Window::new("Marching Cubes")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
       .show(&gui_frame, |ui| {
@@ -204,10 +206,11 @@ impl app::Application for MarchingCubesDemo {
         });
       });
 
+    // Write uniforms
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
 
-    // Draw marching cubes vertices
+    // Run marching cubes to create triangles from voxels
     let mut chunk_vertices = ChunkVertices::new();
     let marching_cubes = MarchingCubes::<C>::new();
     marching_cubes.extract_chunk(UVec3::zero(), 1, &self.chunk_samples, &mut chunk_vertices);
@@ -239,7 +242,9 @@ impl app::Application for MarchingCubesDemo {
     } else {
       panic!();
     };
-    // Points
+    // Axes
+    self.debug_renderer.draw_axes_lines(Vec3::one() * 0.5, 1.0);
+    // Voxels
     for z in 0..C::VOXELS_IN_CHUNK_ROW {
       for y in 0..C::VOXELS_IN_CHUNK_ROW {
         for x in 0..C::VOXELS_IN_CHUNK_ROW {
@@ -250,7 +255,7 @@ impl app::Application for MarchingCubesDemo {
           } else {
             Vec4::new(0.1, 0.1, 0.1, 1.0)
           };
-          self.debug_renderer.draw_point(position.into(), point_color, 15.0);
+          self.debug_renderer.draw_point(position.into(), point_color, 20.0);
         }
       }
     }
@@ -263,8 +268,10 @@ impl app::Application for MarchingCubesDemo {
         }
       }
     }
-    // Marching cubes wireframe
+    // Marching cubes wireframe and points
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())), chunk_vertices.indices().into_iter().copied());
+    self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
+    // Perform the actual debug rendering
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
