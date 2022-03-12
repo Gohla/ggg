@@ -10,8 +10,8 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, Camera};
-use gfx::debug_renderer::DebugRenderer;
+use gfx::camera::{Camera, CameraInput};
+use gfx::debug_renderer::{DebugRenderer, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
@@ -54,7 +54,9 @@ impl app::Application for MarchingCubesDemo {
     let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
-    let light_settings = LightSettings::default();
+    let mut light_settings = LightSettings::default();
+    light_settings.uniform.ambient = 0.2;
+    light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
     let extends = C::CELLS_IN_CHUNK_ROW as f32 / 2.0;
     let transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
@@ -205,10 +207,10 @@ impl app::Application for MarchingCubesDemo {
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
 
+    // Draw marching cubes vertices
     let mut chunk_vertices = ChunkVertices::new();
     let marching_cubes = MarchingCubes::<C>::new();
     marching_cubes.extract_chunk(UVec3::zero(), 1, &self.chunk_samples, &mut chunk_vertices);
-
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
@@ -217,7 +219,6 @@ impl app::Application for MarchingCubesDemo {
       .with_index_usage()
       .with_label("Voxel meshing index buffer")
       .build_with_data(&gfx.device, &chunk_vertices.indices());
-
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
       .with_label("Marching cubes render pass")
@@ -231,12 +232,14 @@ impl app::Application for MarchingCubesDemo {
     render_pass.pop_debug_group();
     drop(render_pass);
 
+    // Debug rendering
     self.debug_renderer.clear();
     let chunk_samples_array = if let ChunkSamples::Mixed(chunk_samples_array) = &self.chunk_samples {
       chunk_samples_array
     } else {
       panic!();
     };
+    // Points
     for z in 0..C::VOXELS_IN_CHUNK_ROW {
       for y in 0..C::VOXELS_IN_CHUNK_ROW {
         for x in 0..C::VOXELS_IN_CHUNK_ROW {
@@ -251,14 +254,17 @@ impl app::Application for MarchingCubesDemo {
         }
       }
     }
+    // Cells
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let position = UVec3::new(x, y, z);
-          self.debug_renderer.draw_cube(position.into(), 1.0, Vec4::new(1.0, 1.0, 1.0, 1.0));
+          self.debug_renderer.draw_cube_lines(position.into(), 1.0, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
       }
     }
+    // Marching cubes wireframe
+    self.debug_renderer.draw_triangle_vertices_wireframe_indexed(chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())), chunk_vertices.indices().into_iter().copied());
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())

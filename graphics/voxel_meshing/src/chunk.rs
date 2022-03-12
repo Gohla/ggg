@@ -218,7 +218,7 @@ impl LodChunkVertices {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
-  position: Vec3,
+  pub position: Vec3,
 }
 
 impl Vertex {

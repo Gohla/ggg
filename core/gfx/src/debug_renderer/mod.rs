@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BindGroupLayout, BufferAddress, Features, PolygonMode, PrimitiveTopology, RenderPass, RenderPipeline, ShaderModule, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BindGroup, BindGroupLayout, BufferAddress, Features, IndexFormat, PolygonMode, PrimitiveTopology, RenderPass, RenderPipeline, ShaderModule, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use crate::{Frame, Gfx, include_shader};
 use crate::bind_group::CombinedBindGroupLayoutBuilder;
@@ -17,6 +17,7 @@ pub struct DebugRenderer {
   point_list_render_pipeline: Option<DebugRendererPipeline<PointVertex>>,
   line_list_render_pipeline: Option<DebugRendererPipeline<RegularVertex>>,
   line_strip_render_pipeline: Option<DebugRendererPipeline<RegularVertex>>,
+  line_triangle_list_render_pipeline: Option<DebugRendererPipeline<RegularVertex>>,
 }
 
 impl DebugRenderer {
@@ -71,6 +72,15 @@ impl DebugRenderer {
       PolygonMode::Line,
       "line strip",
     ));
+    let line_triangle_list_render_pipeline = has_polygon_mode_line_feature.then(|| DebugRendererPipeline::new(
+      gfx,
+      &vertex_shader_module,
+      &fragment_shader_module,
+      &uniform_bind_group_layout,
+      PrimitiveTopology::TriangleList,
+      PolygonMode::Line,
+      "line triangle list",
+    ));
 
     Self {
       uniform_buffer,
@@ -78,72 +88,131 @@ impl DebugRenderer {
       point_list_render_pipeline,
       line_list_render_pipeline,
       line_strip_render_pipeline,
+      line_triangle_list_render_pipeline,
     }
   }
 
   pub fn draw_point(&mut self, point: Vec3, col: Vec4, size: f32) {
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
-      pipeline.vertices.push(PointVertex::new(point, col, size));
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.push_vertex_without_index(PointVertex::new(point, col, size));
+      pipeline.upload_buffers = true;
     }
   }
 
   pub fn draw_line(&mut self, start_pos: Vec3, end_pos: Vec3, start_col: Vec4, end_col: Vec4) {
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
-      pipeline.vertices.push(RegularVertex::new(start_pos, start_col));
-      pipeline.vertices.push(RegularVertex::new(end_pos, end_col));
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.push_vertex(RegularVertex::new(start_pos, start_col));
+      pipeline.push_vertex(RegularVertex::new(end_pos, end_col));
+      pipeline.upload_buffers = true;
     }
   }
 
-  pub fn draw_cube(&mut self, min: Vec3, size: f32, col: Vec4) {
+  pub fn draw_lines(&mut self, positions: impl IntoIterator<Item=Vec3>, col: Vec4) {
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
-      pipeline.vertices.push(RegularVertex::new(min, col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min, col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min, col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, 0.0, size), col));
-
-      let max = min + Vec3::new(size, size, size);
-      pipeline.vertices.push(RegularVertex::new(max, col));
-      pipeline.vertices.push(RegularVertex::new(max + Vec3::new(-size, 0.0, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(max, col));
-      pipeline.vertices.push(RegularVertex::new(max + Vec3::new(0.0, -size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(max, col));
-      pipeline.vertices.push(RegularVertex::new(max + Vec3::new(0.0, 0.0, -size), col));
-
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, size, size), col));
-
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, 0.0, size), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, 0.0, size), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, 0.0, size), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(0.0, size, size), col));
-
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, size, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, 0.0, 0.0), col));
-      pipeline.vertices.push(RegularVertex::new(min + Vec3::new(size, 0.0, size), col));
-
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.push_vertices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)));
+      pipeline.upload_buffers = true;
     }
   }
+
+  pub fn draw_lines_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u16>, col: Vec4) {
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.push_vertices_and_indices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)), indices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_line_vertices(&mut self, vertices: impl IntoIterator<Item=RegularVertex>) {
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.push_vertices(vertices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_line_vertices_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u16>) {
+    if let Some(pipeline) = &mut self.line_list_render_pipeline {
+      pipeline.push_vertices_and_indices(vertices, indices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_cube_lines(&mut self, min: Vec3, size: f32, col: Vec4) {
+    self.draw_line_vertices_indexed(
+      [
+        RegularVertex::new(min, col),
+        RegularVertex::new(min + Vec3::new(size, 0.0, 0.0), col),
+        RegularVertex::new(min + Vec3::new(0.0, size, 0.0), col),
+        RegularVertex::new(min + Vec3::new(size, size, 0.0), col),
+        RegularVertex::new(min + Vec3::new(0.0, 0.0, size), col),
+        RegularVertex::new(min + Vec3::new(size, 0.0, size), col),
+        RegularVertex::new(min + Vec3::new(0.0, size, size), col),
+        RegularVertex::new(min + Vec3::new(size, size, size), col),
+      ],
+      [
+        0, 1, // X
+        2, 3,
+        4, 5,
+        6, 7,
+        0, 2, // Y
+        1, 3,
+        4, 6,
+        5, 7,
+        0, 4, // Z
+        1, 5,
+        2, 6,
+        3, 7,
+      ],
+    );
+  }
+
+  pub fn draw_triangles_wireframe(&mut self, positions: impl IntoIterator<Item=Vec3>, col: Vec4) {
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.push_vertices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)));
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_triangles_wireframe_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u16>, col: Vec4) {
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.push_vertices_and_indices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)), indices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_triangle_vertices_wireframe(&mut self, vertices: impl IntoIterator<Item=RegularVertex>) {
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.push_vertices(vertices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
+  pub fn draw_triangle_vertices_wireframe_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u16>) {
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.push_vertices_and_indices(vertices, indices);
+      pipeline.upload_buffers = true;
+    }
+  }
+
 
   pub fn clear(&mut self) {
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
       pipeline.vertices.clear();
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.indices.clear();
+      pipeline.upload_buffers = true;
     }
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
       pipeline.vertices.clear();
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.indices.clear();
+      pipeline.upload_buffers = true;
     }
     if let Some(pipeline) = &mut self.line_strip_render_pipeline {
       pipeline.vertices.clear();
-      pipeline.upload_new_vertex_buffer = true;
+      pipeline.indices.clear();
+      pipeline.upload_buffers = true;
+    }
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.vertices.clear();
+      pipeline.indices.clear();
+      pipeline.upload_buffers = true;
     }
   }
 
@@ -155,13 +224,16 @@ impl DebugRenderer {
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
-      pipeline.reupload_vertex_buffer_if_needed(gfx);
+      pipeline.upload_buffers_if_needed(gfx);
     }
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
-      pipeline.reupload_vertex_buffer_if_needed(gfx);
+      pipeline.upload_buffers_if_needed(gfx);
     }
     if let Some(pipeline) = &mut self.line_strip_render_pipeline {
-      pipeline.reupload_vertex_buffer_if_needed(gfx);
+      pipeline.upload_buffers_if_needed(gfx);
+    }
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.upload_buffers_if_needed(gfx);
     }
 
     let mut render_pass = RenderPassBuilder::new()
@@ -177,6 +249,9 @@ impl DebugRenderer {
     if let Some(pipeline) = &mut self.line_strip_render_pipeline {
       pipeline.draw(&mut render_pass);
     }
+    if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
+      pipeline.draw(&mut render_pass);
+    }
   }
 }
 
@@ -185,8 +260,10 @@ impl DebugRenderer {
 struct DebugRendererPipeline<V> {
   render_pipeline: RenderPipeline,
   vertex_buffer: GfxBuffer,
-  upload_new_vertex_buffer: bool,
+  index_buffer: GfxBuffer,
+  upload_buffers: bool,
   vertices: Vec<V>,
+  indices: Vec<u16>,
   label: &'static str,
 }
 
@@ -215,30 +292,85 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
       .with_static_vertex_usage()
       .with_label(&format!("Debug {} vertex buffer", label))
       .build_with_data(&gfx.device, &vertices);
+    let indices = Vec::new();
+    let index_buffer = BufferBuilder::new()
+      .with_static_index_usage()
+      .with_label(&format!("Debug {} index buffer", label))
+      .build_with_data(&gfx.device, &indices);
     Self {
       render_pipeline,
       vertex_buffer,
-      upload_new_vertex_buffer: false,
+      index_buffer,
+      upload_buffers: false,
       vertices,
+      indices,
       label,
     }
   }
 
-  fn reupload_vertex_buffer_if_needed(&mut self, gfx: &Gfx) {
-    if self.upload_new_vertex_buffer {
+  #[inline]
+  fn push_vertex_without_index(&mut self, vertex: V) {
+    self.vertices.push(vertex);
+  }
+
+  #[inline]
+  fn next_index(&self) -> u16 {
+    self.vertices.len() as u16
+  }
+
+  #[inline]
+  fn push_vertex(&mut self, vertex: V) -> u16 {
+    let index = self.next_index();
+    self.push_index(index);
+    self.push_vertex_without_index(vertex);
+    index
+  }
+
+  #[inline]
+  fn push_index(&mut self, index: u16) {
+    self.indices.push(index);
+  }
+
+  #[inline]
+  fn push_vertices(&mut self, vertices: impl IntoIterator<Item=V>) {
+    let base = self.next_index();
+    self.vertices.extend(vertices);
+    self.indices.extend(base..self.next_index());
+  }
+
+  #[inline]
+  fn push_vertices_and_indices(&mut self, vertices: impl IntoIterator<Item=V>, indices: impl IntoIterator<Item=u16>) {
+    let base = self.vertices.len() as u16;
+    self.vertices.extend(vertices);
+    self.indices.extend(indices.into_iter().map(|idx| base + idx));
+  }
+
+  #[inline]
+  fn upload_buffers_if_needed(&mut self, gfx: &Gfx) {
+    if self.upload_buffers {
       self.vertex_buffer = BufferBuilder::new()
         .with_static_vertex_usage()
         .with_label(&format!("Debug {} vertex buffer", self.label))
         .build_with_data(&gfx.device, &self.vertices);
+      self.index_buffer = BufferBuilder::new()
+        .with_static_index_usage()
+        .with_label(&format!("Debug {} index buffer", self.label))
+        .build_with_data(&gfx.device, &self.indices);
     }
-    self.upload_new_vertex_buffer = false;
+    self.upload_buffers = false;
   }
 
+  #[inline]
   fn draw<'a, 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
     render_pass.push_debug_group(&format!("Debug draw {}", self.label));
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
+    if !self.indices.is_empty() {
+      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+      render_pass.draw_indexed(0..self.index_buffer.len as u32, 0, 0..1);
+    } else {
+      render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
+    }
     render_pass.pop_debug_group();
   }
 }
@@ -261,10 +393,17 @@ trait Vertex {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-struct PointVertex {
+pub struct PointVertex {
   pos: Vec3,
   col: Vec4,
   size: f32,
+}
+
+impl PointVertex {
+  #[inline]
+  pub fn new(pos: Vec3, col: Vec4, size: f32) -> Self {
+    Self { pos, col, size }
+  }
 }
 
 impl Vertex for PointVertex {
@@ -282,20 +421,20 @@ impl Vertex for PointVertex {
   }
 }
 
-impl PointVertex {
-  #[inline]
-  fn new(pos: Vec3, col: Vec4, size: f32) -> Self {
-    Self { pos, col, size }
-  }
-}
-
 // Regular vertex data
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-struct RegularVertex {
+pub struct RegularVertex {
   pos: Vec3,
   col: Vec4,
+}
+
+impl RegularVertex {
+  #[inline]
+  pub fn new(pos: Vec3, col: Vec4) -> Self {
+    Self { pos, col }
+  }
 }
 
 impl Vertex for RegularVertex {
@@ -309,12 +448,5 @@ impl Vertex for RegularVertex {
       step_mode: VertexStepMode::Vertex,
       attributes: ATTRIBUTES,
     }
-  }
-}
-
-impl RegularVertex {
-  #[inline]
-  fn new(pos: Vec3, col: Vec4) -> Self {
-    Self { pos, col }
   }
 }
