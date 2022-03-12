@@ -3,13 +3,13 @@
 
 use ultraviolet::UVec3;
 
-pub const REGULAR_VOXELS: [UVec3; 8] = [
+pub const REGULAR_VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
   UVec3::new(0, 0, 0), // 0 (0, 0, 0)
   UVec3::new(1, 0, 0), // 1 (1, 0, 0)
-  UVec3::new(0, 1, 0), // 2 (0, 1, 0)
-  UVec3::new(1, 1, 0), // 3 (1, 1, 0)
-  UVec3::new(0, 0, 1), // 4 (0, 0, 1)
-  UVec3::new(1, 0, 1), // 5 (1, 0, 1)
+  UVec3::new(0, 0, 1), // 2 (0, 1, 0)
+  UVec3::new(1, 0, 1), // 3 (1, 1, 0)
+  UVec3::new(0, 1, 0), // 4 (0, 0, 1)
+  UVec3::new(1, 1, 0), // 5 (1, 0, 1)
   UVec3::new(0, 1, 1), // 6 (0, 1, 1)
   UVec3::new(1, 1, 1), // 7 (1, 1, 1)
 ];
@@ -92,11 +92,11 @@ impl RegularVertexData {
     self.high_byte() & 0b0001_0000 != 0
   }
   #[inline]
-  pub fn subtract_y(&self) -> bool {
+  pub fn subtract_z(&self) -> bool { // NOTE: Z and Y axis flipped!
     self.high_byte() & 0b0010_0000 != 0
   }
   #[inline]
-  pub fn subtract_z(&self) -> bool {
+  pub fn subtract_y(&self) -> bool { // NOTE: Y and Z axis flipped!
     self.high_byte() & 0b0100_0000 != 0
   }
   #[inline]

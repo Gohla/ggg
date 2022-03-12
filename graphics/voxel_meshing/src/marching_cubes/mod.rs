@@ -43,8 +43,8 @@ impl<C: ChunkSize> MarchingCubes<C> {
   {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-      for cell_z in 0..C::CELLS_IN_CHUNK_ROW {
-        for cell_y in 0..C::CELLS_IN_CHUNK_ROW {
+      for cell_y in 0..C::CELLS_IN_CHUNK_ROW { // NOTE: Y and Z axis flipped!
+        for cell_z in 0..C::CELLS_IN_CHUNK_ROW { // NOTE: Z and Y axis flipped!
           for cell_x in 0..C::CELLS_IN_CHUNK_ROW {
             let cell = UVec3::new(cell_x, cell_y, cell_z);
             Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_vertices);
@@ -98,15 +98,15 @@ impl<C: ChunkSize> MarchingCubes<C> {
       chunk_sample_array.sample(local_voxels[6]),
       chunk_sample_array.sample(local_voxels[7]),
     ];
-    // Create the case number by packing the sign bits of samples. Positive = inside.
-    let case = (values[0].is_sign_positive() as u8) << 0
-      | (values[1].is_sign_positive() as u8) << 1
-      | (values[2].is_sign_positive() as u8) << 2
-      | (values[3].is_sign_positive() as u8) << 3
-      | (values[4].is_sign_positive() as u8) << 4
-      | (values[5].is_sign_positive() as u8) << 5
-      | (values[6].is_sign_positive() as u8) << 6
-      | (values[7].is_sign_positive() as u8) << 7;
+    // Create the case number by packing the sign bits of samples. Negative = inside, positive = outside.
+    let case = (values[0].is_sign_negative() as u8) << 0
+      | (values[1].is_sign_negative() as u8) << 1
+      | (values[2].is_sign_negative() as u8) << 2
+      | (values[3].is_sign_negative() as u8) << 3
+      | (values[4].is_sign_negative() as u8) << 4
+      | (values[5].is_sign_negative() as u8) << 5
+      | (values[6].is_sign_negative() as u8) << 6
+      | (values[7].is_sign_negative() as u8) << 7;
     if case == 0 || case == 255 { // No triangles // OPTO: use bit twiddling to break it down to 1 comparison?
       return;
     }

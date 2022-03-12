@@ -155,13 +155,13 @@ impl DebugRenderer {
     self.draw_line_vertices_indexed(
       [
         RegularVertex::new(min, col),
-        RegularVertex::new(min + Vec3::new(size, 0.0, 0.0), col),
-        RegularVertex::new(min + Vec3::new(0.0, size, 0.0), col),
+        RegularVertex::new(min + Vec3::unit_x() * size, col),
+        RegularVertex::new(min + Vec3::unit_y() * size, col),
         RegularVertex::new(min + Vec3::new(size, size, 0.0), col),
-        RegularVertex::new(min + Vec3::new(0.0, 0.0, size), col),
+        RegularVertex::new(min + Vec3::unit_z() * size, col),
         RegularVertex::new(min + Vec3::new(size, 0.0, size), col),
         RegularVertex::new(min + Vec3::new(0.0, size, size), col),
-        RegularVertex::new(min + Vec3::new(size, size, size), col),
+        RegularVertex::new(min + Vec3::one() * size, col),
       ],
       [
         0, 1, // X

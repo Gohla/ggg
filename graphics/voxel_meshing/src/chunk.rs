@@ -95,7 +95,10 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
   }
 
   #[inline]
-  fn index(position: UVec3) -> usize { (position.x + C::VOXELS_IN_CHUNK_ROW * position.y + C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * position.z) as usize }
+  fn index_xyz(x: u32, y: u32, z: u32) -> usize { (x + C::VOXELS_IN_CHUNK_ROW * y + C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * z) as usize }
+
+  #[inline]
+  fn index(position: UVec3) -> usize { Self::index_xyz(position.x, position.y, position.z) }
 
   #[inline]
   pub fn sample(&self, position: UVec3) -> f32 {
@@ -105,6 +108,25 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
   #[inline]
   pub fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
     &mut self.array[Self::index(position)]
+  }
+
+  #[inline]
+  pub fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
+    self.array[Self::index_xyz(x, y, z)] = sample;
+  }
+
+  #[inline]
+  pub fn set_all_to(&mut self, sample: f32) {
+    for s in self.array.iter_mut() {
+      *s = sample;
+    }
+  }
+
+  #[inline]
+  pub fn flip_all(&mut self) {
+    for s in self.array.iter_mut() {
+      *s *= -1.0;
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 extern crate core;
 
-use egui::{Align2, Ui};
+use egui::{Align2, ComboBox, Ui};
 use ultraviolet::{Isometry3, Rotor3, UVec3, Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, RenderPipeline, ShaderStages};
 
@@ -36,6 +36,7 @@ pub struct MarchingCubesDemo {
   render_pipeline: RenderPipeline,
 
   chunk_samples: ChunkSamples<C>,
+  gui_equivalence_class: u8,
 }
 
 #[derive(Default)]
@@ -49,7 +50,7 @@ impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
-    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
+    let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
     camera.arcball.distance = -2.0;
     let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
@@ -116,6 +117,7 @@ impl app::Application for MarchingCubesDemo {
       render_pipeline,
 
       chunk_samples,
+      gui_equivalence_class: 0,
     }
   }
 
@@ -146,37 +148,156 @@ impl app::Application for MarchingCubesDemo {
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
       .show(&gui_frame, |ui| {
         self.light_settings.render_gui(ui);
-        let chunk_samples_array = if let ChunkSamples::Mixed(chunk_samples_array) = &mut self.chunk_samples {
+        let samples = if let ChunkSamples::Mixed(chunk_samples_array) = &mut self.chunk_samples {
           chunk_samples_array
         } else {
           panic!();
         };
         ui.collapsing_open("Marching Cubes", |ui| {
-          ui.grid("Buttons", |ui| {
-            if ui.button("Flip").clicked() {
-              for sample in chunk_samples_array.array.iter_mut() {
-                *sample *= -1.0;
+          ui.horizontal(|ui| {
+            ComboBox::from_id_source("Equivalence class")
+              .selected_text(format!("{:?}", self.gui_equivalence_class))
+              .show_ui(ui, |ui| {
+                for i in 0..18 {
+                  ui.selectable_value(&mut self.gui_equivalence_class, i, format!("{:?}", i));
+                }
+              });
+            if ui.button("Set").clicked() {
+              let inside = -1.0;
+              match self.gui_equivalence_class {
+                0 => {
+                  samples.set_all_to(1.0);
+                }
+                1 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 1, inside);
+                }
+                2 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                3 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                }
+                4 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 0, inside);
+                }
+                5 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                }
+                6 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                7 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                8 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                }
+                9 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 0, inside);
+                  samples.set(1, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                10 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                11 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 0, inside);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                }
+                12 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(0, 1, 1, inside);
+                }
+                13 => {
+                  samples.set_all_to(1.0);
+                  samples.set(0, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                14 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                15 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(0, 1, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                16 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(0, 1, 1, inside);
+                }
+                17 => {
+                  samples.set_all_to(1.0);
+                  samples.set(1, 0, 0, inside);
+                  samples.set(0, 1, 0, inside);
+                  samples.set(0, 0, 1, inside);
+                  samples.set(1, 0, 1, inside);
+                  samples.set(1, 1, 1, inside);
+                }
+                _ => {}
               }
+            }
+          });
+          ui.horizontal(|ui| {
+            if ui.button("Flip").clicked() {
+              samples.flip_all();
             }
             if ui.button("To +0.0").clicked() {
-              for sample in chunk_samples_array.array.iter_mut() {
-                *sample = 0.0;
-              }
+              samples.set_all_to(0.0);
             }
             if ui.button("To -0.0").clicked() {
-              for sample in chunk_samples_array.array.iter_mut() {
-                *sample = -0.0;
-              }
+              samples.set_all_to(-0.0);
             }
-            if ui.button("To +0.5").clicked() {
-              for sample in chunk_samples_array.array.iter_mut() {
-                *sample = 0.5;
-              }
+            if ui.button("To +1.0").clicked() {
+              samples.set_all_to(1.0);
             }
-            if ui.button("To -0.5").clicked() {
-              for sample in chunk_samples_array.array.iter_mut() {
-                *sample = -0.5;
-              }
+            if ui.button("To -1.0").clicked() {
+              samples.set_all_to(-1.0);
             }
             ui.end_row();
           });
@@ -190,13 +311,13 @@ impl app::Application for MarchingCubesDemo {
               for y in 0..C::VOXELS_IN_CHUNK_ROW {
                 ui.label(format!("Y={}", y));
                 for x in 0..C::VOXELS_IN_CHUNK_ROW {
-                  let sample = chunk_samples_array.sample_mut(UVec3::new(x, y, z));
+                  let sample = samples.sample_mut(UVec3::new(x, y, z));
                   let response = ui.drag("", sample, 0.01);
                   if response.secondary_clicked() {
-                    *sample = 0.0;
+                    *sample *= -1.0;
                   }
                   if response.middle_clicked() {
-                    *sample *= -1.0;
+                    *sample = 0.0;
                   }
                 }
                 ui.end_row();
@@ -243,19 +364,16 @@ impl app::Application for MarchingCubesDemo {
       panic!();
     };
     // Axes
-    self.debug_renderer.draw_axes_lines(Vec3::one() * 0.5, 1.0);
+    self.debug_renderer.draw_axes_lines(Vec3::one() * 0.5, 0.5);
     // Voxels
     for z in 0..C::VOXELS_IN_CHUNK_ROW {
       for y in 0..C::VOXELS_IN_CHUNK_ROW {
         for x in 0..C::VOXELS_IN_CHUNK_ROW {
           let position = UVec3::new(x, y, z);
           let sample = chunk_samples_array.sample(position);
-          let point_color = if sample.is_sign_positive() {
-            Vec4::new(1.0, 1.0, 1.0, 1.0)
-          } else {
-            Vec4::new(0.1, 0.1, 0.1, 1.0)
-          };
-          self.debug_renderer.draw_point(position.into(), point_color, 20.0);
+          if sample.is_sign_negative() {
+            self.debug_renderer.draw_point(position.into(), Vec4::new(1.0, 1.0, 1.0, 1.0), 20.0);
+          }
         }
       }
     }
