@@ -25,7 +25,7 @@ pub struct MarchingCubes<C: ChunkSize> {
 }
 
 impl<C: ChunkSize> MarchingCubes<C> {
-  pub const SHARED_INDICES_SIZE: usize = 4 * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE;
+  pub const SHARED_INDICES_SIZE: usize = 4 * C::CELLS_IN_CHUNK_USIZE;
 
   pub fn new() -> Self {
     Self { _chunk_phantom: PhantomData::default() }
@@ -43,10 +43,10 @@ impl<C: ChunkSize> MarchingCubes<C> {
   {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-      for cell_y in 0..C::CELLS_IN_CHUNK_ROW { // NOTE: Y and Z axis flipped!
-        for cell_z in 0..C::CELLS_IN_CHUNK_ROW { // NOTE: Z and Y axis flipped!
-          for cell_x in 0..C::CELLS_IN_CHUNK_ROW {
-            let cell = UVec3::new(cell_x, cell_y, cell_z);
+      for z in 0..C::CELLS_IN_CHUNK_ROW {
+        for y in 0..C::CELLS_IN_CHUNK_ROW {
+          for x in 0..C::CELLS_IN_CHUNK_ROW {
+            let cell = Cell::new(x, y, z);
             Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_vertices);
           }
         }
@@ -56,7 +56,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   fn extract_cell(
-    cell: UVec3,
+    cell: Cell,
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
@@ -65,8 +65,8 @@ impl<C: ChunkSize> MarchingCubes<C> {
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
-    let local_voxels = Self::local_voxels(cell);
-    let values = Self::sample(chunk_sample_array, &local_voxels);
+    let local_coordinates = Self::local_coordinates(cell);
+    let values = Self::sample(chunk_sample_array, &local_coordinates);
     let case = Self::case(&values);
     if case == 0 || case == 255 { // No triangles // OPTO: use bit twiddling to break it down to 1 comparison?
       return;
@@ -85,7 +85,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     let vertices_data = tables::VERTEX_DATA[case];
 
     // Get global voxels to put vertices on the correct location.
-    let global_voxels = Self::global_voxels(min, step, &local_voxels);
+    let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
     // Get indices for all vertices, creating new vertices and thus new indices, or reusing indices from previous cells.
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data.iter().enumerate() {
@@ -110,62 +110,48 @@ impl<C: ChunkSize> MarchingCubes<C> {
     }
   }
 
-  pub const VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
-    UVec3::new(0, 0, 0), // 0 (0, 0, 0)
-    UVec3::new(1, 0, 0), // 1 (1, 0, 0)
-    UVec3::new(0, 0, 1), // 2 (0, 1, 0)
-    UVec3::new(1, 0, 1), // 3 (1, 1, 0)
-    UVec3::new(0, 1, 0), // 4 (0, 0, 1)
-    UVec3::new(1, 1, 0), // 5 (1, 0, 1)
-    UVec3::new(0, 1, 1), // 6 (0, 1, 1)
-    UVec3::new(1, 1, 1), // 7 (1, 1, 1)
+  pub const VOXELS: [Voxel; 8] = [
+    Voxel::new(0, 0, 0), // 1
+    Voxel::new(1, 0, 0), // 2
+    Voxel::new(0, 1, 0), // 3
+    Voxel::new(1, 1, 0), // 4
+    Voxel::new(0, 0, 1), // 5
+    Voxel::new(1, 0, 1), // 6
+    Voxel::new(0, 1, 1), // 7
+    Voxel::new(1, 1, 1), // 8
   ];
 
-  #[inline(always)]
-  pub fn local_voxels(cell: UVec3) -> [UVec3; 8] {
+  #[inline]
+  pub fn local_coordinates(cell: Cell) -> [UVec3; 8] {
     [
-      cell + Self::VOXELS[0],
-      cell + Self::VOXELS[1],
-      cell + Self::VOXELS[2],
-      cell + Self::VOXELS[3],
-      cell + Self::VOXELS[4],
-      cell + Self::VOXELS[5],
-      cell + Self::VOXELS[6],
-      cell + Self::VOXELS[7],
+      cell.to_local_coordinate(Self::VOXELS[0]),
+      cell.to_local_coordinate(Self::VOXELS[1]),
+      cell.to_local_coordinate(Self::VOXELS[2]),
+      cell.to_local_coordinate(Self::VOXELS[3]),
+      cell.to_local_coordinate(Self::VOXELS[4]),
+      cell.to_local_coordinate(Self::VOXELS[5]),
+      cell.to_local_coordinate(Self::VOXELS[6]),
+      cell.to_local_coordinate(Self::VOXELS[7]),
     ]
   }
 
-  #[inline(always)]
-  pub fn global_voxels(min: UVec3, step: u32, local_voxels: &[UVec3; 8]) -> [UVec3; 8] {
-    [
-      min + step * local_voxels[0],
-      min + step * local_voxels[1],
-      min + step * local_voxels[2],
-      min + step * local_voxels[3],
-      min + step * local_voxels[4],
-      min + step * local_voxels[5],
-      min + step * local_voxels[6],
-      min + step * local_voxels[7],
-    ]
-  }
-
-  #[inline(always)]
-  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_voxels: &[UVec3; 8]) -> [f32; 8] where
+  #[inline]
+  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
     [
-      chunk_sample_array.sample(local_voxels[0]),
-      chunk_sample_array.sample(local_voxels[1]),
-      chunk_sample_array.sample(local_voxels[2]),
-      chunk_sample_array.sample(local_voxels[3]),
-      chunk_sample_array.sample(local_voxels[4]),
-      chunk_sample_array.sample(local_voxels[5]),
-      chunk_sample_array.sample(local_voxels[6]),
-      chunk_sample_array.sample(local_voxels[7]),
+      chunk_sample_array.sample(local_coordinates[0]),
+      chunk_sample_array.sample(local_coordinates[1]),
+      chunk_sample_array.sample(local_coordinates[2]),
+      chunk_sample_array.sample(local_coordinates[3]),
+      chunk_sample_array.sample(local_coordinates[4]),
+      chunk_sample_array.sample(local_coordinates[5]),
+      chunk_sample_array.sample(local_coordinates[6]),
+      chunk_sample_array.sample(local_coordinates[7]),
     ]
   }
 
-  #[inline(always)]
+  #[inline]
   pub fn case(values: &[f32; 8]) -> u8 {
     // Create the case number by packing the sign bits of samples. Negative = inside, positive = outside.
     (values[0].is_sign_negative() as u8) << 0
@@ -179,9 +165,23 @@ impl<C: ChunkSize> MarchingCubes<C> {
   }
 
   #[inline]
+  pub fn global_coordinates(min: UVec3, step: u32, local_coordinates: &[UVec3; 8]) -> [UVec3; 8] {
+    [
+      min + step * local_coordinates[0],
+      min + step * local_coordinates[1],
+      min + step * local_coordinates[2],
+      min + step * local_coordinates[3],
+      min + step * local_coordinates[4],
+      min + step * local_coordinates[5],
+      min + step * local_coordinates[6],
+      min + step * local_coordinates[7],
+    ]
+  }
+
+  #[inline]
   fn create_or_reuse_vertex(
     vertex_data: VertexData,
-    cell: UVec3,
+    cell: Cell,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
@@ -240,7 +240,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     chunk_vertices.push_vertex(Vertex::new(position))
   }
 
-  #[inline(always)]
+  #[inline]
   pub fn vertex_position(pos_low: UVec3, value_low: f32, pos_high: UVec3, value_high: f32) -> Vec3 {
     let t = value_high / (value_high - value_low);
     let pos_low = Vec3::from(pos_low);
@@ -248,11 +248,46 @@ impl<C: ChunkSize> MarchingCubes<C> {
     t * pos_low + (1.0 - t) * pos_high
   }
 
-  #[inline(always)]
-  pub fn shared_index(cell: UVec3, vertex_index: usize) -> usize {
+  #[inline]
+  pub fn shared_index(cell: Cell, vertex_index: usize) -> usize {
     cell.x as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * cell.y as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * cell.z as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * vertex_index
+  }
+}
+
+/// Cell, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct Cell {
+  pub x: u32,
+  pub y: u32,
+  pub z: u32,
+}
+
+impl Cell {
+  #[inline]
+  pub const fn new(x: u32, y: u32, z: u32) -> Self {
+    Self { x, y, z }
+  }
+
+  #[inline]
+  pub fn to_local_coordinate(&self, voxel: Voxel) -> UVec3 {
+    UVec3::new(self.x + voxel.x, self.z + voxel.z, self.y + voxel.y)
+  }
+}
+
+/// Voxel, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct Voxel {
+  pub x: u32,
+  pub y: u32,
+  pub z: u32,
+}
+
+impl Voxel {
+  #[inline]
+  pub const fn new(x: u32, y: u32, z: u32) -> Self {
+    Self { x, y, z }
   }
 }

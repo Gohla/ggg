@@ -17,7 +17,7 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
-use voxel_meshing::marching_cubes::{MarchingCubes, tables};
+use voxel_meshing::marching_cubes::{Cell, MarchingCubes, tables};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
@@ -287,8 +287,8 @@ impl app::Application for MarchingCubesDemo {
               }
             }
           });
-          let local_voxels = MC::local_voxels(UVec3::new(0, 0, 0));
-          let values = MC::sample(samples, &local_voxels);
+          let local_coordinates = MC::local_coordinates(Cell::new(0, 0, 0));
+          let values = MC::sample(samples, &local_coordinates);
           let case = MarchingCubes::<C>::case(&values);
           let cell_class = tables::CELL_CLASS[case as usize] as usize;
           let triangulation_info = tables::CELL_DATA[cell_class];
