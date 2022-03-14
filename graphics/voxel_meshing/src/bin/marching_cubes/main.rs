@@ -17,7 +17,8 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
-use voxel_meshing::marching_cubes::MarchingCubes;
+use voxel_meshing::marching_cubes;
+use voxel_meshing::marching_cubes::{MarchingCubes, tables};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
@@ -45,6 +46,7 @@ pub struct Input {
 }
 
 type C = GenericChunkSize<1>;
+type MC = MarchingCubes<C>;
 
 impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
@@ -71,17 +73,20 @@ impl app::Application for MarchingCubesDemo {
       .with_uniform_usage()
       .with_label("Camera uniform buffer")
       .build_with_data(&gfx.device, &[camera_uniform]);
-    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
+    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) =
+      camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let light_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
       .build_with_data(&gfx.device, &[light_settings.uniform]);
-    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
+    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) =
+      light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
     let model_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Model uniform buffer")
       .build_with_data(&gfx.device, &[model_uniform]);
-    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
+    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) =
+      model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
       .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
@@ -301,6 +306,17 @@ impl app::Application for MarchingCubesDemo {
             }
             ui.end_row();
           });
+          ui.collapsing_open_with_grid("Data", "Data Grid", |ui| {
+            let local_voxels = MC::local_voxels(UVec3::new(0, 0, 0));
+            let values = MC::sample(samples, &local_voxels);
+            let case = MarchingCubes::<C>::case(&values);
+            let cell_class = tables::CELL_CLASS[case as usize];
+            let triangulation_info = tables::CELL_DATA[cell_class as usize];
+            let vertex_count = triangulation_info.get_vertex_count() as usize;
+            let triangle_count = triangulation_info.get_triangle_count();
+            ui.label("Case");
+            ui.monospace(format!("case: {case}, class: {cell_class}, vertices: {vertex_count}, triangles: {triangle_count}"));
+          });
           for z in 0..C::VOXELS_IN_CHUNK_ROW {
             ui.collapsing_open_with_grid(format!("Z={}", z), format!("Grid Z={}", z), |ui| {
               ui.label("");
@@ -333,7 +349,7 @@ impl app::Application for MarchingCubesDemo {
 
     // Run marching cubes to create triangles from voxels
     let mut chunk_vertices = ChunkVertices::new();
-    let marching_cubes = MarchingCubes::<C>::new();
+    let marching_cubes = MC::new();
     marching_cubes.extract_chunk(UVec3::zero(), 1, &self.chunk_samples, &mut chunk_vertices);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
@@ -387,7 +403,10 @@ impl app::Application for MarchingCubesDemo {
       }
     }
     // Marching cubes wireframe and points
-    self.debug_renderer.draw_triangle_vertices_wireframe_indexed(chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())), chunk_vertices.indices().into_iter().copied());
+    self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
+      chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
+      chunk_vertices.indices().into_iter().copied(),
+    );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     // Perform the actual debug rendering
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);

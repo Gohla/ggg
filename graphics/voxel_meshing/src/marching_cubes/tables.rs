@@ -3,7 +3,7 @@
 
 use ultraviolet::UVec3;
 
-pub const REGULAR_VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
+pub const VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
   UVec3::new(0, 0, 0), // 0 (0, 0, 0)
   UVec3::new(1, 0, 0), // 1 (1, 0, 0)
   UVec3::new(0, 0, 1), // 2 (0, 1, 0)
@@ -17,16 +17,16 @@ pub const REGULAR_VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
 /// Holds information about the triangulation used for a single equivalence class in the modified
 /// Marching Cubes algorithm.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct RegularCellData {
+pub struct CellData {
   /// High nibble is vertex count; low nibble is triangle count.
-  geometry_counts: u8,
+  pub geometry_counts: u8,
   /// Groups of 3 indices giving the triangulation.
   ///
   /// A value of `!0` is used for padding the array.
   pub vertex_index: [u8; 15],
 }
 
-impl RegularCellData {
+impl CellData {
   /// Gets the vertex count from `RegularCellData::geometry_counts`.
   pub fn get_vertex_count(&self) -> u8 {
     self.geometry_counts >> 4
@@ -38,8 +38,30 @@ impl RegularCellData {
   }
 }
 
-/// Maps an 8-bit regular Marching Cubes case index to an equivalence class index.
-pub const REGULAR_CELL_CLASS: [u8; 256] = [
+/// This table maps an 8-bit regular Marching Cubes case index to an equivalence class index.
+///
+/// Even though there are 18 equivalence classes in our modified Marching Cubes algorithm, a couple of them use the same
+/// exact triangulations, just with different vertex locations. We combined those classes for this table so that the
+/// class index ranges from 0 to 15.
+///
+/// In particular, the following equivalence classes from the dissertation map to these concrete values:
+/// -  #0:  0
+/// -  #1:  1
+/// -  #2:  2, 4
+/// -  #3:  3, 11
+/// -  #5:  4
+/// -  #6:  5
+/// -  #7:  6
+/// -  #8:  7
+/// -  #9:  8
+/// - #10:  9
+/// - #12: 10
+/// - #13: 11
+/// - #14: 12
+/// - #15: 13
+/// - #16: 14
+/// - #17: 15
+pub const CELL_CLASS: [u8; 256] = [
   0x00, 0x01, 0x01, 0x03, 0x01, 0x03, 0x02, 0x04, 0x01, 0x02, 0x03, 0x04, 0x03, 0x04, 0x04, 0x03,
   0x01, 0x03, 0x02, 0x04, 0x02, 0x04, 0x06, 0x0C, 0x02, 0x05, 0x05, 0x0B, 0x05, 0x0A, 0x07, 0x04,
   0x01, 0x02, 0x03, 0x04, 0x02, 0x05, 0x05, 0x0A, 0x02, 0x06, 0x04, 0x0C, 0x05, 0x07, 0x0B, 0x04,
@@ -58,66 +80,51 @@ pub const REGULAR_CELL_CLASS: [u8; 256] = [
   0x03, 0x04, 0x04, 0x03, 0x04, 0x03, 0x0D, 0x01, 0x04, 0x0D, 0x03, 0x01, 0x03, 0x01, 0x01, 0x00,
 ];
 
-/// Holds the triangulation data for all 16 distinct classes to which a case can be mapped by the
-/// `REGULAR_CELL_CLASS` table.
+/// Holds the triangulation data for all 16 distinct classes to which a case can be mapped by the `CELL_CLASS` table.
 ///
 /// A value of `!0` is used for padding the array.
-pub const REGULAR_CELL_DATA: [RegularCellData; 16] = [
-  RegularCellData { geometry_counts: 0x00, vertex_index: [!0; 15] },
-  RegularCellData { geometry_counts: 0x31, vertex_index: [0, 1, 2, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x62, vertex_index: [0, 1, 2, 3, 4, 5, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x42, vertex_index: [0, 1, 2, 0, 2, 3, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x53, vertex_index: [0, 1, 4, 1, 3, 4, 1, 2, 3, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x73, vertex_index: [0, 1, 2, 0, 2, 3, 4, 5, 6, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x93, vertex_index: [0, 1, 2, 3, 4, 5, 6, 7, 8, !0, !0, !0, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x84, vertex_index: [0, 1, 4, 1, 3, 4, 1, 2, 3, 5, 6, 7, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x84, vertex_index: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0xC4, vertex_index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x64, vertex_index: [0, 4, 5, 0, 1, 4, 1, 3, 4, 1, 2, 3, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x64, vertex_index: [0, 5, 4, 0, 4, 1, 1, 4, 3, 1, 3, 2, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x64, vertex_index: [0, 4, 5, 0, 3, 4, 0, 1, 3, 1, 2, 3, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x64, vertex_index: [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5, !0, !0, !0] },
-  RegularCellData { geometry_counts: 0x75, vertex_index: [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5, 0, 5, 6] },
-  RegularCellData { geometry_counts: 0x95, vertex_index: [0, 4, 5, 0, 3, 4, 0, 1, 3, 1, 2, 3, 6, 7, 8] },
+pub const CELL_DATA: [CellData; 16] = [
+  CellData { geometry_counts: 0x00, vertex_index: [!0; 15] },
+  CellData { geometry_counts: 0x31, vertex_index: [00, 01, 02, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x62, vertex_index: [00, 01, 02, 03, 04, 05, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x42, vertex_index: [00, 01, 02, 00, 02, 03, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x53, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x73, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x93, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, !0, !0, !0, !0, !0, !0] },
+  CellData { geometry_counts: 0x84, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, 05, 06, 07, !0, !0, !0] },
+  CellData { geometry_counts: 0x84, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, 04, 06, 07, !0, !0, !0] },
+  CellData { geometry_counts: 0xC4, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, !0, !0, !0] },
+  CellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0] },
+  CellData { geometry_counts: 0x64, vertex_index: [00, 05, 04, 00, 04, 01, 01, 04, 03, 01, 03, 02, !0, !0, !0] },
+  CellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, !0, !0, !0] },
+  CellData { geometry_counts: 0x64, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, !0, !0, !0] },
+  CellData { geometry_counts: 0x75, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, 00, 05, 06] },
+  CellData { geometry_counts: 0x95, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, 06, 07, 08] },
 ];
 
 #[derive(Copy, Clone)]
-pub struct RegularVertexData(pub u16);
+pub struct VertexData(pub u16);
 
-impl RegularVertexData {
+impl VertexData {
   #[inline]
   fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
   #[inline]
-  pub fn subtract_x(&self) -> bool {
-    self.high_byte() & 0b0001_0000 != 0
-  }
+  pub fn subtract_x(&self) -> bool { self.high_byte() & 0b0001_0000 != 0 }
   #[inline]
-  pub fn subtract_z(&self) -> bool { // NOTE: Z and Y axis flipped!
-    self.high_byte() & 0b0010_0000 != 0
-  }
+  pub fn subtract_z(&self) -> bool { self.high_byte() & 0b0010_0000 != 0 /* NOTE: Z and Y axis flipped! */ }
   #[inline]
-  pub fn subtract_y(&self) -> bool { // NOTE: Y and Z axis flipped!
-    self.high_byte() & 0b0100_0000 != 0
-  }
+  pub fn subtract_y(&self) -> bool { self.high_byte() & 0b0100_0000 != 0 /* NOTE: Y and Z axis flipped! */ }
   #[inline]
-  pub fn new_vertex(&self) -> bool {
-    self.high_byte() & 0b1000_0000 != 0
-  }
+  pub fn new_vertex(&self) -> bool { self.high_byte() & 0b1000_0000 != 0 }
   #[inline]
-  pub fn vertex_index(&self) -> u8 {
-    self.high_byte() & 0b0000_1111 // Low nibble
-  }
+  pub fn vertex_index(&self) -> u8 { self.high_byte() & 0b0000_1111 /* Low nibble */ }
 
   #[inline]
   fn low_byte(&self) -> u8 { self.0 as u8 }
   #[inline]
-  pub fn voxel_a_index(&self) -> u8 {
-    self.low_byte() >> 4 // High nibble
-  }
+  pub fn voxel_a_index(&self) -> u8 { self.low_byte() >> 4 /* High nibble */ }
   #[inline]
-  pub fn voxel_b_index(&self) -> u8 {
-    self.low_byte() & 0b0000_1111 // Low nibble
-  }
+  pub fn voxel_b_index(&self) -> u8 { self.low_byte() & 0b0000_1111 /* Low nibble */ }
 }
 
 /// Gives the vertex locations for every one of the 256 possible cases in the modified Marching
@@ -125,7 +132,7 @@ impl RegularVertexData {
 /// reused from a neighboring cell.
 /// The low byte contains the indices for the two endpoints of the edge on which the vertex lies.
 /// The high byte contains the vertex reuse data.
-pub const REGULAR_VERTEX_DATA: [[u16; 12]; 256] = [
+pub const VERTEX_DATA: [[u16; 12]; 256] = [
   [0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],
   [0x6201, 0x5102, 0x3304, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],
   [0x6201, 0x2315, 0x4113, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],
