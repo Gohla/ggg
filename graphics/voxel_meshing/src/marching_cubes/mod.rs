@@ -73,19 +73,14 @@ impl<C: ChunkSize> MarchingCubes<C> {
     }
     let case = case as usize;
 
-    // Get the cell class for the `case`.
     let cell_class = tables::CELL_CLASS[case];
-    // Get the triangulation info corresponding to the cell class. This uses `cell_class` instead of `case`, because the
-    // triangulation info is equivalent for a class of cells. The full `case` is used along with this info to form the
-    // eventual triangles.
     let triangulation_info = tables::CELL_DATA[cell_class as usize];
     let vertex_count = triangulation_info.get_vertex_count() as usize;
     let triangle_count = triangulation_info.get_triangle_count();
-    // Get the vertex data corresponding to the `case`.
     let vertices_data = tables::VERTEX_DATA[case];
 
-    // Get global voxels to put vertices on the correct location.
     let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
+
     // Get indices for all vertices, creating new vertices and thus new indices, or reusing indices from previous cells.
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data.iter().enumerate() {
