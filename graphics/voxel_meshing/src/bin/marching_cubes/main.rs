@@ -17,7 +17,6 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
-use voxel_meshing::marching_cubes;
 use voxel_meshing::marching_cubes::{MarchingCubes, tables};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
@@ -288,6 +287,15 @@ impl app::Application for MarchingCubesDemo {
               }
             }
           });
+          let local_voxels = MC::local_voxels(UVec3::new(0, 0, 0));
+          let values = MC::sample(samples, &local_voxels);
+          let case = MarchingCubes::<C>::case(&values);
+          let cell_class = tables::CELL_CLASS[case as usize] as usize;
+          let triangulation_info = tables::CELL_DATA[cell_class];
+          let vertices = triangulation_info.get_vertex_count();
+          let triangles = triangulation_info.get_triangle_count();
+          ui.monospace(format!("case: {case}, cell class: {cell_class}"));
+          ui.monospace(format!("vertices: {vertices}, triangles: {triangles}"));
           ui.horizontal(|ui| {
             if ui.button("Flip").clicked() {
               samples.flip_all();
@@ -305,17 +313,6 @@ impl app::Application for MarchingCubesDemo {
               samples.set_all_to(-1.0);
             }
             ui.end_row();
-          });
-          ui.collapsing_open_with_grid("Data", "Data Grid", |ui| {
-            let local_voxels = MC::local_voxels(UVec3::new(0, 0, 0));
-            let values = MC::sample(samples, &local_voxels);
-            let case = MarchingCubes::<C>::case(&values);
-            let cell_class = tables::CELL_CLASS[case as usize];
-            let triangulation_info = tables::CELL_DATA[cell_class as usize];
-            let vertex_count = triangulation_info.get_vertex_count() as usize;
-            let triangle_count = triangulation_info.get_triangle_count();
-            ui.label("Case");
-            ui.monospace(format!("case: {case}, class: {cell_class}, vertices: {vertex_count}, triangles: {triangle_count}"));
           });
           for z in 0..C::VOXELS_IN_CHUNK_ROW {
             ui.collapsing_open_with_grid(format!("Z={}", z), format!("Grid Z={}", z), |ui| {

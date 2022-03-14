@@ -42,19 +42,21 @@ impl CellData {
 ///
 /// Even though there are 18 equivalence classes in our modified Marching Cubes algorithm, a couple of them use the same
 /// exact triangulations, just with different vertex locations. We combined those classes for this table so that the
-/// class index ranges from 0 to 15.
+/// class index ranges from 0 to 15 (and thus fits in a u8).
 ///
 /// In particular, the following equivalence classes from the dissertation map to these concrete values:
 /// -  #0:  0
 /// -  #1:  1
-/// -  #2:  2, 4
-/// -  #3:  3, 11
+/// -  #2:  2
+/// -  #3:  3
+/// -  #4:  2 <
 /// -  #5:  4
 /// -  #6:  5
 /// -  #7:  6
 /// -  #8:  7
 /// -  #9:  8
 /// - #10:  9
+/// - #11:  3 <
 /// - #12: 10
 /// - #13: 11
 /// - #14: 12
