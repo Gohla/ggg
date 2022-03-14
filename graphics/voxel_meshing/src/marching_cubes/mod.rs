@@ -110,17 +110,28 @@ impl<C: ChunkSize> MarchingCubes<C> {
     }
   }
 
+  pub const VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
+    UVec3::new(0, 0, 0), // 0 (0, 0, 0)
+    UVec3::new(1, 0, 0), // 1 (1, 0, 0)
+    UVec3::new(0, 0, 1), // 2 (0, 1, 0)
+    UVec3::new(1, 0, 1), // 3 (1, 1, 0)
+    UVec3::new(0, 1, 0), // 4 (0, 0, 1)
+    UVec3::new(1, 1, 0), // 5 (1, 0, 1)
+    UVec3::new(0, 1, 1), // 6 (0, 1, 1)
+    UVec3::new(1, 1, 1), // 7 (1, 1, 1)
+  ];
+
   #[inline(always)]
   pub fn local_voxels(cell: UVec3) -> [UVec3; 8] {
     [
-      cell + tables::VOXELS[0],
-      cell + tables::VOXELS[1],
-      cell + tables::VOXELS[2],
-      cell + tables::VOXELS[3],
-      cell + tables::VOXELS[4],
-      cell + tables::VOXELS[5],
-      cell + tables::VOXELS[6],
-      cell + tables::VOXELS[7],
+      cell + Self::VOXELS[0],
+      cell + Self::VOXELS[1],
+      cell + Self::VOXELS[2],
+      cell + Self::VOXELS[3],
+      cell + Self::VOXELS[4],
+      cell + Self::VOXELS[5],
+      cell + Self::VOXELS[6],
+      cell + Self::VOXELS[7],
     ]
   }
 

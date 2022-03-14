@@ -1,19 +1,6 @@
 // The following data originates from Eric Lengyel's Transvoxel Algorithm.
 // http://transvoxel.org/
 
-use ultraviolet::UVec3;
-
-pub const VOXELS: [UVec3; 8] = [ // NOTE: Y and Z axis flipped!
-  UVec3::new(0, 0, 0), // 0 (0, 0, 0)
-  UVec3::new(1, 0, 0), // 1 (1, 0, 0)
-  UVec3::new(0, 0, 1), // 2 (0, 1, 0)
-  UVec3::new(1, 0, 1), // 3 (1, 1, 0)
-  UVec3::new(0, 1, 0), // 4 (0, 0, 1)
-  UVec3::new(1, 1, 0), // 5 (1, 0, 1)
-  UVec3::new(0, 1, 1), // 6 (0, 1, 1)
-  UVec3::new(1, 1, 1), // 7 (1, 1, 1)
-];
-
 /// Holds information about the triangulation used for a single equivalence class in the modified
 /// Marching Cubes algorithm.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
