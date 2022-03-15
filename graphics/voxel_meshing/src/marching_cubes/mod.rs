@@ -21,14 +21,14 @@ pub mod tables;
 
 #[derive(Copy, Clone)]
 pub struct MarchingCubes<C: ChunkSize> {
-  _chunk_phantom: PhantomData<C>,
+  _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize> MarchingCubes<C> {
   pub const SHARED_INDICES_SIZE: usize = 4 * C::CELLS_IN_CHUNK_USIZE;
 
   pub fn new() -> Self {
-    Self { _chunk_phantom: PhantomData::default() }
+    Self { _chunk_size_phantom: PhantomData::default() }
   }
 
   pub fn extract_chunk(
@@ -72,27 +72,21 @@ impl<C: ChunkSize> MarchingCubes<C> {
       return;
     }
     let case = case as usize;
-
-    let cell_class = tables::CELL_CLASS[case];
-    let triangulation_info = tables::CELL_DATA[cell_class as usize];
+    let cell_class = tables::CELL_CLASS[case] as usize;
+    let triangulation_info = tables::CELL_DATA[cell_class];
     let vertex_count = triangulation_info.get_vertex_count() as usize;
-    let triangle_count = triangulation_info.get_triangle_count();
+    let triangle_count = triangulation_info.get_triangle_count() as usize;
     let vertices_data = tables::VERTEX_DATA[case];
-
     let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
-
-    // Get indices for all vertices, creating new vertices and thus new indices, or reusing indices from previous cells.
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
       let index = Self::create_or_reuse_vertex(VertexData(*vd), cell, &global_voxels, &values, shared_indices, chunk_vertices);
       cell_vertices_indices[i] = index;
     }
-
-    // Write the indices that form the final triangulation of this cell.
     for t in 0..triangle_count {
-      let v1_index_in_cell = triangulation_info.vertex_index[3 * t as usize];
-      let v2_index_in_cell = triangulation_info.vertex_index[3 * t as usize + 1];
-      let v3_index_in_cell = triangulation_info.vertex_index[3 * t as usize + 2];
+      let v1_index_in_cell = triangulation_info.vertex_index[3 * t];
+      let v2_index_in_cell = triangulation_info.vertex_index[3 * t + 1];
+      let v3_index_in_cell = triangulation_info.vertex_index[3 * t + 2];
       let global_index_1 = cell_vertices_indices[v1_index_in_cell as usize];
       let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
       let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
@@ -191,7 +185,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
       let subtract_x = vertex_data.subtract_x();
       let subtract_y = vertex_data.subtract_y();
       let subtract_z = vertex_data.subtract_z();
-      // OPTO: use 3-bit validity mask as proposed in the paper?
+      // OPTO: use 3-bit validity mask as proposed in the dissertation?
       if (cell.x > 0 || !subtract_x) && (cell.y > 0 || !subtract_y) && (cell.z > 0 || !subtract_z) {
         // Return index of previous vertex.
         let previous_cell = {
