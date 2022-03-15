@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="a.R voxel_meshing Marching Cubes demo" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package voxel_meshing --bin marching_cubes" />
+  <configuration default="false" name="a.R voxel_meshing Transvoxel demo" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package voxel_meshing --bin transvoxel" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

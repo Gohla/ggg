@@ -34,7 +34,7 @@ test = false
 bench = false
 
 [[bin]]
-name = "marching_cubes"
+name = "transvoxel"
 test = false
 bench = false
 
