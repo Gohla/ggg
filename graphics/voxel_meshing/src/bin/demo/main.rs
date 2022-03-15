@@ -8,7 +8,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, Camera};
+use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -53,7 +53,7 @@ impl app::Application for VoxelMeshing {
     camera.arcball.distance = -extends * 2.0;
     camera.arcball.mouse_scroll_distance_speed = 1000.0;
     camera.far = 10000.0;
-    let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
+    let mut debug_renderer = DebugRenderer::new(gfx, 1, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut settings = Settings::default();
@@ -186,7 +186,7 @@ impl app::Application for VoxelMeshing {
     render_pass.pop_debug_group();
     drop(render_pass);
 
-    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);
+    self.debug_renderer.render(gfx, &mut frame, None, self.camera.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())
   }

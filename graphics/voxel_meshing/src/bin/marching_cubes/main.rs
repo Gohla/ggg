@@ -36,6 +36,7 @@ pub struct MarchingCubesDemo {
   uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
+  multisampled_framebuffer: GfxTexture,
 
   chunk_samples: ChunkSamples<C>,
   gui_equivalence_class: u8,
@@ -49,13 +50,15 @@ pub struct Input {
 type C = GenericChunkSize<1>;
 type MC = MarchingCubes<C>;
 
+const SAMPLE_COUNT: u32 = 4;
+
 impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
     camera.arcball.distance = -2.0;
-    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
+    let debug_renderer = DebugRenderer::new(gfx, SAMPLE_COUNT, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut light_settings = LightSettings::default();
@@ -65,7 +68,9 @@ impl app::Application for MarchingCubesDemo {
     let transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
-    let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
+    let depth_texture = TextureBuilder::new_depth_32_float(viewport)
+      .with_sample_count(SAMPLE_COUNT)
+      .build(&gfx.device);
 
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
@@ -100,9 +105,14 @@ impl app::Application for MarchingCubesDemo {
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       //.with_cull_mode(Some(Face::Back))
+      .with_multisample_count(SAMPLE_COUNT)
       .with_depth_texture(depth_texture.format)
       .with_layout_label("Marching cubes pipeline layout")
       .with_label("Marching cubes render pipeline")
+      .build(&gfx.device);
+    let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
+      .with_texture_label("Multisampling texture")
+      .with_texture_view_label("Multisampling texture view")
       .build(&gfx.device);
 
     let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C>::new_with(0.0));
@@ -121,6 +131,7 @@ impl app::Application for MarchingCubesDemo {
       uniform_bind_group,
       depth_texture,
       render_pipeline,
+      multisampled_framebuffer,
 
       chunk_samples,
       gui_equivalence_class: 0,
@@ -130,7 +141,11 @@ impl app::Application for MarchingCubesDemo {
   fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
-    self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
+    self.depth_texture = TextureBuilder::new_depth_32_float(viewport)
+      .with_sample_count(SAMPLE_COUNT)
+      .build(&gfx.device);
+    self.multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
+      .build(&gfx.device);
   }
 
   type Input = Input;
@@ -406,7 +421,7 @@ impl app::Application for MarchingCubesDemo {
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
       .with_label("Marching cubes render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+      .begin_render_pass_for_multisampled_swap_chain_with_clear(frame.encoder, &self.multisampled_framebuffer.view, &frame.output_texture);
     render_pass.push_debug_group("Draw voxelized mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -453,7 +468,7 @@ impl app::Application for MarchingCubesDemo {
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     // Perform the actual debug rendering
-    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut frame, Some(&self.multisampled_framebuffer), self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }

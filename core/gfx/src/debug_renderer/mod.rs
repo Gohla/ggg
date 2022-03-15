@@ -9,6 +9,7 @@ use crate::bind_group::CombinedBindGroupLayoutBuilder;
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::render_pass::RenderPassBuilder;
 use crate::render_pipeline::RenderPipelineBuilder;
+use crate::texture::GfxTexture;
 
 pub struct DebugRenderer {
   uniform_buffer: GfxBuffer,
@@ -25,7 +26,7 @@ impl DebugRenderer {
     Features::POLYGON_MODE_POINT | Features::POLYGON_MODE_LINE
   }
 
-  pub fn new(gfx: &Gfx, view_projection: Mat4) -> Self {
+  pub fn new(gfx: &Gfx, multisample_sample_count: u32, view_projection: Mat4) -> Self {
     let point_vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/point_vert"));
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/frag"));
@@ -48,6 +49,7 @@ impl DebugRenderer {
       &point_vertex_shader_module,
       &fragment_shader_module,
       &uniform_bind_group_layout,
+      multisample_sample_count,
       PrimitiveTopology::PointList,
       PolygonMode::Point,
       "point list",
@@ -59,6 +61,7 @@ impl DebugRenderer {
       &vertex_shader_module,
       &fragment_shader_module,
       &uniform_bind_group_layout,
+      multisample_sample_count,
       PrimitiveTopology::LineList,
       PolygonMode::Line,
       "line list",
@@ -68,6 +71,7 @@ impl DebugRenderer {
       &vertex_shader_module,
       &fragment_shader_module,
       &uniform_bind_group_layout,
+      multisample_sample_count,
       PrimitiveTopology::LineStrip,
       PolygonMode::Line,
       "line strip",
@@ -77,6 +81,7 @@ impl DebugRenderer {
       &vertex_shader_module,
       &fragment_shader_module,
       &uniform_bind_group_layout,
+      multisample_sample_count,
       PrimitiveTopology::TriangleList,
       PolygonMode::Line,
       "line triangle list",
@@ -249,7 +254,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, model_view_projection: Mat4) {
+  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, multisampled_framebuffer: Option<&GfxTexture>, model_view_projection: Mat4) {
     if self.line_list_render_pipeline.is_none() && self.line_strip_render_pipeline.is_none() {
       return; // Nothing to do
     }
@@ -269,9 +274,16 @@ impl DebugRenderer {
       pipeline.upload_buffers_if_needed(gfx);
     }
 
-    let mut render_pass = RenderPassBuilder::new()
-      .with_label("Debug render pass")
-      .begin_render_pass_for_swap_chain_with_load(frame.encoder, &frame.output_texture);
+    let mut render_pass = {
+      let builder =
+        RenderPassBuilder::new()
+          .with_label("Debug render pass");
+      if let Some(multisampled_framebuffer) = multisampled_framebuffer {
+        builder.begin_render_pass_for_multisampled_swap_chain_with_load(frame.encoder, &multisampled_framebuffer.view, &frame.output_texture)
+      } else {
+        builder.begin_render_pass_for_swap_chain_with_load(frame.encoder, &frame.output_texture)
+      }
+    };
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
       pipeline.draw(&mut render_pass);
@@ -306,6 +318,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     vertex_shader_module: &ShaderModule,
     fragment_shader_module: &ShaderModule,
     uniform_bind_group_layout: &BindGroupLayout,
+    multisample_sample_count: u32,
     primitive_topology: PrimitiveTopology,
     polygon_mode: PolygonMode,
     label: &'static str,
@@ -314,6 +327,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_default_premultiplied_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[V::buffer_layout()])
+      .with_multisample_count(multisample_sample_count)
       .with_primitive_topology(primitive_topology)
       .with_polygon_mode(polygon_mode)
       .with_cull_mode(None)
