@@ -191,15 +191,15 @@ impl app::Application for TransvoxelDemo {
     marching_cubes.extract_chunk(UVec3::zero(), 1, &self.chunk_samples, &mut chunk_vertices);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
-      .with_label("Voxel meshing vertex buffer")
+      .with_label("Transvoxel demo vertex buffer")
       .build_with_data(&gfx.device, &chunk_vertices.vertices());
     let index_buffer = BufferBuilder::new()
       .with_index_usage()
-      .with_label("Voxel meshing index buffer")
+      .with_label("Transvoxel demo index buffer")
       .build_with_data(&gfx.device, &chunk_vertices.indices());
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
-      .with_label("Marching cubes render pass")
+      .with_label("Transvoxel demo render pass")
       .begin_render_pass_for_multisampled_swap_chain_with_clear(frame.encoder, &self.multisampled_framebuffer.view, &frame.output_texture);
     render_pass.push_debug_group("Draw voxelized mesh");
     render_pass.set_pipeline(&self.render_pipeline);

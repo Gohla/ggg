@@ -186,17 +186,22 @@ impl DebugRenderer {
   }
 
   pub fn draw_axes_lines(&mut self, pos: Vec3, size: f32) {
+    let color_x = Vec4::new(1.0, 0.0, 0.0, 1.0);
+    let color_y = Vec4::new(0.0, 1.0, 0.0, 1.0);
+    let color_z = Vec4::new(0.0, 0.0, 1.0, 1.0);
     self.draw_line_vertices_indexed(
       [
-        RegularVertex::new(pos, Vec4::one()),
-        RegularVertex::new(pos + Vec3::unit_x() * size, Vec4::new(1.0, 0.0, 0.0, 1.0)),
-        RegularVertex::new(pos + Vec3::unit_y() * size, Vec4::new(0.0, 1.0, 0.0, 1.0)),
-        RegularVertex::new(pos + Vec3::unit_z() * size, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+        RegularVertex::new(pos, color_x),
+        RegularVertex::new(pos + Vec3::unit_x() * size, color_x),
+        RegularVertex::new(pos, color_y),
+        RegularVertex::new(pos + Vec3::unit_y() * size, color_y),
+        RegularVertex::new(pos, color_z),
+        RegularVertex::new(pos + Vec3::unit_z() * size, color_z),
       ],
       [
         0, 1,
-        0, 2,
-        0, 3,
+        2, 3,
+        4, 5,
       ],
     );
   }
