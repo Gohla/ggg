@@ -12,12 +12,14 @@ use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
+use gfx::display_math::UVec3DisplayExt;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
 use voxel_meshing::marching_cubes::{Cell, MarchingCubes, tables};
+use voxel_meshing::marching_cubes::tables::VertexData;
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
@@ -157,7 +159,7 @@ impl app::Application for MarchingCubesDemo {
         } else {
           panic!();
         };
-        ui.collapsing_open("Marching Cubes", |ui| {
+        ui.collapsing_open("Cell", |ui| {
           ui.horizontal(|ui| {
             ComboBox::from_id_source("Equivalence class")
               .selected_text(format!("{:?}", self.gui_equivalence_class))
@@ -287,15 +289,6 @@ impl app::Application for MarchingCubesDemo {
               }
             }
           });
-          let local_coordinates = MC::local_coordinates(Cell::new(0, 0, 0));
-          let values = MC::sample(samples, &local_coordinates);
-          let case = MarchingCubes::<C>::case(&values);
-          let cell_class = tables::CELL_CLASS[case as usize] as usize;
-          let triangulation_info = tables::CELL_DATA[cell_class];
-          let vertices = triangulation_info.get_vertex_count();
-          let triangles = triangulation_info.get_triangle_count();
-          ui.monospace(format!("case: {case}, cell class: {cell_class}"));
-          ui.monospace(format!("vertices: {vertices}, triangles: {triangles}"));
           ui.horizontal(|ui| {
             if ui.button("Flip").clicked() {
               samples.flip_all();
@@ -314,28 +307,82 @@ impl app::Application for MarchingCubesDemo {
             }
             ui.end_row();
           });
-          for z in 0..C::VOXELS_IN_CHUNK_ROW {
-            ui.collapsing_open_with_grid(format!("Z={}", z), format!("Grid Z={}", z), |ui| {
-              ui.label("");
-              for x in 0..C::VOXELS_IN_CHUNK_ROW {
-                ui.label(format!("{}", x));
-              }
-              ui.end_row();
-              for y in 0..C::VOXELS_IN_CHUNK_ROW {
-                ui.label(format!("Y={}", y));
-                for x in 0..C::VOXELS_IN_CHUNK_ROW {
-                  let sample = samples.sample_mut(UVec3::new(x, y, z));
-                  let response = ui.drag("", sample, 0.01);
-                  if response.secondary_clicked() {
-                    *sample *= -1.0;
-                  }
-                  if response.middle_clicked() {
-                    *sample = 0.0;
-                  }
-                }
-                ui.end_row();
-              }
-            });
+        });
+
+        let local_coordinates = MC::local_coordinates(Cell::new(0, 0, 0));
+        let global_coordinates = MC::global_coordinates(UVec3::zero(), 1, &local_coordinates);
+        let values = MC::sample(samples, &local_coordinates);
+        let case = MarchingCubes::<C>::case(&values);
+        let cell_class = tables::CELL_CLASS[case as usize] as usize;
+        let triangulation_info = tables::CELL_DATA[cell_class];
+        let vertex_count = triangulation_info.get_vertex_count() as usize;
+        let triangle_count = triangulation_info.get_triangle_count() as usize;
+        let vertices_data = tables::VERTEX_DATA[case as usize];
+
+        ui.collapsing_open_with_grid("Data", "Data Grid", |ui| {
+          ui.label("Case");
+          ui.monospace(format!("{case} (class: {cell_class})"));
+          ui.end_row();
+          ui.label("Counts");
+          ui.monospace(format!("Vertices: {vertex_count}, triangles: {triangle_count}"));
+          ui.end_row();
+        });
+
+        ui.collapsing_open_with_grid("Voxels", "Voxels Grid", |ui| {
+          ui.label("#");
+          ui.label("local");
+          ui.label("global");
+          ui.label("value");
+          ui.end_row();
+          for i in 0..8 {
+            let local = local_coordinates[i];
+            ui.monospace(format!("{}", i));
+            ui.monospace(format!("{}", local.display()));
+            ui.monospace(format!("{}", global_coordinates[i].display()));
+            let value = samples.sample_mut(local);
+            let response = ui.drag("", value, 0.01);
+            if response.secondary_clicked() {
+              *value *= -1.0;
+            }
+            if response.middle_clicked() {
+              *value = 0.0;
+            }
+            ui.end_row();
+          }
+        });
+
+        ui.collapsing_open_with_grid("Vertices", "Vertices", |ui| {
+          ui.label("#");
+          ui.label("-x?");
+          ui.label("-y?");
+          ui.label("-z?");
+          ui.label("new?");
+          ui.label("vtx idx");
+          ui.label("vox a idx");
+          ui.label("vox b idx");
+          ui.end_row();
+          for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
+            ui.monospace(format!("{}", i));
+            let vd = VertexData(*vd);
+            ui.monospace(format!("{}", vd.subtract_x()));
+            ui.monospace(format!("{}", vd.subtract_y()));
+            ui.monospace(format!("{}", vd.subtract_z()));
+            ui.monospace(format!("{}", vd.new_vertex()));
+            ui.monospace(format!("{}", vd.vertex_index()));
+            ui.monospace(format!("{}", vd.voxel_a_index()));
+            ui.monospace(format!("{}", vd.voxel_b_index()));
+            ui.end_row();
+          }
+        });
+
+        ui.collapsing_open_with_grid("Triangulation", "Triangulation Grid", |ui| {
+          ui.label("#");
+          ui.label("triangle idxs");
+          ui.end_row();
+          for i in (0..triangle_count * 3).step_by(3) {
+            ui.monospace(format!("{}", i / 3));
+            ui.monospace(format!("{} {} {}", triangulation_info.vertex_index[i + 0], triangulation_info.vertex_index[i + 1], triangulation_info.vertex_index[i + 2]));
+            ui.end_row();
           }
         });
       });

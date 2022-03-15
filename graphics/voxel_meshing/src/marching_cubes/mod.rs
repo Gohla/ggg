@@ -83,10 +83,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
     // Get indices for all vertices, creating new vertices and thus new indices, or reusing indices from previous cells.
     let mut cell_vertices_indices = [0; 12];
-    for (i, vd) in vertices_data.iter().enumerate() {
-      if i >= vertex_count {
-        break;
-      }
+    for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
       let index = Self::create_or_reuse_vertex(VertexData(*vd), cell, &global_voxels, &values, shared_indices, chunk_vertices);
       cell_vertices_indices[i] = index;
     }
