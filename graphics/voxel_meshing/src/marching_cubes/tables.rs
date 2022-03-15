@@ -1,10 +1,10 @@
 // The following data originates from Eric Lengyel's Transvoxel Algorithm.
 // http://transvoxel.org/
 
-/// Holds information about the triangulation used for a single equivalence class in the modified
-/// Marching Cubes algorithm.
+/// Holds information about the triangulation used for a single equivalence class in the modified Marching Cubes
+/// algorithm.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct CellData {
+pub struct RegularCellData {
   /// High nibble is vertex count; low nibble is triangle count.
   pub geometry_counts: u8,
   /// Groups of 3 indices giving the triangulation.
@@ -13,7 +13,7 @@ pub struct CellData {
   pub vertex_index: [u8; 15],
 }
 
-impl CellData {
+impl RegularCellData {
   /// Gets the vertex count from `RegularCellData::geometry_counts`.
   pub fn get_vertex_count(&self) -> u8 {
     self.geometry_counts >> 4
@@ -50,7 +50,7 @@ impl CellData {
 /// - #15: 13
 /// - #16: 14
 /// - #17: 15
-pub const CELL_CLASS: [u8; 256] = [
+pub const REGULAR_CELL_CLASS: [u8; 256] = [
   0x00, 0x01, 0x01, 0x03, 0x01, 0x03, 0x02, 0x04, 0x01, 0x02, 0x03, 0x04, 0x03, 0x04, 0x04, 0x03,
   0x01, 0x03, 0x02, 0x04, 0x02, 0x04, 0x06, 0x0C, 0x02, 0x05, 0x05, 0x0B, 0x05, 0x0A, 0x07, 0x04,
   0x01, 0x02, 0x03, 0x04, 0x02, 0x05, 0x05, 0x0A, 0x02, 0x06, 0x04, 0x0C, 0x05, 0x07, 0x0B, 0x04,
@@ -72,29 +72,29 @@ pub const CELL_CLASS: [u8; 256] = [
 /// Holds the triangulation data for all 16 distinct classes to which a case can be mapped by the `CELL_CLASS` table.
 ///
 /// A value of `!0` is used for padding the array.
-pub const CELL_DATA: [CellData; 16] = [
-  CellData { geometry_counts: 0x00, vertex_index: [!0; 15] },
-  CellData { geometry_counts: 0x31, vertex_index: [00, 01, 02, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x62, vertex_index: [00, 01, 02, 03, 04, 05, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x42, vertex_index: [00, 01, 02, 00, 02, 03, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x53, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x73, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x93, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, !0, !0, !0, !0, !0, !0] },
-  CellData { geometry_counts: 0x84, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, 05, 06, 07, !0, !0, !0] },
-  CellData { geometry_counts: 0x84, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, 04, 06, 07, !0, !0, !0] },
-  CellData { geometry_counts: 0xC4, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, !0, !0, !0] },
-  CellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0] },
-  CellData { geometry_counts: 0x64, vertex_index: [00, 05, 04, 00, 04, 01, 01, 04, 03, 01, 03, 02, !0, !0, !0] },
-  CellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, !0, !0, !0] },
-  CellData { geometry_counts: 0x64, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, !0, !0, !0] },
-  CellData { geometry_counts: 0x75, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, 00, 05, 06] },
-  CellData { geometry_counts: 0x95, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, 06, 07, 08] },
+pub const REGULAR_CELL_DATA: [RegularCellData; 16] = [
+  RegularCellData { geometry_counts: 0x00, vertex_index: [!0; 15] },
+  RegularCellData { geometry_counts: 0x31, vertex_index: [00, 01, 02, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x62, vertex_index: [00, 01, 02, 03, 04, 05, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x42, vertex_index: [00, 01, 02, 00, 02, 03, !0, !0, !0, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x53, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x73, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x93, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, !0, !0, !0, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x84, vertex_index: [00, 01, 04, 01, 03, 04, 01, 02, 03, 05, 06, 07, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x84, vertex_index: [00, 01, 02, 00, 02, 03, 04, 05, 06, 04, 06, 07, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0xC4, vertex_index: [00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 01, 04, 01, 03, 04, 01, 02, 03, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x64, vertex_index: [00, 05, 04, 00, 04, 01, 01, 04, 03, 01, 03, 02, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x64, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x64, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, !0, !0, !0] },
+  RegularCellData { geometry_counts: 0x75, vertex_index: [00, 01, 02, 00, 02, 03, 00, 03, 04, 00, 04, 05, 00, 05, 06] },
+  RegularCellData { geometry_counts: 0x95, vertex_index: [00, 04, 05, 00, 03, 04, 00, 01, 03, 01, 02, 03, 06, 07, 08] },
 ];
 
 #[derive(Copy, Clone)]
-pub struct VertexData(pub u16);
+pub struct RegularVertexData(pub u16);
 
-impl VertexData {
+impl RegularVertexData {
   #[inline]
   fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
   #[inline]
@@ -116,12 +116,14 @@ impl VertexData {
   pub fn voxel_b_index(&self) -> u8 { self.low_byte() & 0b0000_1111 /* Low nibble */ }
 }
 
-/// Gives the vertex locations for every one of the 256 possible cases in the modified Marching
-/// Cubes algorithm. Each 16-bit value also provides information about whether a vertex can be
-/// reused from a neighboring cell.
-/// The low byte contains the indices for the two endpoints of the edge on which the vertex lies.
-/// The high byte contains the vertex reuse data.
-pub const VERTEX_DATA: [[u16; 12]; 256] = [
+/// Gives the vertex locations for every one of the 256 possible cases in the modified Marching Cubes algorithm. Each
+/// 16-bit value also provides information about whether a vertex can be reused from a neighboring cell.
+///
+/// The low byte contains the indices for the two endpoints of the edge on which the vertex lies. The high byte contains
+/// the vertex reuse data.
+///
+/// A value of `0x0000` is used for padding the array.
+pub const REGULAR_VERTEX_DATA: [[u16; 12]; 256] = [
   [0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],
   [0x6201, 0x5102, 0x3304, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],
   [0x6201, 0x2315, 0x4113, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000],

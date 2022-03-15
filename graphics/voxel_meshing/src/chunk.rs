@@ -10,6 +10,8 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   const CELLS_IN_CHUNK_ROW: u32;
   const CELLS_IN_CHUNK_ROW_F32: f32 = Self::CELLS_IN_CHUNK_ROW as f32;
   const CELLS_IN_CHUNK_ROW_USIZE: usize = Self::CELLS_IN_CHUNK_ROW as usize;
+  const CELLS_IN_DECK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
+  const CELLS_IN_DECK_USIZE: usize = Self::CELLS_IN_DECK as usize;
   const CELLS_IN_CHUNK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
   const CELLS_IN_CHUNK_USIZE: usize = Self::CELLS_IN_CHUNK as usize;
 

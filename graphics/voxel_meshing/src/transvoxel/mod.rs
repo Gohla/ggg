@@ -18,7 +18,7 @@ pub struct Transvoxel<C: ChunkSize> {
 }
 
 impl<C: ChunkSize> Transvoxel<C> {
-  pub const SHARED_INDICES_SIZE: usize = 10 * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE;
+  pub const SHARED_INDICES_SIZE: usize = 10 * C::CELLS_IN_DECK_USIZE;
 
   pub fn new() -> Self {
     Self { _chunk_phantom: PhantomData::default() }

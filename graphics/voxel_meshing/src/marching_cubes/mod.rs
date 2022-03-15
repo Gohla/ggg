@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, Vertex};
-use crate::marching_cubes::tables::VertexData;
+use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
 
@@ -46,7 +46,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
       for z in 0..C::CELLS_IN_CHUNK_ROW {
         for y in 0..C::CELLS_IN_CHUNK_ROW {
           for x in 0..C::CELLS_IN_CHUNK_ROW {
-            let cell = Cell::new(x, y, z);
+            let cell = RegularCell::new(x, y, z);
             Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_vertices);
           }
         }
@@ -56,7 +56,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   fn extract_cell(
-    cell: Cell,
+    cell: RegularCell,
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
@@ -72,15 +72,15 @@ impl<C: ChunkSize> MarchingCubes<C> {
       return;
     }
     let case = case as usize;
-    let cell_class = tables::CELL_CLASS[case] as usize;
-    let triangulation_info = tables::CELL_DATA[cell_class];
+    let cell_class = tables::REGULAR_CELL_CLASS[case] as usize;
+    let triangulation_info = tables::REGULAR_CELL_DATA[cell_class];
     let vertex_count = triangulation_info.get_vertex_count() as usize;
     let triangle_count = triangulation_info.get_triangle_count() as usize;
-    let vertices_data = tables::VERTEX_DATA[case];
+    let vertices_data = tables::REGULAR_VERTEX_DATA[case];
     let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
-      let index = Self::create_or_reuse_vertex(VertexData(*vd), cell, &global_voxels, &values, shared_indices, chunk_vertices);
+      let index = Self::create_or_reuse_vertex(RegularVertexData(*vd), cell, &global_voxels, &values, shared_indices, chunk_vertices);
       cell_vertices_indices[i] = index;
     }
     for t in 0..triangle_count {
@@ -96,19 +96,19 @@ impl<C: ChunkSize> MarchingCubes<C> {
     }
   }
 
-  pub const VOXELS: [Voxel; 8] = [
-    Voxel::new(0, 0, 0), // 1
-    Voxel::new(1, 0, 0), // 2
-    Voxel::new(0, 1, 0), // 3
-    Voxel::new(1, 1, 0), // 4
-    Voxel::new(0, 0, 1), // 5
-    Voxel::new(1, 0, 1), // 6
-    Voxel::new(0, 1, 1), // 7
-    Voxel::new(1, 1, 1), // 8
+  pub const VOXELS: [RegularVoxel; 8] = [
+    RegularVoxel::new(0, 0, 0), // 1
+    RegularVoxel::new(1, 0, 0), // 2
+    RegularVoxel::new(0, 1, 0), // 3
+    RegularVoxel::new(1, 1, 0), // 4
+    RegularVoxel::new(0, 0, 1), // 5
+    RegularVoxel::new(1, 0, 1), // 6
+    RegularVoxel::new(0, 1, 1), // 7
+    RegularVoxel::new(1, 1, 1), // 8
   ];
 
   #[inline]
-  pub fn local_coordinates(cell: Cell) -> [UVec3; 8] {
+  pub fn local_coordinates(cell: RegularCell) -> [UVec3; 8] {
     [
       cell.to_local_coordinate(Self::VOXELS[0]),
       cell.to_local_coordinate(Self::VOXELS[1]),
@@ -166,8 +166,8 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   fn create_or_reuse_vertex(
-    vertex_data: VertexData,
-    cell: Cell,
+    vertex_data: RegularVertexData,
+    cell: RegularCell,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
@@ -210,7 +210,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   pub fn create_vertex(
-    vertex_data: VertexData,
+    vertex_data: RegularVertexData,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     chunk_vertices: &mut ChunkVertices,
@@ -235,7 +235,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
   }
 
   #[inline]
-  pub fn shared_index(cell: Cell, vertex_index: usize) -> usize {
+  pub fn shared_index(cell: RegularCell, vertex_index: usize) -> usize {
     cell.x as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * cell.y as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * cell.z as usize
@@ -245,33 +245,35 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
 /// Cell, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub struct Cell {
+pub struct RegularCell {
   pub x: u32,
   pub y: u32,
   pub z: u32,
 }
 
-impl Cell {
+impl RegularCell {
   #[inline]
   pub const fn new(x: u32, y: u32, z: u32) -> Self {
     Self { x, y, z }
   }
 
   #[inline]
-  pub fn to_local_coordinate(&self, voxel: Voxel) -> UVec3 {
+  pub fn to_local_coordinate(&self, voxel: RegularVoxel) -> UVec3 {
+    // NOTE: swaps Z and Y axis, as we use a left handed y-up coordinate system, whereas the dissertation uses a
+    // left-handed z-up coordinate system.
     UVec3::new(self.x + voxel.x, self.z + voxel.z, self.y + voxel.y)
   }
 }
 
 /// Voxel, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub struct Voxel {
+pub struct RegularVoxel {
   pub x: u32,
   pub y: u32,
   pub z: u32,
 }
 
-impl Voxel {
+impl RegularVoxel {
   #[inline]
   pub const fn new(x: u32, y: u32, z: u32) -> Self {
     Self { x, y, z }
