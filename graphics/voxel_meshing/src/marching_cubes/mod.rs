@@ -80,7 +80,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
-      let index = Self::create_or_reuse_vertex(RegularVertexData(*vd), cell, &global_voxels, &values, shared_indices, chunk_vertices);
+      let index = Self::create_or_reuse_vertex(vd, cell, &global_voxels, &values, shared_indices, chunk_vertices);
       cell_vertices_indices[i] = index;
     }
     for t in 0..triangle_count {
@@ -166,7 +166,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   fn create_or_reuse_vertex(
-    vertex_data: RegularVertexData,
+    vertex_data: &RegularVertexData,
     cell: RegularCell,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
@@ -210,7 +210,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   pub fn create_vertex(
-    vertex_data: RegularVertexData,
+    vertex_data: &RegularVertexData,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     chunk_vertices: &mut ChunkVertices,

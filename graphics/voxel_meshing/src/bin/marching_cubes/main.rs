@@ -18,8 +18,7 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
-use voxel_meshing::marching_cubes::{RegularCell, MarchingCubes, tables};
-use voxel_meshing::marching_cubes::tables::RegularVertexData;
+use voxel_meshing::marching_cubes::{self, MarchingCubes, RegularCell};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 pub struct MarchingCubesDemo {
@@ -328,11 +327,11 @@ impl app::Application for MarchingCubesDemo {
         let global_coordinates = MC::global_coordinates(UVec3::zero(), 1, &local_coordinates);
         let values = MC::sample(samples, &local_coordinates);
         let case = MarchingCubes::<C>::case(&values);
-        let cell_class = tables::REGULAR_CELL_CLASS[case as usize] as usize;
-        let triangulation_info = tables::REGULAR_CELL_DATA[cell_class];
+        let cell_class = marching_cubes::tables::REGULAR_CELL_CLASS[case as usize] as usize;
+        let triangulation_info = marching_cubes::tables::REGULAR_CELL_DATA[cell_class];
         let vertex_count = triangulation_info.get_vertex_count() as usize;
         let triangle_count = triangulation_info.get_triangle_count() as usize;
-        let vertices_data = tables::REGULAR_VERTEX_DATA[case as usize];
+        let vertices_data = marching_cubes::tables::REGULAR_VERTEX_DATA[case as usize];
 
         ui.collapsing_open_with_grid("Data", "Data Grid", |ui| {
           ui.label("Case");
@@ -378,7 +377,6 @@ impl app::Application for MarchingCubesDemo {
           ui.end_row();
           for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
             ui.monospace(format!("{}", i));
-            let vd = RegularVertexData(*vd);
             ui.monospace(format!("{}", vd.subtract_x()));
             ui.monospace(format!("{}", vd.subtract_y()));
             ui.monospace(format!("{}", vd.subtract_z()));
