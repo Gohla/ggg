@@ -12,7 +12,7 @@ use crate::transvoxel::tables::TransitionVertexData;
 pub mod side;
 mod tables;
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct Transvoxel<C: ChunkSize> {
   _chunk_phantom: PhantomData<C>,
 }
@@ -20,9 +20,8 @@ pub struct Transvoxel<C: ChunkSize> {
 impl<C: ChunkSize> Transvoxel<C> {
   pub const SHARED_INDICES_SIZE: usize = 10 * C::CELLS_IN_DECK_USIZE;
 
-  pub fn new() -> Self {
-    Self { _chunk_phantom: PhantomData::default() }
-  }
+  #[inline]
+  pub fn new() -> Self { Self::default() }
 
   pub fn extract_chunk(
     &self,

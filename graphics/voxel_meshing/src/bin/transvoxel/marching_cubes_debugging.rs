@@ -12,7 +12,8 @@ use voxel_meshing::marching_cubes::{MarchingCubes, RegularCell};
 use crate::C1;
 
 pub type MC = MarchingCubes<C1>;
-pub const STEP: u32 = 1;
+
+pub const LORES_STEP: u32 = 2;
 
 #[derive(Default)]
 pub struct MarchingCubesDebugging {
@@ -188,7 +189,7 @@ impl MarchingCubesDebugging {
 
   fn draw_data_gui(&mut self, ui: &mut Ui, samples: &mut ChunkSampleArray<C1>) {
     let local_coordinates = MC::local_coordinates(RegularCell::new(0, 0, 0));
-    let global_coordinates = MC::global_coordinates(UVec3::zero(), 1, &local_coordinates);
+    let global_coordinates = MC::global_coordinates(UVec3::zero(), LORES_STEP, &local_coordinates);
     let values = MC::sample(samples, &local_coordinates);
     let case = MC::case(&values);
     let cell_class = marching_cubes::tables::REGULAR_CELL_CLASS[case as usize] as usize;
@@ -265,7 +266,8 @@ impl MarchingCubesDebugging {
   }
 
   pub fn extract_chunk(&self, chunk_samples: &ChunkSamples<C1>, chunk_vertices: &mut ChunkVertices) {
-    self.marching_cubes.extract_chunk(UVec3::zero(), STEP, chunk_samples, chunk_vertices);
+    // HACK: pass LORES_STEP (2) here, to make global voxels draw as if this was a 2x2 chunk grid.
+    self.marching_cubes.extract_chunk(UVec3::zero(), LORES_STEP, chunk_samples, chunk_vertices);
   }
 
   pub fn debug_draw(&self, samples: &ChunkSampleArray<C1>, debug_renderer: &mut DebugRenderer) {
@@ -275,6 +277,8 @@ impl MarchingCubesDebugging {
         for x in 0..C1::VOXELS_IN_CHUNK_ROW {
           let position = UVec3::new(x, y, z);
           let sample = samples.sample(position);
+          // HACK: multiply by LORES_STEP after sampling to draw as if this was a 2x2 chunk grid.
+          let position = position * LORES_STEP;
           if sample.is_sign_negative() {
             debug_renderer.draw_point(position.into(), Vec4::one(), 20.0);
           }
@@ -282,6 +286,6 @@ impl MarchingCubesDebugging {
       }
     }
     // Cell
-    debug_renderer.draw_cube_lines(UVec3::zero().into(), STEP as f32, Vec4::one());
+    debug_renderer.draw_cube_lines(UVec3::zero().into(), LORES_STEP as f32, Vec4::one());
   }
 }

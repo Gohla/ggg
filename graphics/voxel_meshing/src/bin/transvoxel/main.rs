@@ -17,10 +17,11 @@ use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVerti
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 use crate::marching_cubes_debugging::MarchingCubesDebugging;
-use crate::transvoxel_settings::TransvoxelDebugging;
+use crate::transvoxel_debugging::TransvoxelDebugging;
 
 mod marching_cubes_debugging;
-mod transvoxel_settings;
+mod transvoxel_debugging;
+mod chunk_manager;
 
 pub struct TransvoxelDemo {
   camera: Camera,
@@ -52,21 +53,22 @@ pub struct Input {
 pub type C1 = GenericChunkSize<1>;
 
 const MULTISAMPLE_COUNT: u32 = 4;
+// HACK: let extends be equal to C1::CELLS_IN_CHUNK_ROW instead of dividing by 2 because we are imitating a 2x2 grid.
+const EXTENDS: f32 = C1::CELLS_IN_CHUNK_ROW as f32;
 
 impl app::Application for TransvoxelDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
-    camera.arcball.distance = -2.0;
+    camera.arcball.distance = -4.0;
     let debug_renderer = DebugRenderer::new(gfx, MULTISAMPLE_COUNT, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;
     light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
-    let extends = C1::CELLS_IN_CHUNK_ROW as f32 / 2.0;
-    let transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
+    let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport)
@@ -188,7 +190,7 @@ impl app::Application for TransvoxelDemo {
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
 
-    // Run MC and TV to create triangles from voxels
+    // Run MC and TV to create triangles from voxels.
     let mut chunk_vertices = ChunkVertices::new();
     self.marching_cubes_debugging.extract_chunk(&self.chunk_samples, &mut chunk_vertices);
     let vertex_buffer = BufferBuilder::new()
@@ -199,6 +201,8 @@ impl app::Application for TransvoxelDemo {
       .with_index_usage()
       .with_label("Transvoxel demo index buffer")
       .build_with_data(&gfx.device, &chunk_vertices.indices());
+
+    // Render the triangles.
     let mut render_pass = RenderPassBuilder::new()
       .with_depth_texture(&self.depth_texture.view)
       .with_label("Transvoxel demo render pass")
@@ -212,8 +216,9 @@ impl app::Application for TransvoxelDemo {
     render_pass.pop_debug_group();
     drop(render_pass);
 
+    // Debug rendering.
     self.debug_renderer.clear();
-    self.debug_renderer.draw_axes_lines(Vec3::one() * 0.5, 0.5);
+    self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
     if let ChunkSamples::Mixed(chunk_samples_array) = &self.chunk_samples {
       self.marching_cubes_debugging.debug_draw(chunk_samples_array, &mut self.debug_renderer);
     }
