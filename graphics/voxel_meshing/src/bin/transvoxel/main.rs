@@ -1,5 +1,5 @@
 use egui::{Align2, Ui};
-use ultraviolet::{Isometry3, Rotor3, UVec3, Vec3, Vec4};
+use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
@@ -14,12 +14,12 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
-use voxel_meshing::marching_cubes::MarchingCubes;
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
-use crate::marching_cubes_settings::MarchingCubesSettings;
+use crate::marching_cubes_debugging::MarchingCubesDebugging;
+use crate::transvoxel_settings::TransvoxelDebugging;
 
-mod marching_cubes_settings;
+mod marching_cubes_debugging;
 mod transvoxel_settings;
 
 pub struct TransvoxelDemo {
@@ -40,7 +40,8 @@ pub struct TransvoxelDemo {
 
   chunk_samples: ChunkSamples<C1>,
 
-  marching_cubes_settings: MarchingCubesSettings,
+  marching_cubes_debugging: MarchingCubesDebugging,
+  transvoxel_settings: TransvoxelDebugging,
 }
 
 #[derive(Default)]
@@ -49,7 +50,6 @@ pub struct Input {
 }
 
 pub type C1 = GenericChunkSize<1>;
-pub type MC = MarchingCubes<C1>;
 
 const MULTISAMPLE_COUNT: u32 = 4;
 
@@ -118,7 +118,8 @@ impl app::Application for TransvoxelDemo {
 
     let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C1>::new_with(0.0));
 
-    let marching_cubes_settings = MarchingCubesSettings::default();
+    let marching_cubes_debugging = MarchingCubesDebugging::default();
+    let transvoxel_settings = TransvoxelDebugging::default();
 
     Self {
       camera,
@@ -138,7 +139,8 @@ impl app::Application for TransvoxelDemo {
 
       chunk_samples,
 
-      marching_cubes_settings,
+      marching_cubes_debugging,
+      transvoxel_settings,
     }
   }
 
@@ -170,7 +172,8 @@ impl app::Application for TransvoxelDemo {
 
     // Debug GUI
     if let ChunkSamples::Mixed(chunk_samples_array) = &mut self.chunk_samples {
-      self.marching_cubes_settings.render_gui(gui_frame, chunk_samples_array);
+      self.marching_cubes_debugging.show_gui_window(gui_frame, chunk_samples_array);
+      self.transvoxel_settings.render_gui(gui_frame);
     } else {
       panic!();
     };
@@ -185,10 +188,9 @@ impl app::Application for TransvoxelDemo {
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
 
-    // Run marching cubes to create triangles from voxels
+    // Run MC and TV to create triangles from voxels
     let mut chunk_vertices = ChunkVertices::new();
-    let marching_cubes = MC::new();
-    marching_cubes.extract_chunk(UVec3::zero(), 1, &self.chunk_samples, &mut chunk_vertices);
+    self.marching_cubes_debugging.extract_chunk(&self.chunk_samples, &mut chunk_vertices);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Transvoxel demo vertex buffer")
@@ -210,43 +212,16 @@ impl app::Application for TransvoxelDemo {
     render_pass.pop_debug_group();
     drop(render_pass);
 
-    // Debug rendering
     self.debug_renderer.clear();
-    let chunk_samples_array = if let ChunkSamples::Mixed(chunk_samples_array) = &self.chunk_samples {
-      chunk_samples_array
-    } else {
-      panic!();
-    };
-    // Axes
     self.debug_renderer.draw_axes_lines(Vec3::one() * 0.5, 0.5);
-    // Voxels
-    for z in 0..C1::VOXELS_IN_CHUNK_ROW {
-      for y in 0..C1::VOXELS_IN_CHUNK_ROW {
-        for x in 0..C1::VOXELS_IN_CHUNK_ROW {
-          let position = UVec3::new(x, y, z);
-          let sample = chunk_samples_array.sample(position);
-          if sample.is_sign_negative() {
-            self.debug_renderer.draw_point(position.into(), Vec4::new(1.0, 1.0, 1.0, 1.0), 20.0);
-          }
-        }
-      }
+    if let ChunkSamples::Mixed(chunk_samples_array) = &self.chunk_samples {
+      self.marching_cubes_debugging.debug_draw(chunk_samples_array, &mut self.debug_renderer);
     }
-    // Cells
-    for z in 0..C1::CELLS_IN_CHUNK_ROW {
-      for y in 0..C1::CELLS_IN_CHUNK_ROW {
-        for x in 0..C1::CELLS_IN_CHUNK_ROW {
-          let position = UVec3::new(x, y, z);
-          self.debug_renderer.draw_cube_lines(position.into(), 1.0, Vec4::new(1.0, 1.0, 1.0, 1.0));
-        }
-      }
-    }
-    // Marching cubes wireframe and points
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
       chunk_vertices.indices().into_iter().copied(),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    // Perform the actual debug rendering
     self.debug_renderer.render(gfx, &mut frame, Some(&self.multisampled_framebuffer), self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())

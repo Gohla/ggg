@@ -19,7 +19,7 @@ use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct MarchingCubes<C: ChunkSize> {
   _chunk_size_phantom: PhantomData<C>,
 }
@@ -27,9 +27,8 @@ pub struct MarchingCubes<C: ChunkSize> {
 impl<C: ChunkSize> MarchingCubes<C> {
   pub const SHARED_INDICES_SIZE: usize = 4 * C::CELLS_IN_CHUNK_USIZE;
 
-  pub fn new() -> Self {
-    Self { _chunk_size_phantom: PhantomData::default() }
-  }
+  #[inline]
+  pub fn new() -> Self { Self::default() }
 
   pub fn extract_chunk(
     &self,
