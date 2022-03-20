@@ -13,8 +13,9 @@ use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
+use voxel_meshing::chunk::{ChunkSize, ChunkVertices, GenericChunkSize, Vertex};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
+use crate::chunk_manager::ChunkManager;
 
 use crate::marching_cubes_debugging::MarchingCubesDebugging;
 use crate::transvoxel_debugging::TransvoxelDebugging;
@@ -39,7 +40,7 @@ pub struct TransvoxelDemo {
   render_pipeline: RenderPipeline,
   multisampled_framebuffer: GfxTexture,
 
-  chunk_samples: ChunkSamples<C1>,
+  chunk_manager: ChunkManager,
 
   marching_cubes_debugging: MarchingCubesDebugging,
   transvoxel_settings: TransvoxelDebugging,
@@ -118,7 +119,7 @@ impl app::Application for TransvoxelDemo {
       .with_texture_view_label("Multisampling texture view")
       .build(&gfx.device);
 
-    let chunk_samples = ChunkSamples::Mixed(ChunkSampleArray::<C1>::new_with(0.0));
+    let chunk_manager = ChunkManager::new();
 
     let marching_cubes_debugging = MarchingCubesDebugging::default();
     let transvoxel_settings = TransvoxelDebugging::default();
@@ -139,7 +140,7 @@ impl app::Application for TransvoxelDemo {
       render_pipeline,
       multisampled_framebuffer,
 
-      chunk_samples,
+      chunk_manager,
 
       marching_cubes_debugging,
       transvoxel_settings,
@@ -173,12 +174,8 @@ impl app::Application for TransvoxelDemo {
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
     // Debug GUI
-    if let ChunkSamples::Mixed(chunk_samples_array) = &mut self.chunk_samples {
-      self.marching_cubes_debugging.show_gui_window(gui_frame, chunk_samples_array);
-      self.transvoxel_settings.render_gui(gui_frame);
-    } else {
-      panic!();
-    };
+    self.marching_cubes_debugging.show_gui_window(gui_frame, self.chunk_manager.get_mc_chunk_manager());
+    self.transvoxel_settings.render_gui(gui_frame);
     egui::Window::new("Demo")
       .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
       .show(&gui_frame, |ui| {
@@ -192,7 +189,7 @@ impl app::Application for TransvoxelDemo {
 
     // Run MC and TV to create triangles from voxels.
     let mut chunk_vertices = ChunkVertices::new();
-    self.marching_cubes_debugging.extract_chunk(&self.chunk_samples, &mut chunk_vertices);
+    self.marching_cubes_debugging.extract_chunk(self.chunk_manager.get_mc_chunk_manager(), &mut chunk_vertices);
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Transvoxel demo vertex buffer")
@@ -219,9 +216,7 @@ impl app::Application for TransvoxelDemo {
     // Debug rendering.
     self.debug_renderer.clear();
     self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
-    if let ChunkSamples::Mixed(chunk_samples_array) = &self.chunk_samples {
-      self.marching_cubes_debugging.debug_draw(chunk_samples_array, &mut self.debug_renderer);
-    }
+    self.marching_cubes_debugging.debug_draw(self.chunk_manager.get_mc_chunk_manager(), &mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
       chunk_vertices.indices().into_iter().copied(),
