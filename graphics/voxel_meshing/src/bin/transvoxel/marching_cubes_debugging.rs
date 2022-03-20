@@ -10,10 +10,11 @@ use voxel_meshing::marching_cubes;
 use voxel_meshing::marching_cubes::{MarchingCubes, RegularCell};
 
 use crate::C1;
-use crate::chunk_manager::MCChunkManager;
+use crate::chunk_manager::McChunkManager;
 
 pub type MC = MarchingCubes<C1>;
 
+pub const LORES_MIN: UVec3 = UVec3::new(1, 1, 1);
 pub const LORES_STEP: u32 = 2;
 
 #[derive(Default)]
@@ -23,7 +24,7 @@ pub struct MarchingCubesDebugging {
 }
 
 impl MarchingCubesDebugging {
-  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame, mut chunk_manager: MCChunkManager) {
+  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame, mut chunk_manager: McChunkManager) {
     egui::Window::new("Marching Cubes")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
       .show(&gui_frame, |ui| {
@@ -31,12 +32,12 @@ impl MarchingCubesDebugging {
       });
   }
 
-  fn draw_window_contents(&mut self, ui: &mut Ui, chunk_manager: &mut MCChunkManager) {
+  fn draw_window_contents(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
     self.draw_cell_gui(ui, chunk_manager);
     self.draw_data_gui(ui, chunk_manager);
   }
 
-  fn draw_cell_gui(&mut self, ui: &mut Ui, chunk_manager: &mut MCChunkManager) {
+  fn draw_cell_gui(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
     ui.collapsing_open("Cell", |ui| {
       ui.horizontal(|ui| {
         ComboBox::from_id_source("Equivalence class")
@@ -188,7 +189,7 @@ impl MarchingCubesDebugging {
     });
   }
 
-  fn draw_data_gui(&mut self, ui: &mut Ui, chunk_manager: &mut MCChunkManager) {
+  fn draw_data_gui(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
     let local_coordinates = MC::local_coordinates(RegularCell::new(0, 0, 0));
     let global_coordinates = MC::global_coordinates(UVec3::zero(), LORES_STEP, &local_coordinates);
     let values = MC::sample(&chunk_manager.create_sample_array(), &local_coordinates);
@@ -243,9 +244,9 @@ impl MarchingCubesDebugging {
       ui.end_row();
       for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
         ui.monospace(format!("{}", i));
-        ui.monospace(format!("{}", vd.subtract_x()));
-        ui.monospace(format!("{}", vd.subtract_y()));
-        ui.monospace(format!("{}", vd.subtract_z()));
+        ui.monospace(format!("{}", vd.subtract_u()));
+        ui.monospace(format!("{}", vd.subtract_v()));
+        ui.monospace(format!("{}", vd.subtract_w()));
         ui.monospace(format!("{}", vd.new_vertex()));
         ui.monospace(format!("{}", vd.vertex_index()));
         ui.monospace(format!("{}", vd.voxel_a_index()));
@@ -266,12 +267,12 @@ impl MarchingCubesDebugging {
     });
   }
 
-  pub fn extract_chunk(&self, chunk_manager: MCChunkManager, chunk_vertices: &mut ChunkVertices) {
+  pub fn extract_chunk(&self, chunk_manager: McChunkManager, chunk_vertices: &mut ChunkVertices) {
     // HACK: pass LORES_STEP (2) here, to make global voxels draw as if this was a 2x2 chunk grid.
-    self.marching_cubes.extract_chunk(UVec3::zero(), LORES_STEP, &chunk_manager.create_samples(), chunk_vertices);
+    self.marching_cubes.extract_chunk(LORES_MIN, LORES_STEP, &chunk_manager.create_samples(), chunk_vertices);
   }
 
-  pub fn debug_draw(&self, chunk_manager: MCChunkManager, debug_renderer: &mut DebugRenderer) {
+  pub fn debug_draw(&self, chunk_manager: McChunkManager, debug_renderer: &mut DebugRenderer) {
     // Voxels
     for z in 0..C1::VOXELS_IN_CHUNK_ROW {
       for y in 0..C1::VOXELS_IN_CHUNK_ROW {
@@ -279,7 +280,7 @@ impl MarchingCubesDebugging {
           let position = UVec3::new(x, y, z);
           let sample = chunk_manager.sample(position);
           // HACK: multiply by LORES_STEP after sampling to draw as if this was a 2x2 chunk grid.
-          let position = position * LORES_STEP;
+          let position = LORES_MIN + position * LORES_STEP;
           if sample.is_sign_negative() {
             debug_renderer.draw_point(position.into(), Vec4::one(), 20.0);
           }
@@ -287,6 +288,6 @@ impl MarchingCubesDebugging {
       }
     }
     // Cell
-    debug_renderer.draw_cube_lines(UVec3::zero().into(), LORES_STEP as f32, Vec4::one());
+    debug_renderer.draw_cube_lines(LORES_MIN.into(), LORES_STEP as f32, Vec4::one());
   }
 }

@@ -1,13 +1,13 @@
 use egui::Align2;
-use ultraviolet::UVec3;
 
 use app::GuiFrame;
-use voxel_meshing::chunk::{ChunkSamples, ChunkVertices};
+use voxel_meshing::chunk::ChunkVertices;
 use voxel_meshing::transvoxel::side::TransitionSide;
 use voxel_meshing::transvoxel::Transvoxel;
 
 use crate::C1;
-use crate::marching_cubes_debugging::LORES_STEP;
+use crate::chunk_manager::TvLoZChunkManager;
+use crate::marching_cubes_debugging::{LORES_MIN, LORES_STEP};
 
 pub type TV = Transvoxel<C1>;
 
@@ -26,13 +26,12 @@ impl TransvoxelDebugging {
       .show(&gui_frame, |_ui| {});
   }
 
-  pub fn extract_chunk(
+  pub fn extract_loz_chunk(
     &self,
-    side: TransitionSide,
-    hires_chunk_mins: &[UVec3; 4],
-    hires_chunk_samples: &[ChunkSamples<C1>; 4],
+    chunk_manager: TvLoZChunkManager,
     chunk_vertices: &mut ChunkVertices,
   ) {
-    self.transvoxel.extract_chunk(side, hires_chunk_mins, hires_chunk_samples, HIRES_STEP, UVec3::zero(), LORES_STEP, chunk_vertices);
+    let (hires_chunk_mins, hires_chunk_samples) = chunk_manager.create_mins_and_samples();
+    self.transvoxel.extract_chunk(TransitionSide::LoZ, &hires_chunk_mins, &hires_chunk_samples, HIRES_STEP, LORES_MIN, LORES_STEP, chunk_vertices);
   }
 }

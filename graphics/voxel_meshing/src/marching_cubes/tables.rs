@@ -53,11 +53,11 @@ impl RegularVertexData {
   #[inline]
   fn high_byte(&self) -> u8 { (self.0 >> 8) as u8 }
   #[inline]
-  pub fn subtract_x(&self) -> bool { self.high_byte() & 0b0001_0000 != 0 }
+  pub fn subtract_u(&self) -> bool { self.high_byte() & 0b0001_0000 != 0 } // x in dissertation
   #[inline]
-  pub fn subtract_y(&self) -> bool { self.high_byte() & 0b0010_0000 != 0 }
+  pub fn subtract_v(&self) -> bool { self.high_byte() & 0b0010_0000 != 0 } // y in dissertation
   #[inline]
-  pub fn subtract_z(&self) -> bool { self.high_byte() & 0b0100_0000 != 0 }
+  pub fn subtract_w(&self) -> bool { self.high_byte() & 0b0100_0000 != 0 } // z in dissertation
   #[inline]
   pub fn new_vertex(&self) -> bool { self.high_byte() & 0b1000_0000 != 0 }
   #[inline]

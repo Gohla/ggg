@@ -42,10 +42,10 @@ impl<C: ChunkSize> MarchingCubes<C> {
   {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
-      for z in 0..C::CELLS_IN_CHUNK_ROW {
-        for y in 0..C::CELLS_IN_CHUNK_ROW {
-          for x in 0..C::CELLS_IN_CHUNK_ROW {
-            let cell = RegularCell::new(x, y, z);
+      for w in 0..C::CELLS_IN_CHUNK_ROW {
+        for v in 0..C::CELLS_IN_CHUNK_ROW {
+          for u in 0..C::CELLS_IN_CHUNK_ROW {
+            let cell = RegularCell::new(u, v, w);
             Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_vertices);
           }
         }
@@ -181,17 +181,17 @@ impl<C: ChunkSize> MarchingCubes<C> {
       shared_indices[shared_indices_index] = index;
       index
     } else {
-      let subtract_x = vertex_data.subtract_x();
-      let subtract_y = vertex_data.subtract_y();
-      let subtract_z = vertex_data.subtract_z();
+      let subtract_u = vertex_data.subtract_u();
+      let subtract_v = vertex_data.subtract_v();
+      let subtract_w = vertex_data.subtract_w();
       // OPTO: use 3-bit validity mask as proposed in the dissertation?
-      if (cell.x > 0 || !subtract_x) && (cell.y > 0 || !subtract_y) && (cell.z > 0 || !subtract_z) {
+      if (cell.u > 0 || !subtract_u) && (cell.v > 0 || !subtract_v) && (cell.w > 0 || !subtract_w) {
         // Return index of previous vertex.
         let previous_cell = {
           let mut previous_cell = cell;
-          if subtract_x { previous_cell.x -= 1; }
-          if subtract_y { previous_cell.y -= 1; }
-          if subtract_z { previous_cell.z -= 1; }
+          if subtract_u { previous_cell.u -= 1; }
+          if subtract_v { previous_cell.v -= 1; }
+          if subtract_w { previous_cell.w -= 1; }
           previous_cell
         };
         let shared_indices_index = Self::shared_index(previous_cell, vertex_data.vertex_index() as usize);
@@ -235,9 +235,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
 
   #[inline]
   pub fn shared_index(cell: RegularCell, vertex_index: usize) -> usize {
-    cell.x as usize
-      + C::CELLS_IN_CHUNK_ROW_USIZE * cell.y as usize
-      + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * cell.z as usize
+    cell.u as usize
+      + C::CELLS_IN_CHUNK_ROW_USIZE * cell.v as usize
+      + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * cell.w as usize
       + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * vertex_index
   }
 }
@@ -245,36 +245,36 @@ impl<C: ChunkSize> MarchingCubes<C> {
 /// Cell, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct RegularCell {
-  pub x: u32,
-  pub y: u32,
-  pub z: u32,
+  pub u: u32,
+  pub v: u32,
+  pub w: u32,
 }
 
 impl RegularCell {
   #[inline]
-  pub const fn new(x: u32, y: u32, z: u32) -> Self {
-    Self { x, y, z }
+  pub const fn new(u: u32, v: u32, w: u32) -> Self {
+    Self { u, v, w }
   }
 
   #[inline]
   pub fn to_local_coordinate(&self, voxel: RegularVoxel) -> UVec3 {
     // NOTE: swaps Z and Y axis, as we use a left handed y-up coordinate system, whereas the dissertation uses a
     // left-handed z-up coordinate system.
-    UVec3::new(self.x + voxel.x, self.z + voxel.z, self.y + voxel.y)
+    UVec3::new(self.u + voxel.u, self.w + voxel.w, self.v + voxel.v)
   }
 }
 
 /// Voxel, local to the current chunk, in coordinate-space of the Transvoxel dissertation.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct RegularVoxel {
-  pub x: u32,
-  pub y: u32,
-  pub z: u32,
+  pub u: u32,
+  pub v: u32,
+  pub w: u32,
 }
 
 impl RegularVoxel {
   #[inline]
-  pub const fn new(x: u32, y: u32, z: u32) -> Self {
-    Self { x, y, z }
+  pub const fn new(u: u32, v: u32, w: u32) -> Self {
+    Self { u, v, w }
   }
 }

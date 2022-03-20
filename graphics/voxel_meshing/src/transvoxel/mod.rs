@@ -87,7 +87,11 @@ impl<C: ChunkSize> Transvoxel<C> {
     let lores_local_voxels = side.get_lores_local_voxels::<C>(u, v);
     // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = (u / C::HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / C::HALF_CELLS_IN_CHUNK_ROW)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
+      let idx = if C::HALF_CELLS_IN_CHUNK_ROW != 0 { // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
+        (u / C::HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / C::HALF_CELLS_IN_CHUNK_ROW))
+      } else {
+        u + 2 * v
+      };
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };
