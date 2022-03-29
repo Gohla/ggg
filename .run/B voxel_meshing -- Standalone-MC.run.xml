@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="3.Be voxel_meshing -- Standalone-MarchingCubes-Sphere-16" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="2. voxel_meshing">
-    <option name="command" value="bench --package voxel_meshing -- Standalone-MarchingCubes-Sphere-16" />
+  <configuration default="false" name="3.Be voxel -- Standalone-MarchingCubes-Sphere-16" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="z. voxel">
+    <option name="command" value="bench --package voxel -- Standalone-MarchingCubes-Sphere-16" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

@@ -11,6 +11,7 @@ os = { path = "../core/os" }
 gfx = { path = "../core/gfx" }
 gui_widget = { path = "../core/gui_widget" }
 app = { path = "../core/app" }
+voxel = { path = "../core/voxel" }
 wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.16.1"
 image = { version = "0.23", default-features = false, features = ["bmp", "png"] }

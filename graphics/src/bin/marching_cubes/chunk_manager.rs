@@ -1,6 +1,6 @@
 use ultraviolet::UVec3;
 
-use voxel_meshing::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, GenericChunkSize};
+use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, GenericChunkSize};
 
 use crate::C1;
 

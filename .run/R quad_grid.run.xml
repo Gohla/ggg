@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="R quad_grid" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="1. graphics">
+  <configuration default="false" name="R quad_grid" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="command" value="run --bin quad_grid" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

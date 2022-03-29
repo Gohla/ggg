@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="R quads" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="1. graphics">
+  <configuration default="false" name="R quads" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="command" value="run --bin quads" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

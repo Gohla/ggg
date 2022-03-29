@@ -1,9 +1,9 @@
 use egui::Align2;
 
 use app::GuiFrame;
-use voxel_meshing::chunk::ChunkVertices;
-use voxel_meshing::transvoxel::side::TransitionSide;
-use voxel_meshing::transvoxel::Transvoxel;
+use voxel::chunk::ChunkVertices;
+use voxel::transvoxel::side::TransitionSide;
+use voxel::transvoxel::Transvoxel;
 
 use crate::C1;
 use crate::chunk_manager::TvLoZChunkManager;

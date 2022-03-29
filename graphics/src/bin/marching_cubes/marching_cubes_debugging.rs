@@ -5,9 +5,9 @@ use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::{ChunkSize, ChunkVertices};
-use voxel_meshing::marching_cubes;
-use voxel_meshing::marching_cubes::{MarchingCubes, RegularCell};
+use voxel::chunk::{ChunkSize, ChunkVertices};
+use voxel::marching_cubes;
+use voxel::marching_cubes::{MarchingCubes, RegularCell};
 
 use crate::C1;
 use crate::chunk_manager::McChunkManager;

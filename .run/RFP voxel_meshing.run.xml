@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="1.RDP voxel_meshing" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="2. voxel_meshing">
-    <option name="command" value="run --package voxel_meshing --profile=devprofile" />
+  <configuration default="false" name="1.RDP voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="z. voxel">
+    <option name="command" value="run --package graphics --bin voxel_planets --profile=devprofile" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

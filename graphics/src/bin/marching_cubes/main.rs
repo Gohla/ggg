@@ -5,7 +5,7 @@ use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, RenderPipeline, Shad
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::{Frame, Gfx, include_shader};
+use gfx::{Frame, Gfx};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput};
@@ -13,8 +13,8 @@ use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel_meshing::chunk::{GenericChunkSize, LodChunkVertices, Vertex};
-use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
+use voxel::chunk::{GenericChunkSize, LodChunkVertices, Vertex};
+use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 use crate::chunk_manager::ChunkManager;
 use crate::marching_cubes_debugging::MarchingCubesDebugging;
@@ -76,8 +76,8 @@ impl app::Application for TransvoxelDemo {
       .with_sample_count(MULTISAMPLE_COUNT)
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(&voxel::get_vertex_shader());
+    let fragment_shader_module = gfx.device.create_shader_module(&voxel::get_fragment_shader());
 
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()

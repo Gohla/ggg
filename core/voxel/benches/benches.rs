@@ -4,12 +4,12 @@
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ultraviolet::{Isometry3, UVec3, Vec3};
 
-use voxel_meshing::chunk::{ChunkSize, ChunkSize16, ChunkVertices};
-use voxel_meshing::marching_cubes::MarchingCubes;
-use voxel_meshing::octree::{AABB, Octree, OctreeSettings};
-use voxel_meshing::transvoxel::side::TransitionSide;
-use voxel_meshing::transvoxel::Transvoxel;
-use voxel_meshing::volume::{Sphere, SphereSettings, Volume};
+use voxel::chunk::{ChunkSize, ChunkSize16, ChunkVertices};
+use voxel::marching_cubes::MarchingCubes;
+use voxel::octree::{AABB, Octree, OctreeSettings};
+use voxel::transvoxel::side::TransitionSide;
+use voxel::transvoxel::Transvoxel;
+use voxel::volume::{Sphere, SphereSettings, Volume};
 
 pub fn sphere_benchmark(c: &mut Criterion) {
   let sphere = Sphere::new(SphereSettings { radius: 64.0 });

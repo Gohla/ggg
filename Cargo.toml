@@ -4,11 +4,9 @@ cargo-features = ["named-profiles", "profile-overrides"]
 members = [
   "core/*",
   "graphics",
-  "graphics/voxel_meshing"
 ]
 default-members = [
   "graphics",
-  "graphics/voxel_meshing"
 ]
 resolver = "2"
 

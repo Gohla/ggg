@@ -5,8 +5,8 @@ use wgpu::{BufferAddress, Device};
 
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
-use voxel_meshing::chunk::{ChunkVertices, Vertex};
-use voxel_meshing::octree::VolumeMeshManager;
+use voxel::chunk::{ChunkVertices, Vertex};
+use voxel::octree::VolumeMeshManager;
 
 use crate::settings::Settings;
 

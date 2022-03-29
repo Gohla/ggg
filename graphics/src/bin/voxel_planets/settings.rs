@@ -3,12 +3,12 @@ use egui::color_picker::Alpha;
 use ultraviolet::{Isometry3, Vec4};
 
 use gui_widget::UiWidgetsExt;
-use voxel_meshing::chunk::GenericChunkSize;
-use voxel_meshing::marching_cubes::MarchingCubes;
-use voxel_meshing::octree::{Octree, OctreeSettings, VolumeMeshManager};
-use voxel_meshing::transvoxel::Transvoxel;
-use voxel_meshing::uniform::LightSettings;
-use voxel_meshing::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
+use voxel::chunk::GenericChunkSize;
+use voxel::marching_cubes::MarchingCubes;
+use voxel::octree::{Octree, OctreeSettings, VolumeMeshManager};
+use voxel::transvoxel::Transvoxel;
+use voxel::uniform::LightSettings;
+use voxel::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings};
 
 use crate::MeshGeneration;
 
