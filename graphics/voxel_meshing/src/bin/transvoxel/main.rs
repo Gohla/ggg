@@ -13,7 +13,7 @@ use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel_meshing::chunk::{ChunkSize, GenericChunkSize, LodChunkVertices, Vertex};
+use voxel_meshing::chunk::{GenericChunkSize, LodChunkVertices, Vertex};
 use voxel_meshing::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 use crate::chunk_manager::ChunkManager;

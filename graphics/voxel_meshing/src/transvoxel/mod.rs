@@ -35,6 +35,7 @@ impl<C: ChunkSize> Transvoxel<C> {
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]:
   {
+    debug_assert!(C::CELLS_IN_CHUNK_ROW > 1, "Chunk size must be greater than one"); // OPTO: use compile-time assert.
     if side == TransitionSide::HiZ {
       trace!(
         "{:?} hires_chunk_mins: [0={: >4} 1={: >4} 2={: >4} 3={: >4}], hires_step: {: >4}, lores_min: {: >4}, lores_step: {: >4}",
@@ -87,11 +88,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     let lores_local_voxels = side.get_lores_local_voxels::<C>(u, v);
     // Get which ChunkSamples we have to sample values from, and what their minimum is in their coordinate system.
     let (hires_min, hires_chunk_samples) = {
-      let idx = if C::HALF_CELLS_IN_CHUNK_ROW != 0 { // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
-        (u / C::HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / C::HALF_CELLS_IN_CHUNK_ROW))
-      } else {
-        u + 2 * v
-      };
+      let idx = (u / C::HALF_CELLS_IN_CHUNK_ROW) + (2 * (v / C::HALF_CELLS_IN_CHUNK_ROW)); // 0 = 0,0 | 1 = 1,0 | 2 = 0,1 | 3 = 1,1
       let idx = idx as usize;
       (hires_chunk_mins[idx], &hires_chunk_samples[idx])
     };

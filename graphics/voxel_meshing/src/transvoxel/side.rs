@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
-use crate::chunk::ChunkSize;
 
+use crate::chunk::ChunkSize;
 use crate::octree::AABB;
 
 flagset::flags! {
@@ -94,13 +94,8 @@ impl TransitionSide {
 
   #[inline]
   pub fn get_hires_local_voxels<C: ChunkSize>(&self, u: u32, v: u32) -> [UVec3; 9] {
-    let (u, v) = if C::HALF_CELLS_IN_CHUNK_ROW != 0 {
-      let u = (u % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
-      let v = (v % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
-      (u, v)
-    } else {
-      (u, v)
-    };
+    let u = (u % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
+    let v = (v % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
     match self {
       TransitionSide::LoX => {
         Self::add_hires_voxels(UVec3::new(C::CELLS_IN_CHUNK_ROW, v, u), &Self::X_HIRES_VOXELS)
