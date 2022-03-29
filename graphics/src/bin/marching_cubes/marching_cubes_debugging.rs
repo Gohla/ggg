@@ -5,12 +5,11 @@ use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::{ChunkSize, ChunkVertices};
+use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices};
 use voxel::marching_cubes;
 use voxel::marching_cubes::{MarchingCubes, RegularCell};
 
 use crate::C1;
-use crate::chunk_manager::McChunkManager;
 
 pub type MC = MarchingCubes<C1>;
 
@@ -20,24 +19,25 @@ pub const LORES_STEP: u32 = 2;
 #[derive(Default)]
 pub struct MarchingCubesDebugging {
   marching_cubes: MC,
+  samples: ChunkSampleArray<C1>,
   equivalence_class: u8,
 }
 
 impl MarchingCubesDebugging {
-  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame, mut chunk_manager: McChunkManager) {
+  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame) {
     egui::Window::new("Marching Cubes")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
       .show(&gui_frame, |ui| {
-        self.draw_window_contents(ui, &mut chunk_manager);
+        self.draw_window_contents(ui);
       });
   }
 
-  fn draw_window_contents(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
-    self.draw_cell_gui(ui, chunk_manager);
-    self.draw_data_gui(ui, chunk_manager);
+  fn draw_window_contents(&mut self, ui: &mut Ui) {
+    self.draw_cell_gui(ui);
+    self.draw_data_gui(ui);
   }
 
-  fn draw_cell_gui(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
+  fn draw_cell_gui(&mut self, ui: &mut Ui) {
     ui.collapsing_open("Cell", |ui| {
       ui.horizontal(|ui| {
         ComboBox::from_id_source("Equivalence class")
@@ -51,118 +51,118 @@ impl MarchingCubesDebugging {
           let inside = -1.0;
           match self.equivalence_class {
             0 => {
-              chunk_manager.set_all_to(1.0);
+              self.samples.set_all_to(1.0);
             }
             1 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 1, inside);
             }
             2 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             3 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
             }
             4 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 0, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 0, inside);
             }
             5 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
             }
             6 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             7 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             8 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
             }
             9 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 0, inside);
-              chunk_manager.set(1, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 0, inside);
+              self.samples.set(1, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             10 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             11 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 0, inside);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 0, inside);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
             }
             12 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(0, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(0, 1, 1, inside);
             }
             13 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(0, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(0, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             14 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             15 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(0, 1, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(0, 1, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             16 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(0, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(0, 1, 1, inside);
             }
             17 => {
-              chunk_manager.set_all_to(1.0);
-              chunk_manager.set(1, 0, 0, inside);
-              chunk_manager.set(0, 1, 0, inside);
-              chunk_manager.set(0, 0, 1, inside);
-              chunk_manager.set(1, 0, 1, inside);
-              chunk_manager.set(1, 1, 1, inside);
+              self.samples.set_all_to(1.0);
+              self.samples.set(1, 0, 0, inside);
+              self.samples.set(0, 1, 0, inside);
+              self.samples.set(0, 0, 1, inside);
+              self.samples.set(1, 0, 1, inside);
+              self.samples.set(1, 1, 1, inside);
             }
             _ => {}
           }
@@ -170,29 +170,29 @@ impl MarchingCubesDebugging {
       });
       ui.horizontal(|ui| {
         if ui.button("Flip").clicked() {
-          chunk_manager.flip_all();
+          self.samples.flip_all();
         }
         if ui.button("To +0.0").clicked() {
-          chunk_manager.set_all_to(0.0);
+          self.samples.set_all_to(0.0);
         }
         if ui.button("To -0.0").clicked() {
-          chunk_manager.set_all_to(-0.0);
+          self.samples.set_all_to(-0.0);
         }
         if ui.button("To +1.0").clicked() {
-          chunk_manager.set_all_to(1.0);
+          self.samples.set_all_to(1.0);
         }
         if ui.button("To -1.0").clicked() {
-          chunk_manager.set_all_to(-1.0);
+          self.samples.set_all_to(-1.0);
         }
         ui.end_row();
       });
     });
   }
 
-  fn draw_data_gui(&mut self, ui: &mut Ui, chunk_manager: &mut McChunkManager) {
+  fn draw_data_gui(&mut self, ui: &mut Ui) {
     let local_coordinates = MC::local_coordinates(RegularCell::new(0, 0, 0));
     let global_coordinates = MC::global_coordinates(UVec3::zero(), LORES_STEP, &local_coordinates);
-    let values = MC::sample(&chunk_manager.create_sample_array(), &local_coordinates);
+    let values = MC::sample(&self.samples, &local_coordinates);
     let case = MC::case(&values);
     let cell_class = marching_cubes::tables::REGULAR_CELL_CLASS[case as usize] as usize;
     let triangulation_info = marching_cubes::tables::REGULAR_CELL_DATA[cell_class];
@@ -220,7 +220,7 @@ impl MarchingCubesDebugging {
         ui.monospace(format!("{}", i));
         ui.monospace(format!("{}", local.display()));
         ui.monospace(format!("{}", global_coordinates[i].display()));
-        let value = chunk_manager.sample_mut(local);
+        let value = self.samples.sample_mut(local);
         let response = ui.drag("", value, 0.01);
         if response.secondary_clicked() {
           *value *= -1.0;
@@ -267,18 +267,18 @@ impl MarchingCubesDebugging {
     });
   }
 
-  pub fn extract_chunk(&self, chunk_manager: McChunkManager, chunk_vertices: &mut ChunkVertices) {
+  pub fn extract_chunk(&self, chunk_vertices: &mut ChunkVertices) {
     // HACK: pass LORES_STEP (2) here, to make global voxels draw as if this was a 2x2 chunk grid.
-    self.marching_cubes.extract_chunk(LORES_MIN, LORES_STEP, &chunk_manager.create_samples(), chunk_vertices);
+    self.marching_cubes.extract_chunk(LORES_MIN, LORES_STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
   }
 
-  pub fn debug_draw(&self, chunk_manager: McChunkManager, debug_renderer: &mut DebugRenderer) {
+  pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer) {
     // Voxels
     for z in 0..C1::VOXELS_IN_CHUNK_ROW {
       for y in 0..C1::VOXELS_IN_CHUNK_ROW {
         for x in 0..C1::VOXELS_IN_CHUNK_ROW {
           let position = UVec3::new(x, y, z);
-          let sample = chunk_manager.sample(position);
+          let sample = self.samples.sample(position);
           // HACK: multiply by LORES_STEP after sampling to draw as if this was a 2x2 chunk grid.
           let position = LORES_MIN + position * LORES_STEP;
           if sample.is_sign_negative() {

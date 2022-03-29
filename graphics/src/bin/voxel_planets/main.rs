@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+
 use egui::Ui;
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};

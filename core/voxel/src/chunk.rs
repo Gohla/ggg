@@ -112,6 +112,11 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
   }
 
   #[inline]
+  pub fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
+    *self.sample_mut(UVec3::new(x, y, z)) = sample;
+  }
+
+  #[inline]
   pub fn set_all_to(&mut self, sample: f32) {
     for s in self.array.iter_mut() {
       *s = sample;
@@ -123,6 +128,14 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
     for s in self.array.iter_mut() {
       *s *= -1.0;
     }
+  }
+}
+
+impl<C: ChunkSize> Default for ChunkSampleArray<C> where
+  [f32; C::VOXELS_IN_CHUNK_USIZE]:
+{
+  fn default() -> Self {
+    Self::new_positive_zeroed()
   }
 }
 
