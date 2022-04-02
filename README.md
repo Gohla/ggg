@@ -16,11 +16,11 @@ brew install vulkan-sdk
 ## Building
 
 ```shell
-cargo build -Z unstable-options --profile=fastdev
+cargo build
 ```
 
 ## Running
 
 ```shell
-cargo run --bin cubes -Z unstable-options --profile=fastdev
+cargo run --bin cubes
 ```
