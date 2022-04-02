@@ -3,20 +3,17 @@
 
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, RenderPipeline, ShaderStages};
+use wgpu::{CommandBuffer, Features};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
-use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel::chunk::{ChunkVertices, GenericChunkSize, Vertex};
+use voxel::chunk::{ChunkVertices, GenericChunkSize};
+use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 use crate::marching_cubes_debugging::MarchingCubesDebugging;
@@ -31,13 +28,10 @@ pub struct TransvoxelDemo {
   light_settings: LightSettings,
   model_uniform: ModelUniform,
 
-  camera_uniform_buffer: GfxBuffer,
-  light_uniform_buffer: GfxBuffer,
-  _model_uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
-  render_pipeline: RenderPipeline,
   multisampled_framebuffer: GfxTexture,
+
+  voxel_renderer: VoxelRenderer,
 
   marching_cubes_debugging: MarchingCubesDebugging,
 }
@@ -71,49 +65,21 @@ impl app::Application for TransvoxelDemo {
     let depth_texture = TextureBuilder::new_depth_32_float(viewport)
       .with_sample_count(MULTISAMPLE_COUNT)
       .build(&gfx.device);
-
-    let vertex_shader_module = gfx.device.create_shader_module(&voxel::render::get_vertex_shader());
-    let fragment_shader_module = gfx.device.create_shader_module(&voxel::render::get_fragment_shader());
-
-    let camera_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Camera uniform buffer")
-      .build_with_data(&gfx.device, &[camera_uniform]);
-    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) =
-      camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
-    let light_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Light uniform buffer")
-      .build_with_data(&gfx.device, &[light_settings.uniform]);
-    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) =
-      light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
-    let model_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Model uniform buffer")
-      .build_with_data(&gfx.device, &[model_uniform]);
-    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) =
-      model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
-      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
-      .with_layout_label("Marching cubes uniform bind group layout")
-      .with_label("Marching cubes uniform bind group")
-      .build(&gfx.device);
-
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      //.with_cull_mode(Some(Face::Back))
-      .with_multisample_count(MULTISAMPLE_COUNT)
-      .with_depth_texture(depth_texture.format)
-      .with_layout_label("Marching cubes pipeline layout")
-      .with_label("Marching cubes render pipeline")
-      .build(&gfx.device);
     let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, MULTISAMPLE_COUNT)
       .with_texture_label("Multisampling texture")
       .with_texture_view_label("Multisampling texture view")
       .build(&gfx.device);
+
+    let voxel_renderer = VoxelRenderer::new(
+      &gfx.device,
+      &gfx.surface,
+      camera_uniform,
+      light_settings.uniform,
+      model_uniform,
+      MULTISAMPLE_COUNT,
+      None,
+      depth_texture.format,
+    );
 
     let marching_cubes_debugging = MarchingCubesDebugging::default();
 
@@ -125,13 +91,10 @@ impl app::Application for TransvoxelDemo {
       light_settings,
       model_uniform,
 
-      camera_uniform_buffer,
-      light_uniform_buffer,
-      _model_uniform_buffer: model_uniform_buffer,
-      uniform_bind_group,
       depth_texture,
-      render_pipeline,
       multisampled_framebuffer,
+
+      voxel_renderer,
 
       marching_cubes_debugging,
     }
@@ -172,35 +135,19 @@ impl app::Application for TransvoxelDemo {
       });
 
 
-    // Write uniforms
-    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
-    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
-
-    // Run MC to create triangles from voxels.
+    // Write uniforms, run MC to create vertices from voxels, and render them.
+    self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
+    self.voxel_renderer.update_light_uniform(&gfx.queue, self.light_settings.uniform);
     let mut chunk_vertices = ChunkVertices::new();
     self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
-    let mc_vertex_buffer = BufferBuilder::new()
-      .with_vertex_usage()
-      .with_label("Transvoxel demo vertex buffer")
-      .build_with_data(&gfx.device, &chunk_vertices.vertices());
-    let mc_index_buffer = BufferBuilder::new()
-      .with_index_usage()
-      .with_label("Transvoxel demo index buffer")
-      .build_with_data(&gfx.device, &chunk_vertices.indices());
-
-    // Render the triangles.
-    let mut render_pass = RenderPassBuilder::new()
-      .with_depth_texture(&self.depth_texture.view)
-      .with_label("Transvoxel demo render pass")
-      .begin_render_pass_for_multisampled_swap_chain_with_clear(frame.encoder, &self.multisampled_framebuffer.view, &frame.output_texture);
-    render_pass.push_debug_group("Draw voxelized mesh");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_index_buffer(mc_index_buffer.slice(..), IndexFormat::Uint16);
-    render_pass.set_vertex_buffer(0, mc_vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..mc_index_buffer.len as u32, 0, 0..1);
-    render_pass.pop_debug_group();
-    drop(render_pass);
+    self.voxel_renderer.render_chunk_vertices(
+      &gfx.device,
+      &self.depth_texture.view,
+      &mut frame.encoder,
+      Some(&self.multisampled_framebuffer.view),
+      &frame.output_texture,
+      &chunk_vertices,
+    );
 
     // Debug rendering.
     self.debug_renderer.clear();

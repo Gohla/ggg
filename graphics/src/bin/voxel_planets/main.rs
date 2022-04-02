@@ -3,22 +3,18 @@
 
 use egui::Ui;
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Features, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{CommandBuffer, Features, PowerPreference};
 
 use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
-use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
-use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel::chunk::Vertex;
 use voxel::lod::chunk::LodChunkManager;
 use voxel::lod::mesh::{LodMesh, LodMeshManager};
+use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
 use crate::settings::Settings;
@@ -32,12 +28,9 @@ pub struct VoxelMeshing {
   camera_uniform: CameraUniform,
   settings: Settings,
 
-  camera_uniform_buffer: GfxBuffer,
-  light_uniform_buffer: GfxBuffer,
-  model_uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
   depth_texture: GfxTexture,
-  render_pipeline: RenderPipeline,
+
+  voxel_renderer: VoxelRenderer,
 
   lod_chunk_manager: Box<dyn LodChunkManager>,
   lod_mesh_manager: LodMeshManager,
@@ -80,40 +73,16 @@ impl app::Application for VoxelMeshing {
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&voxel::render::get_vertex_shader());
-    let fragment_shader_module = gfx.device.create_shader_module(&voxel::render::get_fragment_shader());
-
-    let camera_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Camera uniform buffer")
-      .build_with_data(&gfx.device, &[camera_uniform]);
-    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
-    let light_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Light uniform buffer")
-      .build_with_data(&gfx.device, &[settings.light.uniform]);
-    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
-    let model_uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Model uniform buffer")
-      .build_with_data(&gfx.device, &[ModelUniform::identity()]);
-    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
-      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
-      .with_layout_label("Voxel meshing uniform bind group layout")
-      .with_label("Voxel meshing uniform bind group")
-      .build(&gfx.device);
-
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      //.with_cull_mode(Some(Face::Back))
-      .with_depth_texture(depth_texture.format)
-      .with_layout_label("Voxel meshing pipeline layout")
-      .with_label("Voxel meshing render pipeline")
-      .build(&gfx.device);
+    let voxel_renderer = VoxelRenderer::new(
+      &gfx.device,
+      &gfx.surface,
+      camera_uniform,
+      settings.light.uniform,
+      ModelUniform::identity(),
+      1,
+      None,
+      depth_texture.format,
+    );
 
     let mut lod_chunk_manager = settings.create_lod_chunk_manager();
     let mut lod_mesh_manager = LodMeshManager::new();
@@ -126,12 +95,9 @@ impl app::Application for VoxelMeshing {
       camera_uniform,
       settings,
 
-      camera_uniform_buffer,
-      light_uniform_buffer,
-      model_uniform_buffer,
-      uniform_bind_group,
       depth_texture,
-      render_pipeline,
+
+      voxel_renderer,
 
       lod_chunk_manager,
       lod_mesh_manager,
@@ -178,25 +144,17 @@ impl app::Application for VoxelMeshing {
       self.settings.draw_lod_mesh_gui(ui, &self.lod_mesh);
     });
 
-    self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
-    self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light.uniform]);
+    self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
+    self.voxel_renderer.update_light_uniform(&gfx.queue, self.settings.light.uniform);
     let model = self.lod_mesh.model;
-    self.model_uniform_buffer.write_whole_data(&gfx.queue, &[ModelUniform::new(model)]);
-
-    let mut render_pass = RenderPassBuilder::new()
-      .with_depth_texture(&self.depth_texture.view)
-      .with_label("Voxel meshing render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
-    render_pass.push_debug_group("Draw voxelized mesh");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_index_buffer(self.lod_mesh.index_buffer.slice(..), IndexFormat::Uint16);
-    for draw in &self.lod_mesh.draws {
-      render_pass.set_vertex_buffer(0, self.lod_mesh.vertex_buffer.offset::<Vertex>(draw.base_vertex));
-      render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
-    }
-    render_pass.pop_debug_group();
-    drop(render_pass);
+    self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
+    self.voxel_renderer.render_lod_mesh(
+      &self.depth_texture.view,
+      &mut frame.encoder,
+      None,
+      &frame.output_texture,
+      &self.lod_mesh,
+    );
 
     self.debug_renderer.render(gfx, &mut frame, None, self.camera.get_view_projection_matrix() * model);
 

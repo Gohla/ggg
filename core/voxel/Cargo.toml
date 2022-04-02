@@ -6,6 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+common = { path = "../common" }
 gfx = { path = "../gfx" }
 gui_widget = { path = "../gui_widget" }
 simdnoise = { git = "https://github.com/jackmott/rust-simd-noise.git", branch = "master" }
