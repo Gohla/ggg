@@ -4,35 +4,24 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, Sender};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use ultraviolet::{Isometry3, UVec3, Vec3};
+use ultraviolet::{Isometry3, Vec3};
 
-use crate::chunk::{ChunkSize, ChunkVertices, LodChunkVertices};
+use crate::chunk::{ChunkSize, ChunkVertices};
+use crate::lod::chunk::{AABB, LodChunkManager, LodChunkVertices};
 use crate::marching_cubes::MarchingCubes;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::Transvoxel;
 use crate::volume::Volume;
 
-// Trait
-
-pub trait VolumeMeshManager {
-  fn get_max_lod_level(&self) -> u32;
-  fn get_lod_factor(&self) -> f32;
-  fn get_lod_factor_mut(&mut self) -> &mut f32;
-
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>);
-}
-
-// Octree settings
-
 #[derive(Copy, Clone, Debug)]
-pub struct OctreeSettings {
+pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,
   pub thread_pool_threads: usize,
   pub mesh_cache_size: usize,
 }
 
-impl OctreeSettings {
+impl LodOctmapSettings {
   #[inline]
   pub fn check(&self) {
     assert_ne!(self.total_size, 0, "Total size may not be 0");
@@ -40,7 +29,7 @@ impl OctreeSettings {
   }
 }
 
-impl Default for OctreeSettings {
+impl Default for LodOctmapSettings {
   fn default() -> Self {
     Self {
       total_size: 4096,
@@ -53,7 +42,7 @@ impl Default for OctreeSettings {
 
 // Octree
 
-pub struct Octree<V, C: ChunkSize> {
+pub struct LodOctmap<V, C: ChunkSize> {
   total_size: u32,
   lod_factor: f32,
 
@@ -77,12 +66,12 @@ pub struct Octree<V, C: ChunkSize> {
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
-impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
+impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
 {
-  pub fn new(settings: OctreeSettings, transform: Isometry3, volume: V, marching_cubes: MarchingCubes<C>, transvoxel: Transvoxel<C>) -> Self {
+  pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, marching_cubes: MarchingCubes<C>, transvoxel: Transvoxel<C>) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
@@ -260,7 +249,7 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
       &hires_chunk_mins,
       &hires_chunk_samples,
       hires_step,
-      aabb.min,
+      aabb.min(),
       lores_step,
       chunk_vertices,
     );
@@ -269,7 +258,7 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> Octree<V, C> where
 
 // Volume-mesh manager abstraction, to enable using Octree without generic arguments.
 
-impl<V: Volume + Clone + Send + 'static, C: ChunkSize> VolumeMeshManager for Octree<V, C> where
+impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodChunkManager for LodOctmap<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
@@ -285,89 +274,5 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> VolumeMeshManager for Oct
   fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>) {
     let (transform, chunks) = self.do_update(position);
     (transform, Box::new(chunks))
-  }
-}
-
-// AABB
-
-/// Square axis-aligned bounding box, always in powers of 2, and with size always larger than 1.
-#[derive(Default, Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct AABB {
-  min: UVec3,
-  size: u32,
-}
-
-impl AABB {
-  #[inline]
-  pub fn from_size(size: u32) -> Self {
-    assert_ne!(size, 0, "Size may not be 0");
-    assert_ne!(size, 1, "Size may not be 1");
-    assert!(size.is_power_of_two(), "Size {} must be a power of 2", size);
-    let min = UVec3::new(0, 0, 0);
-    Self { min, size }
-  }
-
-  #[inline(always)]
-  pub fn min(&self) -> UVec3 { self.min }
-
-  #[inline(always)]
-  pub fn size(&self) -> u32 { self.size }
-
-  #[inline(always)]
-  pub fn step<C: ChunkSize>(&self) -> u32 { self.size() / C::CELLS_IN_CHUNK_ROW }
-
-  #[inline(always)]
-  pub fn size_3d(&self) -> UVec3 { UVec3::new(self.size, self.size, self.size) }
-
-  #[inline(always)]
-  pub fn max(&self) -> UVec3 { self.min + self.size_3d() }
-
-  #[inline]
-  pub fn extends(&self) -> u32 {
-    self.size() / 2 // Note: no rounding needed because AABB is always size of 2 and > 1.
-  }
-
-  #[inline]
-  pub fn extends_3d(&self) -> UVec3 {
-    let extends = self.extends();
-    UVec3::new(extends, extends, extends)
-  }
-
-  #[inline]
-  pub fn center(&self) -> UVec3 {
-    self.min + self.extends_3d()
-  }
-
-  #[inline]
-  pub fn distance_from(&self, point: Vec3) -> f32 {
-    // TODO: copied from voxel-planets, check if this is correct and efficient?
-    let distance_to_center = (point - self.center().into()).abs();
-    let extends = self.extends_3d().into();
-    let v = Vec3::zero().max_by_component(distance_to_center - extends).map(|f| f.powf(2.0));
-    let distance = (v.x + v.y + v.z).sqrt();
-    distance
-  }
-
-  #[inline]
-  pub fn subdivide(&self) -> [AABB; 8] {
-    let min = self.min;
-    let cen = self.center();
-    let extends = self.extends();
-    [
-      Self::new_unchecked(min, extends),
-      Self::new_unchecked(UVec3::new(min.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, min.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(min.x, min.y, cen.z), extends),
-      Self::new_unchecked(UVec3::new(min.x, cen.y, cen.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, min.y, cen.z), extends),
-      Self::new_unchecked(cen, extends),
-    ]
-  }
-
-
-  #[inline(always)]
-  fn new_unchecked(min: UVec3, size: u32) -> Self {
-    Self { min, size }
   }
 }

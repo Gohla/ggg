@@ -17,13 +17,13 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use voxel::chunk::Vertex;
+use voxel::lod::chunk::LodChunkManager;
+use voxel::lod::mesh::{LodMesh, LodMeshManager};
 use voxel::uniform::{CameraUniform, ModelUniform};
 
-use crate::mesh_generation::MeshGeneration;
 use crate::settings::Settings;
 
 pub mod settings;
-pub mod mesh_generation;
 
 pub struct VoxelMeshing {
   camera: Camera,
@@ -39,7 +39,9 @@ pub struct VoxelMeshing {
   depth_texture: GfxTexture,
   render_pipeline: RenderPipeline,
 
-  mesh_generation: MeshGeneration,
+  lod_chunk_manager: Box<dyn LodChunkManager>,
+  lod_mesh_manager: LodMeshManager,
+  lod_mesh: LodMesh,
 }
 
 #[derive(Default)]
@@ -61,25 +63,25 @@ impl app::Application for VoxelMeshing {
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut settings = Settings::default();
     settings.light.rotation_y_degree = 270.0;
-    settings.octree_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
-    settings.render_regular_chunks = true;
-    settings.render_transition_lo_x_chunks = false;
-    settings.render_transition_hi_x_chunks = false;
-    settings.render_transition_lo_y_chunks = false;
-    settings.render_transition_hi_y_chunks = false;
-    settings.render_transition_lo_z_chunks = false;
-    settings.render_transition_hi_z_chunks = false;
-    settings.debug_render_octree_nodes = true;
-    settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
-    settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
-    settings.octree_settings.lod_factor = 2.0;
+    settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
+    settings.lod_mesh_manager_settings.render_regular_chunks = true;
+    settings.lod_mesh_manager_settings.render_transition_lo_x_chunks = false;
+    settings.lod_mesh_manager_settings.render_transition_hi_x_chunks = false;
+    settings.lod_mesh_manager_settings.render_transition_lo_y_chunks = false;
+    settings.lod_mesh_manager_settings.render_transition_hi_y_chunks = false;
+    settings.lod_mesh_manager_settings.render_transition_lo_z_chunks = false;
+    settings.lod_mesh_manager_settings.render_transition_hi_z_chunks = false;
+    settings.lod_mesh_manager_settings.debug_render_octree_nodes = true;
+    settings.lod_mesh_manager_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
+    settings.lod_mesh_manager_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
+    settings.lod_octmap_settings.lod_factor = 2.0;
     //settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&voxel::get_vertex_shader());
-    let fragment_shader_module = gfx.device.create_shader_module(&voxel::get_fragment_shader());
+    let vertex_shader_module = gfx.device.create_shader_module(&voxel::render::get_vertex_shader());
+    let fragment_shader_module = gfx.device.create_shader_module(&voxel::render::get_fragment_shader());
 
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
@@ -113,12 +115,12 @@ impl app::Application for VoxelMeshing {
       .with_label("Voxel meshing render pipeline")
       .build(&gfx.device);
 
-    let volume_mesh_manager = settings.create_volume_mesh_manager();
-
-    let mesh_generation = MeshGeneration::new(camera.get_position(), &settings, volume_mesh_manager, &mut debug_renderer, &gfx.device);
+    let mut lod_chunk_manager = settings.create_lod_chunk_manager();
+    let mut lod_mesh_manager = LodMeshManager::new();
+    let lod_mesh = lod_mesh_manager.update(&mut lod_chunk_manager, camera.get_position(), &settings.lod_mesh_manager_settings, &mut debug_renderer, &gfx.device);
 
     Self {
-      camera: camera,
+      camera,
       debug_renderer,
 
       camera_uniform,
@@ -131,7 +133,9 @@ impl app::Application for VoxelMeshing {
       depth_texture,
       render_pipeline,
 
-      mesh_generation,
+      lod_chunk_manager,
+      lod_mesh_manager,
+      lod_mesh,
     }
   }
 
@@ -158,20 +162,25 @@ impl app::Application for VoxelMeshing {
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
-    let mut recreate_volume_mesh_manager = false;
-    let mut update_volume_mesh_manager = false;
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
-      self.settings.render_gui(ui, &mut self.mesh_generation, &mut recreate_volume_mesh_manager, &mut update_volume_mesh_manager);
+      self.settings.draw_light_gui(ui);
+      let mut recreate_lod_chunk_manager = false;
+      recreate_lod_chunk_manager |= self.settings.draw_volume_gui(ui);
+      recreate_lod_chunk_manager |= self.settings.draw_meshing_algorithm_gui(ui);
+      if recreate_lod_chunk_manager {
+        self.lod_chunk_manager = self.settings.create_lod_chunk_manager();
+      }
+      self.settings.draw_lod_chunk_manager_gui(ui, &mut self.lod_chunk_manager);
+      if self.settings.draw_lod_mesh_manager_gui(ui) { // Update is pressed or auto update is true
+        self.debug_renderer.clear();
+        self.lod_mesh = self.lod_mesh_manager.update(&mut self.lod_chunk_manager, self.camera.get_position(), &self.settings.lod_mesh_manager_settings, &mut self.debug_renderer, &gfx.device);
+      }
+      self.settings.draw_lod_mesh_gui(ui, &self.lod_mesh);
     });
-    if recreate_volume_mesh_manager {
-      self.mesh_generation.set_volume_mesh_manager(self.settings.create_volume_mesh_manager(), self.camera.get_position(), &self.settings, &mut self.debug_renderer, &gfx.device);
-    } else if self.settings.auto_update || update_volume_mesh_manager {
-      self.mesh_generation.update(self.camera.get_position(), &self.settings, &mut self.debug_renderer, &gfx.device);
-    }
 
     self.camera_uniform_buffer.write_whole_data(&gfx.queue, &[self.camera_uniform]);
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.settings.light.uniform]);
-    let model = self.mesh_generation.model;
+    let model = self.lod_mesh.model;
     self.model_uniform_buffer.write_whole_data(&gfx.queue, &[ModelUniform::new(model)]);
 
     let mut render_pass = RenderPassBuilder::new()
@@ -181,9 +190,9 @@ impl app::Application for VoxelMeshing {
     render_pass.push_debug_group("Draw voxelized mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_index_buffer(self.mesh_generation.index_buffer.slice(..), IndexFormat::Uint16);
-    for draw in &self.mesh_generation.draws {
-      render_pass.set_vertex_buffer(0, self.mesh_generation.vertex_buffer.offset::<Vertex>(draw.base_vertex));
+    render_pass.set_index_buffer(self.lod_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+    for draw in &self.lod_mesh.draws {
+      render_pass.set_vertex_buffer(0, self.lod_mesh.vertex_buffer.offset::<Vertex>(draw.base_vertex));
       render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
     }
     render_pass.pop_debug_group();

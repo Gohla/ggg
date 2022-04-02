@@ -16,7 +16,7 @@ use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel::chunk::{GenericChunkSize, LodChunkVertices, Vertex};
+use voxel::chunk::{ChunkVertices, GenericChunkSize, Vertex};
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
 use crate::marching_cubes_debugging::MarchingCubesDebugging;
@@ -72,8 +72,8 @@ impl app::Application for TransvoxelDemo {
       .with_sample_count(MULTISAMPLE_COUNT)
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&voxel::get_vertex_shader());
-    let fragment_shader_module = gfx.device.create_shader_module(&voxel::get_fragment_shader());
+    let vertex_shader_module = gfx.device.create_shader_module(&voxel::render::get_vertex_shader());
+    let fragment_shader_module = gfx.device.create_shader_module(&voxel::render::get_fragment_shader());
 
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
@@ -177,16 +177,16 @@ impl app::Application for TransvoxelDemo {
     self.light_uniform_buffer.write_whole_data(&gfx.queue, &[self.light_settings.uniform]);
 
     // Run MC to create triangles from voxels.
-    let mut lod_chunk_vertices = LodChunkVertices::new();
-    self.marching_cubes_debugging.extract_chunk(&mut lod_chunk_vertices.regular);
+    let mut chunk_vertices = ChunkVertices::new();
+    self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
     let mc_vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Transvoxel demo vertex buffer")
-      .build_with_data(&gfx.device, &lod_chunk_vertices.regular.vertices());
+      .build_with_data(&gfx.device, &chunk_vertices.vertices());
     let mc_index_buffer = BufferBuilder::new()
       .with_index_usage()
       .with_label("Transvoxel demo index buffer")
-      .build_with_data(&gfx.device, &lod_chunk_vertices.regular.indices());
+      .build_with_data(&gfx.device, &chunk_vertices.indices());
 
     // Render the triangles.
     let mut render_pass = RenderPassBuilder::new()
@@ -207,10 +207,10 @@ impl app::Application for TransvoxelDemo {
     self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
     self.marching_cubes_debugging.debug_draw(&mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
-      lod_chunk_vertices.regular.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
-      lod_chunk_vertices.regular.indices().into_iter().copied(),
+      chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
+      chunk_vertices.indices().into_iter().copied(),
     );
-    self.debug_renderer.draw_point_vertices(lod_chunk_vertices.regular.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
+    self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     self.debug_renderer.render(gfx, &mut frame, Some(&self.multisampled_framebuffer), self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())

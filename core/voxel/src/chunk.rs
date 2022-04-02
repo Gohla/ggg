@@ -192,58 +192,6 @@ impl ChunkVertices {
   }
 }
 
-// LOD chunk vertices
-
-#[derive(Clone, Default, Debug)]
-pub struct LodChunkVertices {
-  pub regular: ChunkVertices,
-  pub transition_lo_x_chunk: ChunkVertices,
-  pub transition_hi_x_chunk: ChunkVertices,
-  pub transition_lo_y_chunk: ChunkVertices,
-  pub transition_hi_y_chunk: ChunkVertices,
-  pub transition_lo_z_chunk: ChunkVertices,
-  pub transition_hi_z_chunk: ChunkVertices,
-}
-
-impl LodChunkVertices {
-  #[inline]
-  pub fn new() -> Self {
-    Self::default()
-  }
-
-  #[inline]
-  pub fn with_chunk_vertices(
-    regular: ChunkVertices,
-    transition_lo_x_chunk: ChunkVertices,
-    transition_hi_x_chunk: ChunkVertices,
-    transition_lo_y_chunk: ChunkVertices,
-    transition_hi_y_chunk: ChunkVertices,
-    transition_lo_z_chunk: ChunkVertices,
-    transition_hi_z_chunk: ChunkVertices,
-  ) -> Self {
-    Self {
-      regular,
-      transition_lo_x_chunk,
-      transition_hi_x_chunk,
-      transition_lo_y_chunk,
-      transition_hi_y_chunk,
-      transition_lo_z_chunk,
-      transition_hi_z_chunk,
-    }
-  }
-
-  #[inline]
-  pub fn clear(&mut self) {
-    self.regular.clear();
-    self.transition_lo_x_chunk.clear();
-    self.transition_hi_x_chunk.clear();
-    self.transition_lo_y_chunk.clear();
-    self.transition_hi_y_chunk.clear();
-    self.transition_lo_z_chunk.clear();
-    self.transition_hi_z_chunk.clear();
-  }
-}
-
 // Vertex
 
 #[repr(C)]

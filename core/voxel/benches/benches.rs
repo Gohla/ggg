@@ -6,7 +6,7 @@ use ultraviolet::{Isometry3, UVec3, Vec3};
 
 use voxel::chunk::{ChunkSize, ChunkSize16, ChunkVertices};
 use voxel::marching_cubes::MarchingCubes;
-use voxel::octree::{AABB, Octree, OctreeSettings};
+use voxel::lod_volume::{AABB, LodOctmap, LodOctmapSettings};
 use voxel::transvoxel::side::TransitionSide;
 use voxel::transvoxel::Transvoxel;
 use voxel::volume::{Sphere, SphereSettings, Volume};
@@ -83,29 +83,29 @@ pub fn octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-Sphere");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 1.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
+    || preallocate_octree(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-2.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 2.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
+    || preallocate_octree(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 2.0, ..LodOctmapSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-3.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 3.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
+    || preallocate_octree(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 3.0, ..LodOctmapSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-4.0", |b| b.iter_batched(
-    || preallocate_octree(Octree::new(OctreeSettings { total_size, lod_factor: 4.0, ..OctreeSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
+    || preallocate_octree(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 4.0, ..LodOctmapSettings::default() }, transform, sphere, marching_cubes, transvoxel), position),
     |mut octree| drop(black_box(octree.do_update(position))),
     BatchSize::SmallInput,
   ));
   group.finish();
 }
 
-fn preallocate_octree<V: Volume + Clone + Send + 'static, C: ChunkSize>(mut octree: Octree<V, C>, position: Vec3) -> Octree<V, C> where
+fn preallocate_octree<V: Volume + Clone + Send + 'static, C: ChunkSize>(mut octree: LodOctmap<V, C>, position: Vec3) -> LodOctmap<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
   [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
