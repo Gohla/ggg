@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
 use wgpu::{Buffer, BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{GuiFrame, Os};
+use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::buffer::BufferBuilder;
@@ -67,10 +67,10 @@ impl app::Application for Triangle {
 
   fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
-  fn render<'a>(&mut self, _os: &Os, _gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Triangle render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);
     render_pass.push_debug_group("Draw triangle");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
@@ -80,4 +80,10 @@ impl app::Application for Triangle {
   }
 }
 
-fn main() { app::run_with_defaults::<Triangle>("Triangle").unwrap(); }
+fn main() {
+  app::run::<Triangle>(Options {
+    name: "Triangle".to_string(),
+    depth_stencil_texture_format: None,
+    ..Options::default()
+  }).unwrap();
+}

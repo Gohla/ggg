@@ -51,7 +51,7 @@ impl app::Application for VoxelMeshing {
     camera.arcball.distance = -extends * 2.0;
     camera.arcball.mouse_scroll_distance_speed = 1000.0;
     camera.far = 10000.0;
-    let mut debug_renderer = DebugRenderer::new(gfx, 1, camera.get_view_projection_matrix());
+    let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut settings = Settings::default();
@@ -74,14 +74,11 @@ impl app::Application for VoxelMeshing {
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
     let voxel_renderer = VoxelRenderer::new(
-      &gfx.device,
-      &gfx.surface,
+      gfx,
       camera_uniform,
       settings.light.uniform,
       ModelUniform::identity(),
-      1,
       None,
-      depth_texture.format,
     );
 
     let mut lod_chunk_manager = settings.create_lod_chunk_manager();
@@ -149,14 +146,12 @@ impl app::Application for VoxelMeshing {
     let model = self.lod_mesh.model;
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
     self.voxel_renderer.render_lod_mesh(
-      &self.depth_texture.view,
-      &mut frame.encoder,
-      None,
-      &frame.output_texture,
+      gfx,
+      &mut frame,
       &self.lod_mesh,
     );
 
-    self.debug_renderer.render(gfx, &mut frame, None, self.camera.get_view_projection_matrix() * model);
+    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())
   }

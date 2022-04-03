@@ -12,7 +12,6 @@ use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use gfx::texture::{GfxTexture, TextureBuilder};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -47,14 +46,11 @@ pub struct RayTracing {
   static_bind_group: BindGroup,
 
   render_pipeline: RenderPipeline,
-  multisampled_framebuffer: GfxTexture,
 
   camera_aperture: f32,
   camera_origin: Vec3,
   v_fov: f32,
 }
-
-const SAMPLE_COUNT: u32 = 1;
 
 impl app::Application for RayTracing {
   fn new(os: &Os, gfx: &Gfx) -> Self {
@@ -79,14 +75,8 @@ impl app::Application for RayTracing {
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_multisample_count(SAMPLE_COUNT)
       .with_layout_label("Ray tracing pipeline layout")
       .with_label("Ray tracing render pipeline")
-      .build(&gfx.device);
-
-    let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
-      .with_texture_label("Multisampling texture")
-      .with_texture_view_label("Multisampling texture view")
       .build(&gfx.device);
 
     Self {
@@ -95,19 +85,11 @@ impl app::Application for RayTracing {
 
       render_pipeline,
 
-      multisampled_framebuffer,
-
       camera_aperture,
       camera_origin,
       v_fov,
     }
   }
-
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, _screen_size: ScreenSize) {
-    self.multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, SAMPLE_COUNT)
-      .build(&gfx.device);
-  }
-
 
   type Input = Input;
 
@@ -140,7 +122,7 @@ impl app::Application for RayTracing {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let delta = frame.time.delta.as_s() as f32;
     if input.forward { self.camera_origin.z -= 1.0 * delta; }
     if input.backward { self.camera_origin.z += 1.0 * delta; }
@@ -152,13 +134,9 @@ impl app::Application for RayTracing {
     self.camera_aperture += input.aperture_delta;
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
-    let render_pass_builder = RenderPassBuilder::new()
-      .with_label("Ray tracing render pass");
-    let mut render_pass = if SAMPLE_COUNT != 1 {
-      render_pass_builder.begin_render_pass_for_multisampled_swap_chain_with_clear(frame.encoder, &self.multisampled_framebuffer.view, &frame.output_texture)
-    } else {
-      render_pass_builder.begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture)
-    };
+    let mut render_pass = RenderPassBuilder::new()
+      .with_label("Ray tracing render pass")
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);
     render_pass.push_debug_group("Trace rays");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);
@@ -173,6 +151,7 @@ fn main() {
     name: "Ray tracing".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
     require_graphics_device_features: Features::SPIRV_SHADER_PASSTHROUGH,
+    depth_stencil_texture_format: None,
     ..Options::default()
   }).unwrap();
 }

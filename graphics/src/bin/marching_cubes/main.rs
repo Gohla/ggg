@@ -11,7 +11,6 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use gfx::texture::{GfxTexture, TextureBuilder};
 use voxel::chunk::{ChunkVertices, GenericChunkSize};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
@@ -28,9 +27,6 @@ pub struct TransvoxelDemo {
   light_settings: LightSettings,
   model_uniform: ModelUniform,
 
-  depth_texture: GfxTexture,
-  multisampled_framebuffer: GfxTexture,
-
   voxel_renderer: VoxelRenderer,
 
   marching_cubes_debugging: MarchingCubesDebugging,
@@ -43,7 +39,6 @@ pub struct Input {
 
 pub type C1 = GenericChunkSize<1>;
 
-const MULTISAMPLE_COUNT: u32 = 4;
 const EXTENDS: f32 = 0.5;
 
 impl app::Application for TransvoxelDemo {
@@ -52,7 +47,7 @@ impl app::Application for TransvoxelDemo {
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
     camera.arcball.distance = -2.0;
-    let debug_renderer = DebugRenderer::new(gfx, MULTISAMPLE_COUNT, camera.get_view_projection_matrix());
+    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
     let mut light_settings = LightSettings::default();
@@ -61,23 +56,12 @@ impl app::Application for TransvoxelDemo {
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
-    let depth_texture = TextureBuilder::new_depth_32_float(viewport)
-      .with_sample_count(MULTISAMPLE_COUNT)
-      .build(&gfx.device);
-    let multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, MULTISAMPLE_COUNT)
-      .with_texture_label("Multisampling texture")
-      .with_texture_view_label("Multisampling texture view")
-      .build(&gfx.device);
-
     let voxel_renderer = VoxelRenderer::new(
-      &gfx.device,
-      &gfx.surface,
+      gfx,
       camera_uniform,
       light_settings.uniform,
       model_uniform,
-      MULTISAMPLE_COUNT,
       None,
-      depth_texture.format,
     );
 
     let marching_cubes_debugging = MarchingCubesDebugging::default();
@@ -90,23 +74,15 @@ impl app::Application for TransvoxelDemo {
       light_settings,
       model_uniform,
 
-      depth_texture,
-      multisampled_framebuffer,
-
       voxel_renderer,
 
       marching_cubes_debugging,
     }
   }
 
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
-    self.depth_texture = TextureBuilder::new_depth_32_float(viewport)
-      .with_sample_count(MULTISAMPLE_COUNT)
-      .build(&gfx.device);
-    self.multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&gfx.surface, MULTISAMPLE_COUNT)
-      .build(&gfx.device);
   }
 
   type Input = Input;
@@ -140,11 +116,8 @@ impl app::Application for TransvoxelDemo {
     let mut chunk_vertices = ChunkVertices::new();
     self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
     self.voxel_renderer.render_chunk_vertices(
-      &gfx.device,
-      &self.depth_texture.view,
-      &mut frame.encoder,
-      Some(&self.multisampled_framebuffer.view),
-      &frame.output_texture,
+      gfx,
+      &mut frame,
       &chunk_vertices,
     );
 
@@ -157,7 +130,7 @@ impl app::Application for TransvoxelDemo {
       chunk_vertices.indices().into_iter().copied(),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    self.debug_renderer.render(gfx, &mut frame, Some(&self.multisampled_framebuffer), self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }
@@ -167,6 +140,7 @@ fn main() {
   app::run::<TransvoxelDemo>(Options {
     name: "Transvoxel".to_string(),
     request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
+    sample_count: 4,
     ..Options::default()
   }).unwrap();
 }

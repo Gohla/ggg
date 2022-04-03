@@ -1,9 +1,10 @@
-use wgpu::{Adapter, CommandEncoder, Device, Instance, Queue, TextureView};
+use wgpu::{Adapter, CommandEncoder, Device, Instance, Queue, TextureFormat, TextureView};
 
 use common::screen::ScreenSize;
 use common::timing::FrameTime;
 
 use crate::surface::GfxSurface;
+use crate::texture::{GfxTexture, TextureBuilder};
 
 pub mod prelude;
 pub mod surface;
@@ -27,12 +28,27 @@ pub struct Gfx {
   pub device: Device,
   pub queue: Queue,
   pub surface: GfxSurface,
+
+  pub depth_stencil_texture: Option<GfxTexture>,
+  pub multisampled_framebuffer: Option<GfxTexture>,
+  pub sample_count: u32,
 }
 
 impl Gfx {
   pub fn resize_surface(&mut self, size: ScreenSize) {
     self.surface.resize(&self.adapter, &self.device, size);
+    if let Some(depth_texture) = &mut self.depth_stencil_texture {
+      *depth_texture = TextureBuilder::new_depth(size.physical, depth_texture.format)
+        .with_sample_count(self.sample_count)
+        .build(&self.device);
+    }
+    if let Some(multisampled_framebuffer) = &mut self.multisampled_framebuffer {
+      *multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&self.surface, self.sample_count)
+        .build(&self.device);
+    }
   }
+
+  pub fn depth_stencil_format(&self) -> Option<TextureFormat> { self.depth_stencil_texture.as_ref().map(|t| t.format) }
 }
 
 #[derive(Debug)]

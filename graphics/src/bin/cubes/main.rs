@@ -16,10 +16,9 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, Camera};
+use gfx::camera::{Camera, CameraInput};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
-use gfx::texture::{GfxTexture, TextureBuilder};
 use gui_widget::UiWidgetsExt;
 
 const NUM_CUBE_INDICES: usize = 3 * 3 * 2;
@@ -71,8 +70,6 @@ pub struct Cubes {
   static_bind_group: BindGroup,
 
   render_pipeline: RenderPipeline,
-
-  depth_texture: GfxTexture,
 
   index_buffer: GfxBuffer,
 
@@ -133,12 +130,10 @@ impl app::Application for Cubes {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
 
-    let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
-
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_depth_texture(depth_texture.format)
+      .with_depth_texture(gfx.depth_stencil_format().unwrap())
       .with_layout_label("Cubes pipeline layout")
       .with_label("Cubes render pipeline")
       .build(&gfx.device);
@@ -164,8 +159,6 @@ impl app::Application for Cubes {
 
       render_pipeline,
 
-      depth_texture,
-
       index_buffer,
 
       num_cubes_to_generate,
@@ -177,10 +170,9 @@ impl app::Application for Cubes {
   }
 
 
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
-    self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
 
@@ -196,7 +188,7 @@ impl app::Application for Cubes {
     ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
@@ -220,9 +212,8 @@ impl app::Application for Cubes {
     });
 
     let mut render_pass = RenderPassBuilder::new()
-      .with_depth_texture(&self.depth_texture.view)
       .with_label("Cubes render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, true);
     render_pass.push_debug_group("Draw cubes");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);

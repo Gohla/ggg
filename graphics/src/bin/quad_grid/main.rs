@@ -7,7 +7,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use rand::prelude::*;
 use ultraviolet::Mat4;
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
 use app::{GuiFrame, Options, Os};
 use common::idx_assigner::Item;
@@ -15,7 +15,7 @@ use common::input::RawInput;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, Camera};
+use gfx::camera::{Camera, CameraInput};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
@@ -180,13 +180,13 @@ impl app::Application for QuadGrid {
     ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Quad grid render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);
     render_pass.push_debug_group("Quad grid");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.bind_group, &[]);
@@ -201,7 +201,7 @@ impl app::Application for QuadGrid {
 fn main() {
   app::run::<QuadGrid>(Options {
     name: "Quad grid".to_string(),
-    graphics_adapter_power_preference: PowerPreference::HighPerformance,
+    depth_stencil_texture_format: None,
     ..Options::default()
   }).unwrap();
 }

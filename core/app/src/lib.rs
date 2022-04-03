@@ -6,7 +6,7 @@ use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
-use wgpu::{Backends, CommandBuffer, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, RequestAdapterOptions, RequestDeviceError, SurfaceError};
+use wgpu::{Backends, CommandBuffer, DeviceDescriptor, Features, Instance, Limits, PowerPreference, PresentMode, RequestAdapterOptions, RequestDeviceError, SurfaceError, TextureFormat};
 
 use common::input::RawInput;
 use common::screen::{LogicalSize, ScreenSize};
@@ -14,6 +14,7 @@ use common::timing::{Duration, FrameTimer, TickTimer, TimingStats};
 use gfx::{Frame, Gfx};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
+use gfx::texture::TextureBuilder;
 use gui::Gui;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
@@ -87,6 +88,9 @@ pub struct Options {
   pub request_graphics_device_features: Features,
   pub graphics_device_limits: Limits,
   pub graphics_swap_chain_present_mode: PresentMode,
+
+  pub depth_stencil_texture_format: Option<TextureFormat>,
+  pub sample_count: u32,
 }
 
 impl Default for Options {
@@ -107,6 +111,9 @@ impl Default for Options {
       request_graphics_device_features: Features::empty(),
       graphics_device_limits: default_limits(),
       graphics_swap_chain_present_mode: PresentMode::Immediate,
+
+      depth_stencil_texture_format: Some(TextureFormat::Depth32Float),
+      sample_count: 1,
     };
     #[cfg(target_os = "macos")] {
       options.graphics_swap_chain_present_mode = PresentMode::Mailbox;
@@ -212,8 +219,24 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
   }, None).await?;
   let screen_size = os.window.get_inner_size();
   let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
+
   let gui = Gui::new(&device, surface.get_texture_format());
-  let gfx = Gfx { instance, adapter, device, queue, surface };
+
+  let sample_count = options.sample_count;
+  let depth_texture = options.depth_stencil_texture_format.map(|format| {
+    TextureBuilder::new_depth(screen_size.physical, format)
+      .with_sample_count(sample_count)
+      .build(&device)
+  });
+  let multisampled_framebuffer = if options.sample_count > 1 {
+    Some(TextureBuilder::new_multisampled_framebuffer(&surface, sample_count)
+      .with_texture_label("Multisampling texture")
+      .with_texture_view_label("Multisampling texture view")
+      .build(&device)
+    )
+  } else { None };
+
+  let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture: depth_texture, multisampled_framebuffer, sample_count };
 
   run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size)?;
 

@@ -42,11 +42,16 @@ impl<'a> TextureBuilder<'a> {
   }
 
   #[inline]
-  pub fn new_depth_32_float(size: PhysicalSize) -> Self {
+  pub fn new_depth(size: PhysicalSize, format: TextureFormat) -> Self {
     Self::new()
       .with_2d_size(size.width as u32, size.height as u32)
-      .with_depth32_float_format()
+      .with_format(format)
       .with_render_attachment_usage()
+  }
+
+  #[inline]
+  pub fn new_depth_32_float(size: PhysicalSize) -> Self {
+    Self::new_depth(size, TextureFormat::Depth32Float)
   }
 
   #[inline]
@@ -165,6 +170,7 @@ impl<'a> TextureBuilder<'a> {
 
 // Texture creation
 
+#[derive(Debug)]
 pub struct GfxTexture {
   pub texture: Texture,
   pub view: TextureView,

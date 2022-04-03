@@ -13,12 +13,12 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{CameraInput, Camera};
+use gfx::camera::{Camera, CameraInput};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
-use gfx::texture::{GfxTexture, TextureBuilder};
+use gfx::texture::TextureBuilder;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -88,8 +88,6 @@ pub struct Quads {
 
   render_pipeline: RenderPipeline,
 
-  depth_texture: GfxTexture,
-
   vertex_buffer: Buffer,
   index_buffer: Buffer,
   instance_buffer: Buffer,
@@ -139,13 +137,11 @@ impl app::Application for Quads {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
 
-    let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
-
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
-      .with_depth_texture(depth_texture.format)
+      .with_depth_texture(gfx.depth_stencil_format().unwrap())
       .with_layout_label("Quads pipeline layout")
       .with_label("Quads render pipeline")
       .build(&gfx.device);
@@ -185,8 +181,6 @@ impl app::Application for Quads {
 
       render_pipeline,
 
-      depth_texture,
-
       vertex_buffer,
       index_buffer,
       instance_buffer,
@@ -194,10 +188,9 @@ impl app::Application for Quads {
   }
 
 
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
-    self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
   }
 
 
@@ -213,7 +206,7 @@ impl app::Application for Quads {
     ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera.get_view_projection_matrix() }]);
 
@@ -222,9 +215,8 @@ impl app::Application for Quads {
     });
 
     let mut render_pass = RenderPassBuilder::new()
-      .with_depth_texture(&self.depth_texture.view)
       .with_label("Quads render pass")
-      .begin_render_pass_for_swap_chain_with_clear(frame.encoder, &frame.output_texture);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, true);
     render_pass.push_debug_group("Draw quads");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
