@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -7,7 +5,8 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{Isometry3, Vec3};
 
 use crate::chunk::{ChunkSize, ChunkVertices};
-use crate::lod::chunk::{AABB, LodChunkManager, LodChunkVertices};
+use crate::lod::aabb::AABB;
+use crate::lod::chunk::{LodChunkManager, LodChunkVertices};
 use crate::marching_cubes::MarchingCubes;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::Transvoxel;
@@ -39,8 +38,6 @@ impl Default for LodOctmapSettings {
     }
   }
 }
-
-// Octree
 
 pub struct LodOctmap<V, C: ChunkSize> {
   total_size: u32,
@@ -255,8 +252,6 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
     );
   }
 }
-
-// Volume-mesh manager abstraction, to enable using Octree without generic arguments.
 
 impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodChunkManager for LodOctmap<V, C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,

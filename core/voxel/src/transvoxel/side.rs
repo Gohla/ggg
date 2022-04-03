@@ -1,7 +1,7 @@
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::ChunkSize;
-use crate::lod::chunk::AABB;
+use crate::lod::aabb::AABB;
 
 flagset::flags! {
    pub enum TransitionSide: u8 {
