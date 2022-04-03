@@ -44,15 +44,14 @@ pub struct Input {
 pub type C1 = GenericChunkSize<1>;
 
 const MULTISAMPLE_COUNT: u32 = 4;
-// HACK: extends is 4 / 2 because are imitating a 4x4 grid.
-const EXTENDS: f32 = 4.0 / 2.0;
+const EXTENDS: f32 = 0.5;
 
 impl app::Application for TransvoxelDemo {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
-    camera.arcball.distance = -4.0;
+    camera.arcball.distance = -2.0;
     let debug_renderer = DebugRenderer::new(gfx, MULTISAMPLE_COUNT, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);

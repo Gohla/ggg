@@ -13,8 +13,8 @@ use crate::C1;
 
 pub type MC = MarchingCubes<C1>;
 
-pub const LORES_MIN: UVec3 = UVec3::new(1, 1, 1);
-pub const LORES_STEP: u32 = 2;
+pub const MIN: UVec3 = UVec3::new(0, 0, 0);
+pub const STEP: u32 = 1;
 
 #[derive(Default)]
 pub struct MarchingCubesDebugging {
@@ -191,7 +191,7 @@ impl MarchingCubesDebugging {
 
   fn draw_data_gui(&mut self, ui: &mut Ui) {
     let local_coordinates = MC::local_coordinates(RegularCell::new(0, 0, 0));
-    let global_coordinates = MC::global_coordinates(UVec3::zero(), LORES_STEP, &local_coordinates);
+    let global_coordinates = MC::global_coordinates(UVec3::zero(), STEP, &local_coordinates);
     let values = MC::sample(&self.samples, &local_coordinates);
     let case = MC::case(&values);
     let cell_class = marching_cubes::tables::REGULAR_CELL_CLASS[case as usize] as usize;
@@ -269,7 +269,7 @@ impl MarchingCubesDebugging {
 
   pub fn extract_chunk(&self, chunk_vertices: &mut ChunkVertices) {
     // HACK: pass LORES_STEP (2) here, to make global voxels draw as if this was a 2x2 chunk grid.
-    self.marching_cubes.extract_chunk(LORES_MIN, LORES_STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
+    self.marching_cubes.extract_chunk(MIN, STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
   }
 
   pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer) {
@@ -280,7 +280,7 @@ impl MarchingCubesDebugging {
           let position = UVec3::new(x, y, z);
           let sample = self.samples.sample(position);
           // HACK: multiply by LORES_STEP after sampling to draw as if this was a 2x2 chunk grid.
-          let position = LORES_MIN + position * LORES_STEP;
+          let position = MIN + position * STEP;
           if sample.is_sign_negative() {
             debug_renderer.draw_point(position.into(), Vec4::one(), 20.0);
           }
@@ -288,6 +288,6 @@ impl MarchingCubesDebugging {
       }
     }
     // Cell
-    debug_renderer.draw_cube_lines(LORES_MIN.into(), LORES_STEP as f32, Vec4::one());
+    debug_renderer.draw_cube_lines(MIN.into(), STEP as f32, Vec4::one());
   }
 }
