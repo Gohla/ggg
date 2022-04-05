@@ -21,6 +21,36 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   const VOXELS_IN_CHUNK_ROW_USIZE: usize = Self::VOXELS_IN_CHUNK_ROW as usize;
   const VOXELS_IN_CHUNK: u32 = Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW;
   const VOXELS_IN_CHUNK_USIZE: usize = Self::VOXELS_IN_CHUNK as usize;
+
+  #[inline]
+  fn cell_index_from_position(position: UVec3) -> usize {
+    Self::cell_index_from_xyz(position.x, position.y, position.z)
+  }
+
+  #[inline]
+  fn cell_index_from_xyz(x: u32, y: u32, z: u32) -> usize {
+    cell_index::<Self>(x, y, z)
+  }
+
+  #[inline]
+  fn voxel_index_from_position(position: UVec3) -> usize {
+    Self::voxel_index_from_xyz(position.x, position.y, position.z)
+  }
+
+  #[inline]
+  fn voxel_index_from_xyz(x: u32, y: u32, z: u32) -> usize {
+    voxel_index::<Self>(x, y, z)
+  }
+}
+
+#[inline]
+pub const fn cell_index<C: ChunkSize>(x: u32, y: u32, z: u32) -> usize {
+  (x + (C::CELLS_IN_CHUNK_ROW * y) + (C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * z)) as usize
+}
+
+#[inline]
+pub const fn voxel_index<C: ChunkSize>(x: u32, y: u32, z: u32) -> usize {
+  (x + (C::VOXELS_IN_CHUNK_ROW * y) + (C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * z)) as usize
 }
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -97,23 +127,28 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
   }
 
   #[inline]
-  fn index(position: UVec3) -> usize {
-    (position.x + C::VOXELS_IN_CHUNK_ROW * position.y + C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * position.z) as usize
+  pub fn sample_index(&self, voxel_index: usize) -> f32 {
+    self.array[voxel_index]
+  }
+
+  #[inline]
+  pub fn sample_index_mut(&mut self, voxel_index: usize) -> &mut f32 {
+    &mut self.array[voxel_index]
   }
 
   #[inline]
   pub fn sample(&self, position: UVec3) -> f32 {
-    self.array[Self::index(position)]
+    self.sample_index(C::voxel_index_from_position(position))
   }
 
   #[inline]
   pub fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
-    &mut self.array[Self::index(position)]
+    self.sample_index_mut(C::voxel_index_from_position(position))
   }
 
   #[inline]
   pub fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
-    *self.sample_mut(UVec3::new(x, y, z)) = sample;
+    *self.sample_index_mut(C::voxel_index_from_xyz(x, y, z)) = sample;
   }
 
   #[inline]
@@ -183,6 +218,11 @@ impl ChunkVertices {
   #[inline]
   pub fn push_index(&mut self, index: u16) {
     self.indices.push(index);
+  }
+
+  #[inline]
+  pub fn extend_indices_from_slice(&mut self, indices: &[u16]) {
+    self.indices.extend_from_slice(indices);
   }
 
   #[inline]
