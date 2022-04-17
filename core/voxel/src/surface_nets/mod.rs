@@ -75,9 +75,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
   {
     let local_voxel_positions = Self::local_voxel_positions(cell);
     let values = Self::sample(chunk_sample_array, &local_voxel_positions);
-    if !Self::has_point(&values) { return None; }
-    let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions);
-    let vertex_position = Self::centroid_of_edge_intersections(&values, &global_voxel_positions);
+    let case = Self::case(&values);
+    if case == 0 || case == 255 { return None; } // OPTO: use bit twiddling to break it down to 1 comparison?
+    let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions); // OPTO: delay this computation as not all 8 positions are typically used?
+    let vertex_position = Self::centroid_of_edge_intersections(case, &values, &global_voxel_positions);
     Some(vertex_position)
   }
 
@@ -123,16 +124,15 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  pub fn has_point(values: &[f32; 8]) -> bool {
-    let sign_bits = (values[0].is_sign_negative() as u8) << 0
+  pub fn case(values: &[f32; 8]) -> u8 {
+    (values[0].is_sign_negative() as u8) << 0
       | (values[1].is_sign_negative() as u8) << 1
       | (values[2].is_sign_negative() as u8) << 2
       | (values[3].is_sign_negative() as u8) << 3
       | (values[4].is_sign_negative() as u8) << 4
       | (values[5].is_sign_negative() as u8) << 5
       | (values[6].is_sign_negative() as u8) << 6
-      | (values[7].is_sign_negative() as u8) << 7;
-    sign_bits != 0 && sign_bits != 255 // OPTO: use bit twiddling to break it down to 1 comparison?
+      | (values[7].is_sign_negative() as u8) << 7
   }
 
   #[inline]
@@ -166,20 +166,23 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
   #[inline]
   pub fn centroid_of_edge_intersections(
+    case: u8,
     values: &[f32; 8],
     global_voxel_positions: &[UVec3; 8],
   ) -> Vec3 {
     let mut count = 0;
     let mut sum = Vec3::zero();
     for &[voxel_a_index, voxel_b_index] in Self::EDGE_TO_VOXEL_INDICES.iter() {
-      let voxel_a_index = voxel_a_index as usize;
-      let value_a = values[voxel_a_index];
-      let voxel_b_index = voxel_b_index as usize;
-      let value_b = values[voxel_b_index];
-      if (value_a < 0.0) != (value_b < 0.0) {
-        count += 1;
+      let a_negative = (case & (1 << voxel_a_index)) != 0;
+      let b_negative = (case & (1 << voxel_b_index)) != 0;
+      if a_negative != b_negative {
+        let voxel_a_index = voxel_a_index as usize;
+        let voxel_b_index = voxel_b_index as usize;
+        let value_a = values[voxel_a_index];
+        let value_b = values[voxel_b_index];
         let position_a = global_voxel_positions[voxel_a_index];
         let position_b = global_voxel_positions[voxel_b_index];
+        count += 1;
         sum += Self::surface_edge_intersection(position_a, value_a, position_b, value_b);
       }
     }
