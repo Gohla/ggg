@@ -12,9 +12,8 @@ use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel::lod::chunk_vertices::LodChunkVerticesManager;
-use voxel::lod::render::{LodRenderData, LodRenderDataManager, SimpleLodRenderDataManager, SimpleLodRenderDataSettings};
-use voxel::lod::transvoxel::{TransvoxelLodChunkVertices, TransvoxelLodRenderDataUpdaterSettings, TransvoxelLodRenderDataUpdater};
+use voxel::chunk::ChunkSize16;
+use voxel::lod::render::{LodRenderData, LodRenderDataManager};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
@@ -33,7 +32,7 @@ pub struct VoxelPlanets {
 
   voxel_renderer: VoxelRenderer,
 
-  lod_render_data_manager: SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRenderDataUpdater>,
+  lod_render_data_manager: Box<dyn LodRenderDataManager<ChunkSize16>>,
   lod_render_data: LodRenderData,
 }
 
@@ -59,6 +58,9 @@ impl app::Application for VoxelPlanets {
     settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     settings.lod_octmap_settings.lod_factor = 1.0;
     //settings.octree_settings.thread_pool_threads = 1;
+    settings.lod_render_data_settings.debug_render_octree_nodes = true;
+    settings.lod_render_data_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
+    settings.lod_render_data_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
     settings.auto_update = true;
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
@@ -71,20 +73,8 @@ impl app::Application for VoxelPlanets {
       None,
     );
 
-    let mut updater_settings = TransvoxelLodRenderDataUpdaterSettings::default();
-    updater_settings.render_regular_chunks = true;
-    updater_settings.render_transition_lo_x_chunks = false;
-    updater_settings.render_transition_hi_x_chunks = false;
-    updater_settings.render_transition_lo_y_chunks = false;
-    updater_settings.render_transition_hi_y_chunks = false;
-    updater_settings.render_transition_lo_z_chunks = false;
-    updater_settings.render_transition_hi_z_chunks = false;
-    let mut lod_render_data_settings = SimpleLodRenderDataSettings::default();
-    lod_render_data_settings.debug_render_octree_nodes = true;
-    lod_render_data_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
-    lod_render_data_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
-    let mut lod_render_data_manager = settings.create_lod_render_data_manager(updater_settings, lod_render_data_settings);
-    let lod_render_data = lod_render_data_manager.update(camera.get_position(), &mut debug_renderer, &gfx.device);
+    let mut lod_render_data_manager = settings.create_lod_render_data_manager();
+    let lod_render_data = lod_render_data_manager.update(camera.get_position(), &settings.lod_render_data_settings, &mut debug_renderer, &gfx.device);
 
     Self {
       camera,
@@ -129,16 +119,16 @@ impl app::Application for VoxelPlanets {
       self.settings.draw_light_gui(ui);
       let mut recreate_lod_render_data_manager = false;
       recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
-      recreate_lod_render_data_manager |= self.settings.draw_meshing_algorithm_gui(ui);
+      recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
       if recreate_lod_render_data_manager {
-        self.lod_render_data_manager = self.settings.create_lod_render_data_manager(self.lod_render_data_manager.updater.settings, self.lod_render_data_manager.settings);
+        self.lod_render_data_manager = self.settings.create_lod_render_data_manager();
       }
-      self.settings.draw_lod_chunk_vertices_manager_gui(ui, &mut self.lod_render_data_manager.chunk_vertices_manager);
-      if self.settings.draw_lod_render_data_manager_gui(ui, &mut self.lod_render_data_manager) { // Update is pressed or auto update is true
+      self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
+      if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true
         self.debug_renderer.clear();
-        self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &mut self.debug_renderer, &gfx.device);
+        self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
       }
-      self.settings.draw_lod_mesh_gui(ui, &self.lod_render_data);
+      self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
     });
 
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);

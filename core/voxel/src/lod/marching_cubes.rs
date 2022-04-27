@@ -3,34 +3,34 @@ use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
-use crate::surface_nets::SurfaceNets;
+use crate::marching_cubes::MarchingCubes;
 use crate::volume::Volume;
 
 // Settings
 
 #[derive(Default, Copy, Clone, Debug)]
-pub struct SurfaceNetsExtractorSettings {}
+pub struct MarchingCubesExtractorSettings {}
 
 // Extractor
 
 #[derive(Default, Copy, Clone)]
-pub struct SurfaceNetsExtractor<C: ChunkSize> {
-  surface_nets: SurfaceNets<C>,
-  _settings: SurfaceNetsExtractorSettings,
+pub struct MarchingCubesExtractor<C: ChunkSize> {
+  marching_cubes: MarchingCubes<C>,
+  _settings: MarchingCubesExtractorSettings,
 }
 
-impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> where
+impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> where
   [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; SurfaceNets::<C>::SHARED_INDICES_SIZE]:,
+  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
 {
-  type Chunk = SurfaceNetsLodChunkMesh;
+  type Chunk = MarchingCubesLodChunkVertices;
 
   #[inline]
   fn extract<V: Volume>(&self, _total_size: u32, aabb: AABB, volume: &V, chunk: &mut Self::Chunk) {
     let min = aabb.min();
     let step = aabb.step::<C>();
     let chunk_samples = volume.sample_chunk(min, step);
-    self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
+    self.marching_cubes.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
   }
 
   #[inline]
@@ -39,10 +39,10 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> where
   }
 }
 
-impl<C: ChunkSize> SurfaceNetsExtractor<C> {
+impl<C: ChunkSize> MarchingCubesExtractor<C> {
   #[inline]
-  pub fn new(surface_nets: SurfaceNets<C>, settings: SurfaceNetsExtractorSettings) -> Self {
-    Self { surface_nets, _settings: settings }
+  pub fn new(marching_cubes: MarchingCubes<C>, settings: MarchingCubesExtractorSettings) -> Self {
+    Self { marching_cubes, _settings: settings }
   }
 }
 
@@ -50,11 +50,11 @@ impl<C: ChunkSize> SurfaceNetsExtractor<C> {
 
 #[repr(transparent)]
 #[derive(Default, Clone, Debug)]
-pub struct SurfaceNetsLodChunkMesh {
+pub struct MarchingCubesLodChunkVertices {
   pub regular: ChunkMesh,
 }
 
-impl SurfaceNetsLodChunkMesh {
+impl MarchingCubesLodChunkVertices {
   #[inline]
   pub fn new() -> Self {
     Self::default()
@@ -66,7 +66,7 @@ impl SurfaceNetsLodChunkMesh {
   }
 }
 
-impl LodChunkMesh for SurfaceNetsLodChunkMesh {
+impl LodChunkMesh for MarchingCubesLodChunkVertices {
   #[inline]
   fn is_empty(&self) -> bool {
     self.regular.is_empty()

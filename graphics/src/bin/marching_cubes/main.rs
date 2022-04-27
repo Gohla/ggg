@@ -11,7 +11,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use voxel::chunk::{ChunkVertices, GenericChunkSize};
+use voxel::chunk::{ChunkMesh, GenericChunkSize};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
@@ -113,7 +113,7 @@ impl app::Application for TransvoxelDemo {
     // Write uniforms, run MC to create vertices from voxels, and render them.
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.light_settings.uniform);
-    let mut chunk_vertices = ChunkVertices::new();
+    let mut chunk_vertices = ChunkMesh::new();
     self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
     self.voxel_renderer.render_chunk_vertices(
       gfx,

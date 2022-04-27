@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, Vertex, voxel_index_from_xyz, VoxelIndex};
+use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh, Vertex, voxel_index_from_xyz, VoxelIndex};
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
@@ -26,7 +26,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min: UVec3,
     step: u32,
     chunk_samples: &ChunkSamples<C>,
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
     [u16; Self::SHARED_INDICES_SIZE]:,
@@ -43,7 +43,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   {
@@ -201,7 +201,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn extract_quads(
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -225,7 +225,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min_voxel_index: VoxelIndex,
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -280,7 +280,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn maybe_make_quad(
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
     voxel_index_a: VoxelIndex,
     voxel_index_b: VoxelIndex,
     cell_index: CellIndex,

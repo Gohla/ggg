@@ -1,16 +1,18 @@
-use std::borrow::BorrowMut;
-
 use egui::{ComboBox, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::Isometry3;
 
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::GenericChunkSize;
-use voxel::lod::chunk_vertices::{LodChunkVerticesManager, LodChunkVerticesManagerParameters};
-use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};
-use voxel::lod::render::{LodRenderData, SimpleLodRenderDataManager, SimpleLodRenderDataSettings};
-use voxel::lod::transvoxel::{TransvoxelExtractor, TransvoxelLodChunkVertices, TransvoxelLodRenderDataUpdaterSettings, TransvoxelLodRenderDataUpdater};
+use voxel::lod::builder::LodManagerBuilder;
+use voxel::lod::chunk_mesh::LodChunkMeshManagerParameters;
+use voxel::lod::marching_cubes::{MarchingCubesExtractor, MarchingCubesExtractorSettings};
+use voxel::lod::octmap::LodOctmapSettings;
+use voxel::lod::render::{LodRenderData, LodRenderDataManager, LodRenderDataSettings};
+use voxel::lod::surface_nets::{SurfaceNetsExtractor, SurfaceNetsExtractorSettings};
+use voxel::lod::transvoxel::{TransvoxelExtractor, TransvoxelExtractorSettings};
 use voxel::marching_cubes::MarchingCubes;
+use voxel::surface_nets::SurfaceNets;
 use voxel::transvoxel::Transvoxel;
 use voxel::uniform::LightSettings;
 use voxel::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings, Volume};
@@ -27,11 +29,13 @@ impl Default for VolumeType {
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum MeshingAlgorithmType {
+pub enum ExtractorType {
   MarchingCubes,
+  Transvoxel,
+  SurfaceNets,
 }
 
-impl Default for MeshingAlgorithmType {
+impl Default for ExtractorType {
   fn default() -> Self { Self::MarchingCubes }
 }
 
@@ -43,10 +47,15 @@ pub struct Settings {
   pub sphere_settings: SphereSettings,
   pub noise_settings: NoiseSettings,
 
-  pub meshing_algorithm_type: MeshingAlgorithmType,
+  pub extractor_type: ExtractorType,
+  pub marching_cubes_settings: MarchingCubesExtractorSettings,
+  pub transvoxel_settings: TransvoxelExtractorSettings,
+  pub surface_nets_settings: SurfaceNetsExtractorSettings,
 
   pub lod_octmap_settings: LodOctmapSettings,
   pub lod_octmap_transform: Isometry3,
+
+  pub lod_render_data_settings: LodRenderDataSettings,
 
   pub auto_update: bool,
 }
@@ -56,37 +65,30 @@ type C16 = GenericChunkSize<16>;
 impl Settings {
   pub fn create_lod_render_data_manager(
     &self,
-    updater_settings: TransvoxelLodRenderDataUpdaterSettings,
-    settings: SimpleLodRenderDataSettings,
-  ) -> SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRenderDataUpdater> {
+  ) -> Box<dyn LodRenderDataManager<C16>> {
+    let builder = LodManagerBuilder::new::<C16>();
     match self.volume_type {
-      VolumeType::Sphere => self.create_render_data_manager(Box::new(self.create_lod_vertices_manager(Sphere::new(self.sphere_settings))), updater_settings, settings),
-      VolumeType::Noise => self.create_render_data_manager(Box::new(self.create_lod_vertices_manager(Noise::new(self.noise_settings))), updater_settings, settings),
-      VolumeType::SpherePlusNoise => self.create_render_data_manager(Box::new(self.create_lod_vertices_manager(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)))), updater_settings, settings),
+      VolumeType::Sphere => self.build_lod_render_data_manager(builder.with_volume(Sphere::new(self.sphere_settings))),
+      VolumeType::Noise => self.build_lod_render_data_manager(builder.with_volume(Noise::new(self.noise_settings))),
+      VolumeType::SpherePlusNoise => self.build_lod_render_data_manager(builder.with_volume(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)))),
     }
   }
 
-  fn create_lod_vertices_manager<V: Volume>(&self, volume: V) -> LodOctmap<V, C16, TransvoxelExtractor<C16>> {
-    let extractor = TransvoxelExtractor::new(MarchingCubes::<C16>::new(), Transvoxel::<C16>::new());
-    LodOctmap::new(
-      self.lod_octmap_settings,
-      self.lod_octmap_transform,
-      volume,
-      extractor,
-    )
-  }
-
-  fn create_render_data_manager<M: LodChunkVerticesManager<TransvoxelLodChunkVertices>>(
+  fn build_lod_render_data_manager<V: Volume, E>(
     &self,
-    chunk_vertices_manager: M,
-    updater_settings: TransvoxelLodRenderDataUpdaterSettings,
-    settings: SimpleLodRenderDataSettings,
-  ) -> SimpleLodRenderDataManager<M, TransvoxelLodRenderDataUpdater> {
-    SimpleLodRenderDataManager::new(
-      chunk_vertices_manager,
-      TransvoxelLodRenderDataUpdater::new(updater_settings),
-      settings,
-    )
+    builder: LodManagerBuilder<C16, V, E>,
+  ) -> Box<dyn LodRenderDataManager<C16>> {
+    match self.extractor_type {
+      ExtractorType::MarchingCubes => builder
+        .with_extractor(MarchingCubesExtractor::new(MarchingCubes::<C16>::default(), self.marching_cubes_settings))
+        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+      ExtractorType::Transvoxel => builder
+        .with_extractor(TransvoxelExtractor::new(MarchingCubes::<C16>::default(), Transvoxel::<C16>::default(), self.transvoxel_settings))
+        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+      ExtractorType::SurfaceNets => builder
+        .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), self.surface_nets_settings))
+        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+    }
   }
 
   pub fn draw_light_gui(&mut self, ui: &mut Ui) {
@@ -142,17 +144,37 @@ impl Settings {
   }
 
   /// Returns true if update button was pressed.
-  pub fn draw_meshing_algorithm_gui(&mut self, ui: &mut Ui) -> bool {
-    ui.collapsing_open_with_grid("Meshing Algorithm", "Grid", |ui| {
+  pub fn draw_extractor_gui(&mut self, ui: &mut Ui) -> bool {
+    ui.collapsing_open_with_grid("Extractor", "Grid", |ui| {
       ui.label("Type");
       ComboBox::from_id_source("Type")
-        .selected_text(format!("{:?}", self.meshing_algorithm_type))
+        .selected_text(format!("{:?}", self.extractor_type))
         .show_ui(ui, |ui| {
-          ui.selectable_value(&mut self.meshing_algorithm_type, MeshingAlgorithmType::MarchingCubes, "Marching Cubes");
+          ui.selectable_value(&mut self.extractor_type, ExtractorType::MarchingCubes, "Marching Cubes");
+          ui.selectable_value(&mut self.extractor_type, ExtractorType::Transvoxel, "Transvoxel");
+          ui.selectable_value(&mut self.extractor_type, ExtractorType::SurfaceNets, "Surface Nets");
         });
       ui.end_row();
-      match self.meshing_algorithm_type {
-        MeshingAlgorithmType::MarchingCubes => {}
+      match self.extractor_type {
+        ExtractorType::MarchingCubes => {}
+        ExtractorType::Transvoxel => {
+          ui.label("Render regular chunks?");
+          ui.checkbox(&mut self.transvoxel_settings.extract_regular_chunks, "");
+          ui.end_row();
+          ui.label("extract transition chunks?");
+          ui.grid("Transition cell extracting", |ui| {
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_lo_x_chunks, "Lo X");
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_hi_x_chunks, "Hi X");
+            ui.end_row();
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_lo_y_chunks, "Lo Y");
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_hi_y_chunks, "Hi Y");
+            ui.end_row();
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_lo_z_chunks, "Lo Z");
+            ui.checkbox(&mut self.transvoxel_settings.extract_transition_hi_z_chunks, "Hi Z");
+            ui.end_row();
+          });
+        }
+        ExtractorType::SurfaceNets => {}
       }
       return ui.button("Update").clicked();
     }).body_returned.map(|i| i.inner).unwrap_or(false)
@@ -161,48 +183,30 @@ impl Settings {
   pub fn draw_lod_chunk_vertices_manager_gui(
     &mut self,
     ui: &mut Ui,
-    lod_chunk_vertices_manager: &mut dyn LodChunkVerticesManagerParameters,
+    lod_chunk_mesh_manager: &mut dyn LodChunkMeshManagerParameters,
   ) {
-    ui.collapsing_open_with_grid("LOD chunk vertices manager", "Grid", |ui| {
+    ui.collapsing_open_with_grid("LOD chunk mesh manager", "Grid", |ui| {
       ui.label("LOD factor");
-      ui.drag_unlabelled_range(lod_chunk_vertices_manager.get_lod_factor_mut(), 0.1, 0.0..=4.0);
+      ui.drag_unlabelled_range(lod_chunk_mesh_manager.get_lod_factor_mut(), 0.1, 0.0..=4.0);
       ui.end_row();
       ui.label("Max LOD level");
-      ui.monospace(format!("{}", lod_chunk_vertices_manager.get_max_lod_level()));
+      ui.monospace(format!("{}", lod_chunk_mesh_manager.get_max_lod_level()));
       ui.end_row();
     });
   }
 
   /// Returns true if update button was pressed or auto update is set to true.
-  pub fn draw_lod_render_data_manager_gui<M: LodChunkVerticesManager<TransvoxelLodChunkVertices>>(
+  pub fn draw_lod_render_data_manager_gui(
     &mut self,
     ui: &mut Ui,
-    lod_render_data_manager: &mut SimpleLodRenderDataManager<M, TransvoxelLodRenderDataUpdater>,
   ) -> bool {
-    let settings = lod_render_data_manager.settings.borrow_mut();
-    let updater_settings = lod_render_data_manager.updater.settings.borrow_mut();
     ui.collapsing_open_with_grid("LOD render data manager", "Grid", |ui| {
-      ui.label("Render regular chunks?");
-      ui.checkbox(&mut updater_settings.render_regular_chunks, "");
-      ui.end_row();
-      ui.label("Render transition chunks?");
-      ui.grid("Transition cell rendering", |ui| {
-        ui.checkbox(&mut updater_settings.render_transition_lo_x_chunks, "Lo X");
-        ui.checkbox(&mut updater_settings.render_transition_hi_x_chunks, "Hi X");
-        ui.end_row();
-        ui.checkbox(&mut updater_settings.render_transition_lo_y_chunks, "Lo Y");
-        ui.checkbox(&mut updater_settings.render_transition_hi_y_chunks, "Hi Y");
-        ui.end_row();
-        ui.checkbox(&mut updater_settings.render_transition_lo_z_chunks, "Lo Z");
-        ui.checkbox(&mut updater_settings.render_transition_hi_z_chunks, "Hi Z");
-        ui.end_row();
-      });
       ui.end_row();
       ui.label("Debug render octree nodes?");
       ui.grid("Debug rendering", |ui| {
-        ui.checkbox(&mut settings.debug_render_octree_nodes, "");
-        ui.edit_color_vec4(&mut settings.debug_render_octree_node_color, Alpha::OnlyBlend);
-        ui.edit_color_vec4(&mut settings.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
+        ui.checkbox(&mut self.lod_render_data_settings.debug_render_octree_nodes, "");
+        ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_color, Alpha::OnlyBlend);
+        ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
       });
       ui.end_row();
       let mut update = false;
@@ -215,27 +219,28 @@ impl Settings {
     }).body_returned.map(|i| i.inner).unwrap_or(false) || self.auto_update
   }
 
-  pub fn draw_lod_mesh_gui(
+  pub fn draw_lod_render_data_gui(
     &mut self,
     ui: &mut Ui,
-    lod_mesh: &LodRenderData,
+    lod_render_data: &LodRenderData,
   ) {
-    ui.collapsing_open_with_grid("LOD mesh", "Grid", |ui| {
+    ui.collapsing_open_with_grid("LOD render data", "Grid", |ui| {
       ui.label("# vertices");
-      ui.monospace(format!("{}", lod_mesh.vertex_buffer.len));
+      ui.monospace(format!("{}", lod_render_data.vertex_buffer.len));
       ui.end_row();
       ui.label("Vertex buffer size");
-      ui.monospace(format!("{}", lod_mesh.vertex_buffer.size));
+      ui.monospace(format!("{}", lod_render_data.vertex_buffer.size));
       ui.end_row();
       ui.label("# indices");
-      ui.monospace(format!("{}", lod_mesh.index_buffer.len));
+      ui.monospace(format!("{}", lod_render_data.index_buffer.len));
       ui.end_row();
       ui.label("Index buffer size");
-      ui.monospace(format!("{}", lod_mesh.index_buffer.size));
+      ui.monospace(format!("{}", lod_render_data.index_buffer.size));
       ui.end_row();
       ui.label("# draw commands");
-      ui.monospace(format!("{}", lod_mesh.draws.len()));
+      ui.monospace(format!("{}", lod_render_data.draws.len()));
       ui.end_row();
     });
   }
 }
+

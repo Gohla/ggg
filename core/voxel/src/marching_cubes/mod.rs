@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices, Vertex};
+use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh, Vertex};
 use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
@@ -35,7 +35,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     min: UVec3,
     step: u32,
     chunk_samples: &ChunkSamples<C>,
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
     [u16; Self::SHARED_INDICES_SIZE]:,
@@ -60,7 +60,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -170,7 +170,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) -> u16 {
     if vertex_data.new_vertex() {
       // Create a new vertex and index, and share the index.
@@ -212,7 +212,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     vertex_data: &RegularVertexData,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();

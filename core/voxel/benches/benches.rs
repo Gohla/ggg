@@ -4,7 +4,7 @@
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ultraviolet::{Isometry3, UVec3, Vec3};
 
-use voxel::chunk::{ChunkSize, ChunkSize16, ChunkVertices};
+use voxel::chunk::{ChunkSize, ChunkSize16, ChunkMesh};
 use voxel::marching_cubes::MarchingCubes;
 use voxel::lod_volume::{AABB, LodOctmap, LodOctmapSettings};
 use voxel::transvoxel::side::TransitionSide;
@@ -68,9 +68,9 @@ pub fn transvoxel_benchmark(c: &mut Criterion) {
   ));
 }
 
-fn preallocate_chunk_vertices<C: ChunkSize>() -> ChunkVertices {
+fn preallocate_chunk_vertices<C: ChunkSize>() -> ChunkMesh {
   // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
-  ChunkVertices::with_vertices_indices(Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE), Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE))
+  ChunkMesh::with_vertices_indices(Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE), Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE))
 }
 
 pub fn octree_benchmark(c: &mut Criterion) {

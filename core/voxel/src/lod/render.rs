@@ -6,18 +6,29 @@ use wgpu::{BufferAddress, Device};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
 
-use crate::chunk::{ChunkVertices, Vertex};
-use crate::lod::chunk_vertices::{LodChunkVertices, LodChunkVerticesManager};
+use crate::chunk::{ChunkMesh, ChunkSize, Vertex};
+use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
+use crate::lod::extract::LodExtractor;
 
 // Trait
 
-pub trait LodRenderDataManager {
+pub trait LodRenderDataManager<C: ChunkSize> {
   fn update(
     &mut self,
     position: Vec3,
+    settings: &LodRenderDataSettings,
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> LodRenderData;
+
+  fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters;
+}
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct LodRenderDataSettings {
+  pub debug_render_octree_nodes: bool,
+  pub debug_render_octree_node_color: Vec4,
+  pub debug_render_octree_node_empty_color: Vec4,
 }
 
 pub struct LodRenderData {
@@ -35,48 +46,30 @@ pub struct LodDraw {
 
 // Implementation
 
-pub trait LodRenderDataUpdater {
-  type Chunk: LodChunkVertices;
-
-  fn update_chunk(
-    &mut self,
-    chunk: &Self::Chunk,
-    vertices: &mut Vec<Vertex>,
-    indices: &mut Vec<u16>,
-    draws: &mut Vec<LodDraw>,
-  );
-}
-
 #[derive(Default, Debug)]
-pub struct SimpleLodRenderDataManager<M, U> {
-  pub chunk_vertices_manager: M,
-  pub updater: U,
-  pub settings: SimpleLodRenderDataSettings,
+pub struct SimpleLodRenderDataManager<MM> {
+  chunk_mesh_manager: MM,
   vertices: Vec<Vertex>,
   indices: Vec<u16>,
   draws: Vec<LodDraw>,
 }
 
-#[derive(Default, Copy, Clone, Debug)]
-pub struct SimpleLodRenderDataSettings {
-  pub debug_render_octree_nodes: bool,
-  pub debug_render_octree_node_color: Vec4,
-  pub debug_render_octree_node_empty_color: Vec4,
-}
-
-impl<C: LodChunkVertices, M: LodChunkVerticesManager<C>, U> SimpleLodRenderDataManager<M, U> where U: LodRenderDataUpdater<Chunk=C> {
-  pub fn new(chunk_vertices_manager: M, updater: U, settings: SimpleLodRenderDataSettings) -> Self {
+impl<MM> SimpleLodRenderDataManager<MM> {
+  pub fn new(chunk_mesh_manager: MM) -> Self {
     let vertices = Vec::new();
     let indices = Vec::new();
     let draws = Vec::new();
-    Self { chunk_vertices_manager, updater, settings, vertices, indices, draws }
+    Self { chunk_mesh_manager, vertices, indices, draws }
   }
 }
 
-impl<C: LodChunkVertices, T: LodChunkVerticesManager<C>, U> LodRenderDataManager for SimpleLodRenderDataManager<T, U> where U: LodRenderDataUpdater<Chunk=C> {
+impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLodRenderDataManager<MM> where
+  MM: LodChunkMeshManager<C, Extractor=E>
+{
   fn update(
     &mut self,
     position: Vec3,
+    settings: &LodRenderDataSettings,
     debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> LodRenderData {
@@ -84,19 +77,20 @@ impl<C: LodChunkVertices, T: LodChunkVerticesManager<C>, U> LodRenderDataManager
     self.indices.clear();
     self.draws.clear();
 
-    let (transform, chunks) = self.chunk_vertices_manager.update(position);
+    let extractor = self.chunk_mesh_manager.get_extractor().clone();
+    let (transform, chunks) = self.chunk_mesh_manager.update(position);
 
     for (aabb, (chunk, filled)) in chunks {
       let is_empty = chunk.is_empty();
       if !is_empty {
         if !*filled { continue; }
-        self.updater.update_chunk(chunk, &mut self.vertices, &mut self.indices, &mut self.draws);
+        extractor.update_render_data(chunk, &mut self.vertices, &mut self.indices, &mut self.draws);
       }
-      if self.settings.debug_render_octree_nodes {
+      if settings.debug_render_octree_nodes {
         if is_empty {
-          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, self.settings.debug_render_octree_node_empty_color);
+          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
         } else {
-          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, self.settings.debug_render_octree_node_color);
+          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
         }
       }
     }
@@ -112,10 +106,15 @@ impl<C: LodChunkVertices, T: LodChunkVerticesManager<C>, U> LodRenderDataManager
 
     LodRenderData { vertex_buffer, index_buffer, draws: self.draws.clone(), model: transform.into_homogeneous_matrix() }
   }
+
+  #[inline]
+  fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters {
+    &mut self.chunk_mesh_manager
+  }
 }
 
 pub(crate) fn copy_chunk_vertices(
-  chunk_vertices: &ChunkVertices,
+  chunk_vertices: &ChunkMesh,
   vertices: &mut Vec<Vertex>,
   indices: &mut Vec<u16>,
   draws: &mut Vec<LodDraw>,

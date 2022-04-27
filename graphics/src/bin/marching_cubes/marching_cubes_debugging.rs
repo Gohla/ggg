@@ -5,7 +5,7 @@ use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices};
+use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh};
 use voxel::marching_cubes;
 use voxel::marching_cubes::{MarchingCubes, RegularCell};
 
@@ -267,7 +267,7 @@ impl MarchingCubesDebugging {
     });
   }
 
-  pub fn extract_chunk(&self, chunk_vertices: &mut ChunkVertices) {
+  pub fn extract_chunk(&self, chunk_vertices: &mut ChunkMesh) {
     // HACK: pass LORES_STEP (2) here, to make global voxels draw as if this was a 2x2 chunk grid.
     self.marching_cubes.extract_chunk(MIN, STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
   }

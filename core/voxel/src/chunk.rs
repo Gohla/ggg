@@ -304,15 +304,15 @@ impl<C: ChunkSize> Default for ChunkSampleArray<C> where
 }
 
 
-// Chunk vertices
+// Chunk mesh
 
 #[derive(Clone, Default, Debug)]
-pub struct ChunkVertices {
+pub struct ChunkMesh {
   vertices: Vec<Vertex>,
   indices: Vec<u16>,
 }
 
-impl ChunkVertices {
+impl ChunkMesh {
   #[inline]
   pub fn new() -> Self {
     Self::default()

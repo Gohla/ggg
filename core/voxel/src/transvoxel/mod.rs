@@ -5,7 +5,7 @@ use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
-use crate::chunk::{ChunkSamples, ChunkSize, ChunkVertices, Vertex};
+use crate::chunk::{ChunkSamples, ChunkSize, ChunkMesh, Vertex};
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
@@ -31,7 +31,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:, [u16; Self::SHARED_INDICES_SIZE]:
   {
@@ -79,7 +79,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     lores_min: UVec3,
     lores_step: u32,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -257,7 +257,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     global_voxels: &[Vec3; 13],
     values: &[f32; 13],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) -> u16 {
     if vertex_data.new_reusable_vertex() {
       // Create a new vertex and index, and share the index.
@@ -302,7 +302,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     vertex_data: TransitionVertexData,
     global_voxels: &[Vec3; 13],
     values: &[f32; 13],
-    chunk_vertices: &mut ChunkVertices,
+    chunk_vertices: &mut ChunkMesh,
   ) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();

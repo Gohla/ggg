@@ -4,7 +4,7 @@ use ultraviolet::{UVec3, Vec4};
 use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkVertices};
+use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh};
 use voxel::surface_nets::SurfaceNets;
 
 use crate::C;
@@ -158,7 +158,7 @@ impl SurfaceNetsDebugging {
   //   });
   // }
 
-  pub fn extract_chunk(&self, chunk_vertices: &mut ChunkVertices) {
+  pub fn extract_chunk(&self, chunk_vertices: &mut ChunkMesh) {
     self.surface_nets.extract_chunk(MIN, STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
   }
 

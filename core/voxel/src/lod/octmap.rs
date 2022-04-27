@@ -6,7 +6,7 @@ use ultraviolet::{Isometry3, Vec3};
 
 use crate::chunk::ChunkSize;
 use crate::lod::aabb::AABB;
-use crate::lod::chunk_vertices::{LodChunkVertices, LodChunkVerticesManager, LodChunkVerticesManagerParameters};
+use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
 use crate::volume::Volume;
 
@@ -198,15 +198,22 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize, E: LodExtractor<C>> LodOc
 
 // Trait implementation
 
-impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkVerticesManager<E::Chunk> for LodOctmap<V, C, E> {
+impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for LodOctmap<V, C, E> {
+  type Extractor = E;
+
   #[inline]
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(E::Chunk, bool))> + '_>) {
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk, bool))> + '_>) {
     let (transform, chunks) = self.do_update(position);
     (transform, Box::new(chunks))
   }
+
+  #[inline]
+  fn get_extractor(&self) -> &E {
+    &self.extractor
+  }
 }
 
-impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkVerticesManagerParameters for LodOctmap<V, C, E> {
+impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<V, C, E> {
   #[inline]
   fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
   #[inline]
