@@ -12,8 +12,9 @@ use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
 use gfx::texture::{GfxTexture, TextureBuilder};
-use voxel::lod::chunk::LodChunkManager;
-use voxel::lod::mesh::{LodMesh, LodMeshManager};
+use voxel::lod::chunk_vertices::LodChunkVerticesManager;
+use voxel::lod::render::{LodRenderData, LodRenderDataManager, SimpleLodRenderDataManager, SimpleLodRenderDataSettings};
+use voxel::lod::transvoxel::{TransvoxelLodChunkVertices, TransvoxelLodRendererSettings, TransvoxelLodRendererUpdater};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
@@ -32,9 +33,8 @@ pub struct VoxelMeshing {
 
   voxel_renderer: VoxelRenderer,
 
-  lod_chunk_manager: Box<dyn LodChunkManager>,
-  lod_mesh_manager: LodMeshManager,
-  lod_mesh: LodMesh,
+  lod_render_data_manager: SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRendererUpdater>,
+  lod_render_data: LodRenderData,
 }
 
 #[derive(Default)]
@@ -57,17 +57,7 @@ impl app::Application for VoxelMeshing {
     let mut settings = Settings::default();
     settings.light.rotation_y_degree = 270.0;
     settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
-    settings.lod_mesh_manager_settings.render_regular_chunks = true;
-    settings.lod_mesh_manager_settings.render_transition_lo_x_chunks = false;
-    settings.lod_mesh_manager_settings.render_transition_hi_x_chunks = false;
-    settings.lod_mesh_manager_settings.render_transition_lo_y_chunks = false;
-    settings.lod_mesh_manager_settings.render_transition_hi_y_chunks = false;
-    settings.lod_mesh_manager_settings.render_transition_lo_z_chunks = false;
-    settings.lod_mesh_manager_settings.render_transition_hi_z_chunks = false;
-    settings.lod_mesh_manager_settings.debug_render_octree_nodes = true;
-    settings.lod_mesh_manager_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
-    settings.lod_mesh_manager_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
-    settings.lod_octmap_settings.lod_factor = 2.0;
+    settings.lod_octmap_settings.lod_factor = 1.0;
     //settings.octree_settings.thread_pool_threads = 1;
     settings.auto_update = true;
 
@@ -81,9 +71,20 @@ impl app::Application for VoxelMeshing {
       None,
     );
 
-    let mut lod_chunk_manager = settings.create_lod_chunk_manager();
-    let mut lod_mesh_manager = LodMeshManager::new();
-    let lod_mesh = lod_mesh_manager.update(&mut lod_chunk_manager, camera.get_position(), &settings.lod_mesh_manager_settings, &mut debug_renderer, &gfx.device);
+    let mut updater_settings = TransvoxelLodRendererSettings::default();
+    updater_settings.render_regular_chunks = true;
+    updater_settings.render_transition_lo_x_chunks = false;
+    updater_settings.render_transition_hi_x_chunks = false;
+    updater_settings.render_transition_lo_y_chunks = false;
+    updater_settings.render_transition_hi_y_chunks = false;
+    updater_settings.render_transition_lo_z_chunks = false;
+    updater_settings.render_transition_hi_z_chunks = false;
+    let mut lod_render_data_settings = SimpleLodRenderDataSettings::default();
+    lod_render_data_settings.debug_render_octree_nodes = true;
+    lod_render_data_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
+    lod_render_data_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
+    let mut lod_render_data_manager = settings.create_lod_render_data_manager(updater_settings, lod_render_data_settings);
+    let lod_render_data = lod_render_data_manager.update(camera.get_position(), &mut debug_renderer, &gfx.device);
 
     Self {
       camera,
@@ -96,9 +97,8 @@ impl app::Application for VoxelMeshing {
 
       voxel_renderer,
 
-      lod_chunk_manager,
-      lod_mesh_manager,
-      lod_mesh,
+      lod_render_data_manager,
+      lod_render_data,
     }
   }
 
@@ -127,28 +127,28 @@ impl app::Application for VoxelMeshing {
 
     egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
       self.settings.draw_light_gui(ui);
-      let mut recreate_lod_chunk_manager = false;
-      recreate_lod_chunk_manager |= self.settings.draw_volume_gui(ui);
-      recreate_lod_chunk_manager |= self.settings.draw_meshing_algorithm_gui(ui);
-      if recreate_lod_chunk_manager {
-        self.lod_chunk_manager = self.settings.create_lod_chunk_manager();
+      let mut recreate_lod_render_data_manager = false;
+      recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
+      recreate_lod_render_data_manager |= self.settings.draw_meshing_algorithm_gui(ui);
+      if recreate_lod_render_data_manager {
+        self.lod_render_data_manager = self.settings.create_lod_render_data_manager(self.lod_render_data_manager.updater.settings, self.lod_render_data_manager.settings);
       }
-      self.settings.draw_lod_chunk_manager_gui(ui, &mut self.lod_chunk_manager);
-      if self.settings.draw_lod_mesh_manager_gui(ui) { // Update is pressed or auto update is true
+      self.settings.draw_lod_chunk_vertices_manager_gui(ui, &mut self.lod_render_data_manager.chunk_vertices_manager);
+      if self.settings.draw_lod_render_data_manager_gui(ui, &mut self.lod_render_data_manager) { // Update is pressed or auto update is true
         self.debug_renderer.clear();
-        self.lod_mesh = self.lod_mesh_manager.update(&mut self.lod_chunk_manager, self.camera.get_position(), &self.settings.lod_mesh_manager_settings, &mut self.debug_renderer, &gfx.device);
+        self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &mut self.debug_renderer, &gfx.device);
       }
-      self.settings.draw_lod_mesh_gui(ui, &self.lod_mesh);
+      self.settings.draw_lod_mesh_gui(ui, &self.lod_render_data);
     });
 
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.settings.light.uniform);
-    let model = self.lod_mesh.model;
+    let model = self.lod_render_data.model;
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
     self.voxel_renderer.render_lod_mesh(
       gfx,
       &mut frame,
-      &self.lod_mesh,
+      &self.lod_render_data,
     );
 
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);

@@ -7,7 +7,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 
 use crate::chunk::{ChunkVertices, Vertex};
-use crate::lod::mesh::LodMesh;
+use crate::lod::render::LodRenderData;
 use crate::uniform::{CameraUniform, LightUniform, ModelUniform};
 
 pub struct VoxelRenderer {
@@ -94,7 +94,7 @@ impl VoxelRenderer {
     &self,
     gfx: &Gfx,
     frame: &mut Frame,
-    lod_mesh: &LodMesh,
+    lod_mesh: &LodRenderData,
   ) {
     let mut render_pass = self.create_render_pass(gfx, frame);
     render_pass.push_debug_group("Render LOD mesh");

@@ -4,13 +4,13 @@ use std::sync::mpsc::{Receiver, Sender};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{Isometry3, Vec3};
 
-use crate::chunk::{ChunkSize, ChunkVertices};
+use crate::chunk::ChunkSize;
 use crate::lod::aabb::AABB;
-use crate::lod::chunk::{LodChunkManager, LodChunkVertices};
-use crate::marching_cubes::MarchingCubes;
-use crate::transvoxel::side::TransitionSide;
-use crate::transvoxel::Transvoxel;
+use crate::lod::chunk_vertices::{LodChunkVertices, LodChunkVerticesManager, LodChunkVerticesManagerParameters};
+use crate::lod::extract::LodExtractor;
 use crate::volume::Volume;
+
+// Settings
 
 #[derive(Copy, Clone, Debug)]
 pub struct LodOctmapSettings {
@@ -39,7 +39,9 @@ impl Default for LodOctmapSettings {
   }
 }
 
-pub struct LodOctmap<V, C: ChunkSize> {
+// LOD octmap
+
+pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   total_size: u32,
   lod_factor: f32,
 
@@ -48,27 +50,22 @@ pub struct LodOctmap<V, C: ChunkSize> {
 
   max_lod_level: u32,
   volume: V,
-  marching_cubes: MarchingCubes<C>,
-  transvoxel: Transvoxel<C>,
+  extractor: E,
 
   active_aabbs: HashSet<AABB>,
   keep_aabbs: HashSet<AABB>,
-  chunks: HashMap<AABB, (LodChunkVertices, bool)>,
+  lod_chunk_vertices: HashMap<AABB, (E::Chunk, bool)>,
 
   requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
-  tx: Sender<(AABB, LodChunkVertices)>,
-  rx: Receiver<(AABB, LodChunkVertices)>,
+  tx: Sender<(AABB, E::Chunk)>,
+  rx: Receiver<(AABB, E::Chunk)>,
 
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
-impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
-  [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
-{
-  pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, marching_cubes: MarchingCubes<C>, transvoxel: Transvoxel<C>) -> Self {
+impl<V: Volume + Clone + Send + 'static, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
+  pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
@@ -82,12 +79,11 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
 
       max_lod_level,
       volume,
-      marching_cubes,
-      transvoxel,
+      extractor,
 
       active_aabbs: HashSet::new(),
       keep_aabbs: HashSet::new(),
-      chunks: HashMap::new(),
+      lod_chunk_vertices: HashMap::new(),
 
       requested_aabbs: HashSet::new(),
       thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
@@ -101,11 +97,11 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn do_update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(LodChunkVertices, bool))>) {
+  pub fn do_update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
     let position = self.transform_inversed.transform_vec(position);
 
     for (aabb, lod_chunk) in self.rx.try_iter() {
-      self.chunks.insert(aabb, (lod_chunk, true));
+      self.lod_chunk_vertices.insert(aabb, (lod_chunk, true));
       self.requested_aabbs.remove(&aabb);
     }
 
@@ -115,20 +111,20 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
     self.update_root_node(position);
 
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      if let Some((mesh, filled)) = self.chunks.get_mut(removed) {
-        mesh.clear();
+      if let Some((lod_chunk_vertices, filled)) = self.lod_chunk_vertices.get_mut(removed) {
+        lod_chunk_vertices.clear();
         *filled = false;
       }
     }
 
-    let chunks = self.chunks.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
+    let chunks = self.lod_chunk_vertices.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
     (self.transform, chunks)
   }
 
   pub fn clear(&mut self) {
     self.keep_aabbs.clear();
     self.active_aabbs.clear();
-    for (_, (vertices, filled)) in &mut self.chunks {
+    for (_, (vertices, filled)) in &mut self.lod_chunk_vertices {
       vertices.clear();
       *filled = false;
     }
@@ -179,7 +175,7 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
   }
 
   fn update_chunk(&mut self, aabb: AABB) -> bool {
-    let (chunk, filled) = self.chunks.entry(aabb).or_default();
+    let (chunk, filled) = self.lod_chunk_vertices.entry(aabb).or_default();
     if *filled { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
     let chunk = std::mem::take(chunk);
@@ -187,87 +183,34 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodOctmap<V, C> where
     return false;
   }
 
-  fn request_chunk(&mut self, aabb: AABB, mut chunk: LodChunkVertices) {
+  fn request_chunk(&mut self, aabb: AABB, mut chunk: E::Chunk) {
     self.requested_aabbs.insert(aabb);
     let total_size = self.total_size;
-    let marching_cubes = self.marching_cubes.clone();
-    let transvoxel = self.transvoxel.clone();
     let volume = self.volume.clone();
+    let extractor = self.extractor.clone();
     let tx = self.tx.clone();
     self.thread_pool.spawn(move || {
-      let lores_min = aabb.min();
-      let lores_max = aabb.max();
-      let lores_step = aabb.step::<C>();
-      let chunk_samples = volume.sample_chunk(lores_min, lores_step);
-      marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
-      if lores_step != 1 { // At max LOD level, no need to create transition cells.
-        let hires_step = lores_step / 2;
-        if lores_min.x > 0 {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_x_chunk);
-        }
-        if lores_max.x < total_size {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiX, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_x_chunk);
-        }
-        if lores_min.y > 0 {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoY, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_y_chunk);
-        }
-        if lores_max.y < total_size {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiY, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_y_chunk);
-        }
-        if lores_min.z > 0 {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_lo_z_chunk);
-        }
-        if lores_max.z < total_size {
-          Self::extract_transvoxel_chunk(aabb, TransitionSide::HiZ, &volume, hires_step, lores_step, &transvoxel, &mut chunk.transition_hi_z_chunk);
-        }
-      }
+      extractor.extract::<V>(total_size, aabb, &volume, &mut chunk);
       tx.send((aabb, chunk)).ok(); // Ignore hangups.
     })
   }
+}
 
-  fn extract_transvoxel_chunk(
-    aabb: AABB,
-    side: TransitionSide,
-    volume: &V,
-    hires_step: u32,
-    lores_step: u32,
-    transvoxel: &Transvoxel<C>,
-    chunk_vertices: &mut ChunkVertices,
-  ) {
-    let hires_chunk_mins = side.subdivided_face_of_side_minimums(aabb);
-    let hires_chunk_samples = [
-      volume.sample_chunk(hires_chunk_mins[0], hires_step),
-      volume.sample_chunk(hires_chunk_mins[1], hires_step),
-      volume.sample_chunk(hires_chunk_mins[2], hires_step),
-      volume.sample_chunk(hires_chunk_mins[3], hires_step),
-    ];
-    transvoxel.extract_chunk(
-      side,
-      &hires_chunk_mins,
-      &hires_chunk_samples,
-      hires_step,
-      aabb.min(),
-      lores_step,
-      chunk_vertices,
-    );
+// Trait implementation
+
+impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkVerticesManager<E::Chunk> for LodOctmap<V, C, E> {
+  #[inline]
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(E::Chunk, bool))> + '_>) {
+    let (transform, chunks) = self.do_update(position);
+    (transform, Box::new(chunks))
   }
 }
 
-impl<V: Volume + Clone + Send + 'static, C: ChunkSize> LodChunkManager for LodOctmap<V, C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
-  [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
-{
+impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkVerticesManagerParameters for LodOctmap<V, C, E> {
   #[inline]
   fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
   #[inline]
   fn get_lod_factor(&self) -> f32 { self.lod_factor }
   #[inline]
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
-
-  #[inline]
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(LodChunkVertices, bool))> + '_>) {
-    let (transform, chunks) = self.do_update(position);
-    (transform, Box::new(chunks))
-  }
 }

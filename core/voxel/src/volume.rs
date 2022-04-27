@@ -1,10 +1,10 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{ChunkSize, ChunkSampleArray, ChunkSamples};
+use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize};
 
 // Trait
 
-pub trait Volume {
+pub trait Volume: Clone + Send + 'static {
   /// Samples a single position, returning its value.
   fn sample(&self, position: UVec3) -> f32;
 
