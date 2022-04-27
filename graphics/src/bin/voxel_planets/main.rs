@@ -22,7 +22,7 @@ use crate::settings::Settings;
 
 pub mod settings;
 
-pub struct VoxelMeshing {
+pub struct VoxelPlanets {
   camera: Camera,
   debug_renderer: DebugRenderer,
 
@@ -42,7 +42,7 @@ pub struct Input {
   camera: CameraInput,
 }
 
-impl app::Application for VoxelMeshing {
+impl app::Application for VoxelPlanets {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
@@ -125,7 +125,7 @@ impl app::Application for VoxelMeshing {
     self.camera.update(&input.camera, frame.time.delta, &gui_frame);
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
-    egui::Window::new("Voxel Meshing").show(&gui_frame, |ui| {
+    egui::Window::new("Voxel Planets").show(&gui_frame, |ui| {
       self.settings.draw_light_gui(ui);
       let mut recreate_lod_render_data_manager = false;
       recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
@@ -158,8 +158,8 @@ impl app::Application for VoxelMeshing {
 }
 
 fn main() {
-  app::run::<VoxelMeshing>(Options {
-    name: "Voxel meshing".to_string(),
+  app::run::<VoxelPlanets>(Options {
+    name: "Voxel Planets".to_string(),
     graphics_adapter_power_preference: PowerPreference::HighPerformance,
     request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
     ..Options::default()
