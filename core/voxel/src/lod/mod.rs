@@ -6,3 +6,4 @@ pub mod render;
 pub mod octmap;
 
 pub mod transvoxel;
+pub mod surface_nets;

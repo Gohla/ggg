@@ -14,7 +14,7 @@ use gfx::debug_renderer::DebugRenderer;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use voxel::lod::chunk_vertices::LodChunkVerticesManager;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager, SimpleLodRenderDataManager, SimpleLodRenderDataSettings};
-use voxel::lod::transvoxel::{TransvoxelLodChunkVertices, TransvoxelLodRendererSettings, TransvoxelLodRendererUpdater};
+use voxel::lod::transvoxel::{TransvoxelLodChunkVertices, TransvoxelLodRenderDataUpdaterSettings, TransvoxelLodRenderDataUpdater};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
@@ -33,7 +33,7 @@ pub struct VoxelPlanets {
 
   voxel_renderer: VoxelRenderer,
 
-  lod_render_data_manager: SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRendererUpdater>,
+  lod_render_data_manager: SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRenderDataUpdater>,
   lod_render_data: LodRenderData,
 }
 
@@ -71,7 +71,7 @@ impl app::Application for VoxelPlanets {
       None,
     );
 
-    let mut updater_settings = TransvoxelLodRendererSettings::default();
+    let mut updater_settings = TransvoxelLodRenderDataUpdaterSettings::default();
     updater_settings.render_regular_chunks = true;
     updater_settings.render_transition_lo_x_chunks = false;
     updater_settings.render_transition_hi_x_chunks = false;

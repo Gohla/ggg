@@ -9,7 +9,7 @@ use voxel::chunk::GenericChunkSize;
 use voxel::lod::chunk_vertices::{LodChunkVerticesManager, LodChunkVerticesManagerParameters};
 use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};
 use voxel::lod::render::{LodRenderData, SimpleLodRenderDataManager, SimpleLodRenderDataSettings};
-use voxel::lod::transvoxel::{TransvoxelExtractor, TransvoxelLodChunkVertices, TransvoxelLodRendererSettings, TransvoxelLodRendererUpdater};
+use voxel::lod::transvoxel::{TransvoxelExtractor, TransvoxelLodChunkVertices, TransvoxelLodRenderDataUpdaterSettings, TransvoxelLodRenderDataUpdater};
 use voxel::marching_cubes::MarchingCubes;
 use voxel::transvoxel::Transvoxel;
 use voxel::uniform::LightSettings;
@@ -56,9 +56,9 @@ type C16 = GenericChunkSize<16>;
 impl Settings {
   pub fn create_lod_render_data_manager(
     &self,
-    updater_settings: TransvoxelLodRendererSettings,
+    updater_settings: TransvoxelLodRenderDataUpdaterSettings,
     settings: SimpleLodRenderDataSettings,
-  ) -> SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRendererUpdater> {
+  ) -> SimpleLodRenderDataManager<Box<dyn LodChunkVerticesManager<TransvoxelLodChunkVertices>>, TransvoxelLodRenderDataUpdater> {
     match self.volume_type {
       VolumeType::Sphere => self.create_render_data_manager(Box::new(self.create_lod_vertices_manager(Sphere::new(self.sphere_settings))), updater_settings, settings),
       VolumeType::Noise => self.create_render_data_manager(Box::new(self.create_lod_vertices_manager(Noise::new(self.noise_settings))), updater_settings, settings),
@@ -79,12 +79,12 @@ impl Settings {
   fn create_render_data_manager<M: LodChunkVerticesManager<TransvoxelLodChunkVertices>>(
     &self,
     chunk_vertices_manager: M,
-    updater_settings: TransvoxelLodRendererSettings,
+    updater_settings: TransvoxelLodRenderDataUpdaterSettings,
     settings: SimpleLodRenderDataSettings,
-  ) -> SimpleLodRenderDataManager<M, TransvoxelLodRendererUpdater> {
+  ) -> SimpleLodRenderDataManager<M, TransvoxelLodRenderDataUpdater> {
     SimpleLodRenderDataManager::new(
       chunk_vertices_manager,
-      TransvoxelLodRendererUpdater::new(updater_settings),
+      TransvoxelLodRenderDataUpdater::new(updater_settings),
       settings,
     )
   }
@@ -177,7 +177,7 @@ impl Settings {
   pub fn draw_lod_render_data_manager_gui<M: LodChunkVerticesManager<TransvoxelLodChunkVertices>>(
     &mut self,
     ui: &mut Ui,
-    lod_render_data_manager: &mut SimpleLodRenderDataManager<M, TransvoxelLodRendererUpdater>,
+    lod_render_data_manager: &mut SimpleLodRenderDataManager<M, TransvoxelLodRenderDataUpdater>,
   ) -> bool {
     let settings = lod_render_data_manager.settings.borrow_mut();
     let updater_settings = lod_render_data_manager.updater.settings.borrow_mut();

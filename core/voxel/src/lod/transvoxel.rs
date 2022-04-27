@@ -95,7 +95,7 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
 // Renderer updater
 
 #[derive(Default, Copy, Clone, Debug)]
-pub struct TransvoxelLodRendererSettings {
+pub struct TransvoxelLodRenderDataUpdaterSettings {
   pub render_regular_chunks: bool,
   pub render_transition_lo_x_chunks: bool,
   pub render_transition_hi_x_chunks: bool,
@@ -106,11 +106,11 @@ pub struct TransvoxelLodRendererSettings {
 }
 
 #[derive(Default, Copy, Clone, Debug)]
-pub struct TransvoxelLodRendererUpdater {
-  pub settings: TransvoxelLodRendererSettings,
+pub struct TransvoxelLodRenderDataUpdater {
+  pub settings: TransvoxelLodRenderDataUpdaterSettings,
 }
 
-impl LodRenderDataUpdater for TransvoxelLodRendererUpdater {
+impl LodRenderDataUpdater for TransvoxelLodRenderDataUpdater {
   type Chunk = TransvoxelLodChunkVertices;
 
   fn update_chunk(&mut self, chunk: &Self::Chunk, vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>, draws: &mut Vec<LodDraw>) {
@@ -138,8 +138,8 @@ impl LodRenderDataUpdater for TransvoxelLodRendererUpdater {
   }
 }
 
-impl TransvoxelLodRendererUpdater {
-  pub fn new(settings: TransvoxelLodRendererSettings) -> Self {
+impl TransvoxelLodRenderDataUpdater {
+  pub fn new(settings: TransvoxelLodRenderDataUpdaterSettings) -> Self {
     Self { settings }
   }
 }
