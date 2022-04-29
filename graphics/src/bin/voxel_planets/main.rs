@@ -11,7 +11,6 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
-use gfx::texture::{GfxTexture, TextureBuilder};
 use voxel::chunk::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
 use voxel::render::VoxelRenderer;
@@ -29,8 +28,6 @@ pub struct VoxelPlanets {
 
   camera_uniform: CameraUniform,
   settings: Settings,
-
-  depth_texture: GfxTexture,
 
   stars_renderer: StarsRenderer,
   voxel_renderer: VoxelRenderer,
@@ -66,8 +63,6 @@ impl app::Application for VoxelPlanets {
     settings.lod_render_data_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
     settings.auto_update = true;
 
-    let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
-
     let stars_renderer = StarsRenderer::new(gfx, &camera);
     let voxel_renderer = VoxelRenderer::new(
       gfx,
@@ -87,8 +82,6 @@ impl app::Application for VoxelPlanets {
       camera_uniform,
       settings,
 
-      depth_texture,
-
       stars_renderer,
       voxel_renderer,
 
@@ -98,10 +91,8 @@ impl app::Application for VoxelPlanets {
   }
 
 
-  fn screen_resize(&mut self, _os: &Os, gfx: &Gfx, screen_size: ScreenSize) {
-    let viewport = screen_size.physical;
-    self.camera.viewport = viewport;
-    self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
+    self.camera.viewport = screen_size.physical;
     self.stars_renderer.screen_resize(screen_size);
   }
 
