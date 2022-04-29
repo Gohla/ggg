@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="0.B all" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="0. all">
+  <configuration default="false" name="$.B all" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="command" value="build" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

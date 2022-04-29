@@ -24,11 +24,31 @@ pub trait LodRenderDataManager<C: ChunkSize> {
   fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters;
 }
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LodRenderDataSettings {
+  pub debug_render_vertices: bool,
+  pub debug_render_vertex_color: Vec4,
+  pub debug_render_vertex_point_size: f32,
+  pub debug_render_edges: bool,
+  pub debug_render_edge_color: Vec4,
   pub debug_render_octree_nodes: bool,
   pub debug_render_octree_node_color: Vec4,
   pub debug_render_octree_node_empty_color: Vec4,
+}
+
+impl Default for LodRenderDataSettings {
+  fn default() -> Self {
+    Self {
+      debug_render_vertices: true,
+      debug_render_vertex_color: Vec4::new(0.0, 0.0, 0.5, 0.5),
+      debug_render_vertex_point_size: 3.0,
+      debug_render_edges: false,
+      debug_render_edge_color: Vec4::new(0.0, 0.25, 0.0, 0.25),
+      debug_render_octree_nodes: true,
+      debug_render_octree_node_color: Vec4::new(0.0, 0.1, 0.0, 0.1),
+      debug_render_octree_node_empty_color: Vec4::new(0.1, 0.0, 0.0, 0.1),
+    }
+  }
 }
 
 pub struct LodRenderData {
@@ -92,6 +112,19 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         } else {
           debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
         }
+      }
+    }
+
+    if settings.debug_render_vertices {
+      debug_renderer.draw_points(self.vertices.iter().map(|v| v.position), settings.debug_render_vertex_color, settings.debug_render_vertex_point_size)
+    }
+    if settings.debug_render_edges {
+      for draw in &self.draws {
+        debug_renderer.draw_triangles_wireframe_indexed(
+          self.vertices.iter().map(|v| v.position),
+          self.indices[draw.indices.start as usize..draw.indices.end as usize].iter().map(|i| draw.base_vertex as u32 + *i as u32),
+          settings.debug_render_edge_color,
+        );
       }
     }
 

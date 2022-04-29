@@ -204,9 +204,21 @@ impl Settings {
     ui: &mut Ui,
   ) -> bool {
     ui.collapsing_open_with_grid("LOD render data manager", "Grid", |ui| {
+      ui.label("Debug render vertices?");
+      ui.horizontal(|ui| {
+        ui.checkbox(&mut self.lod_render_data_settings.debug_render_vertices, "");
+        ui.drag_unlabelled_range(&mut self.lod_render_data_settings.debug_render_vertex_point_size, 0.1, 0.0..=10.0);
+        ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_vertex_color, Alpha::OnlyBlend);
+      });
+      ui.end_row();
+      ui.label("Debug render edges?");
+      ui.horizontal(|ui| {
+        ui.checkbox(&mut self.lod_render_data_settings.debug_render_edges, "");
+        ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_edge_color, Alpha::OnlyBlend);
+      });
       ui.end_row();
       ui.label("Debug render octree nodes?");
-      ui.grid("Debug rendering", |ui| {
+      ui.horizontal(|ui| {
         ui.checkbox(&mut self.lod_render_data_settings.debug_render_octree_nodes, "");
         ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_color, Alpha::OnlyBlend);
         ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
@@ -227,7 +239,7 @@ impl Settings {
     ui: &mut Ui,
     lod_render_data: &LodRenderData,
   ) {
-    ui.collapsing_open_with_grid("LOD render data", "Grid", |ui| {
+    ui.collapsing_with_grid("LOD render data", "Grid", |ui| {
       ui.label("# vertices");
       ui.monospace(format!("{}", lod_render_data.vertex_buffer.len));
       ui.end_row();
@@ -250,7 +262,7 @@ impl Settings {
     &mut self,
     ui: &mut Ui,
   ) {
-    ui.collapsing_open_with_grid("Stars renderer", "Grid", |ui| {
+    ui.collapsing_with_grid("Stars renderer", "Grid", |ui| {
       ui.label("Stars threshold");
       ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_threshold, 0.1, 0.0..=1000.0);
       ui.end_row();

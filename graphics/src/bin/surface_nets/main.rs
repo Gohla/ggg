@@ -11,7 +11,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use voxel::chunk::{ChunkSize, ChunkMesh, GenericChunkSize};
+use voxel::chunk::{ChunkMesh, ChunkSize, GenericChunkSize};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
@@ -127,7 +127,7 @@ impl app::Application for SurfaceNetsDemo {
     self.surface_nets_debugging.debug_draw(&mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
-      chunk_vertices.indices().into_iter().copied(),
+      chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);

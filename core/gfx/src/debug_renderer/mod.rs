@@ -134,7 +134,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn draw_lines_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u16>, col: Vec4) {
+  pub fn draw_lines_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u32>, col: Vec4) {
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
       pipeline.push_vertices_and_indices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)), indices);
       pipeline.upload_buffers = true;
@@ -148,7 +148,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn draw_line_vertices_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u16>) {
+  pub fn draw_line_vertices_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u32>) {
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
       pipeline.push_vertices_and_indices(vertices, indices);
       pipeline.upload_buffers = true;
@@ -213,7 +213,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn draw_triangles_wireframe_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u16>, col: Vec4) {
+  pub fn draw_triangles_wireframe_indexed(&mut self, positions: impl IntoIterator<Item=Vec3>, indices: impl IntoIterator<Item=u32>, col: Vec4) {
     if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
       pipeline.push_vertices_and_indices(positions.into_iter().map(|pos| RegularVertex::new(pos, col)), indices);
       pipeline.upload_buffers = true;
@@ -227,7 +227,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn draw_triangle_vertices_wireframe_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u16>) {
+  pub fn draw_triangle_vertices_wireframe_indexed(&mut self, vertices: impl IntoIterator<Item=RegularVertex>, indices: impl IntoIterator<Item=u32>) {
     if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
       pipeline.push_vertices_and_indices(vertices, indices);
       pipeline.upload_buffers = true;
@@ -305,7 +305,7 @@ struct DebugRendererPipeline<V> {
   index_buffer: GfxBuffer,
   upload_buffers: bool,
   vertices: Vec<V>,
-  indices: Vec<u16>,
+  indices: Vec<u32>,
   label: &'static str,
 }
 
@@ -358,12 +358,12 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
   }
 
   #[inline]
-  fn next_index(&self) -> u16 {
-    self.vertices.len() as u16
+  fn next_index(&self) -> u32 {
+    self.vertices.len() as u32
   }
 
   #[inline]
-  fn push_vertex(&mut self, vertex: V) -> u16 {
+  fn push_vertex(&mut self, vertex: V) -> u32 {
     let index = self.next_index();
     self.push_index(index);
     self.push_vertex_without_index(vertex);
@@ -371,7 +371,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
   }
 
   #[inline]
-  fn push_index(&mut self, index: u16) {
+  fn push_index(&mut self, index: u32) {
     self.indices.push(index);
   }
 
@@ -383,8 +383,8 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
   }
 
   #[inline]
-  fn push_vertices_and_indices(&mut self, vertices: impl IntoIterator<Item=V>, indices: impl IntoIterator<Item=u16>) {
-    let base = self.vertices.len() as u16;
+  fn push_vertices_and_indices(&mut self, vertices: impl IntoIterator<Item=V>, indices: impl IntoIterator<Item=u32>) {
+    let base = self.vertices.len() as u32;
     self.vertices.extend(vertices);
     self.indices.extend(indices.into_iter().map(|idx| base + idx));
   }
@@ -410,7 +410,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     if !self.indices.is_empty() {
-      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+      render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
       render_pass.draw_indexed(0..self.index_buffer.len as u32, 0, 0..1);
     } else {
       render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
