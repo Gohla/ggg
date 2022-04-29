@@ -22,7 +22,11 @@ pub struct StarsRenderer {
 pub struct StarsRendererSettings {
   pub stars_threshold: f32,
   pub stars_exposure: f32,
-  pub stars_distance: f32,
+  pub stars_noise_frequency: f32,
+  pub temperature_noise_frequency: f32,
+  pub temperature_minimum: f32,
+  pub temperature_maximum: f32,
+  pub temperature_power: f32,
 }
 
 impl Default for StarsRendererSettings {
@@ -30,7 +34,11 @@ impl Default for StarsRendererSettings {
     Self {
       stars_threshold: 10.0,
       stars_exposure: 50.0,
-      stars_distance: 500.0,
+      stars_noise_frequency: 500.0,
+      temperature_noise_frequency: 100.0,
+      temperature_minimum: 1500.0,
+      temperature_maximum: 65000.0,
+      temperature_power: 4.0
     }
   }
 }
@@ -101,10 +109,16 @@ impl StarsRenderer {
 #[derive(Default, Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Uniform {
   screen_size: Vec4,
-  view_projection: Mat4,
+  view_inverse: Mat4,
+
   stars_threshold: f32,
   stars_exposure: f32,
-  stars_distance: f32,
+  stars_noise_frequency: f32,
+  temperature_noise_frequency: f32,
+
+  temperature_minimum: f32,
+  temperature_maximum: f32,
+  temperature_power: f32,
   _dummy: f32,
 }
 
@@ -117,13 +131,17 @@ impl Uniform {
 
   #[inline]
   pub fn update_view_projection(&mut self, camera: &Camera) {
-    self.view_projection = camera.get_view_inverse_matrix();
+    self.view_inverse = camera.get_view_inverse_matrix();
   }
 
   #[inline]
   pub fn update_settings(&mut self, settings: &StarsRendererSettings) {
     self.stars_threshold = settings.stars_threshold;
     self.stars_exposure = settings.stars_exposure;
-    self.stars_distance = settings.stars_distance;
+    self.stars_noise_frequency = settings.stars_noise_frequency;
+    self.temperature_noise_frequency = settings.temperature_noise_frequency;
+    self.temperature_minimum = settings.temperature_minimum;
+    self.temperature_maximum = settings.temperature_maximum;
+    self.temperature_power = settings.temperature_power;
   }
 }

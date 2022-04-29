@@ -45,10 +45,16 @@ vec3 Unity_Blackbody_float(float Temperature) {
 
 layout(std140, set = 0, binding = 0) uniform Uniform {
   vec4 screen_size;
-  mat4 view_projection;
+  mat4 view_inverse;
+
   float stars_threshold;
   float stars_exposure;
-  float stars_distance;
+  float stars_noise_frequency;
+  float temperature_noise_frequency;
+
+  float temperature_minimum;
+  float temperature_maximum;
+  float temperature_power;
 };
 layout(location = 0) out vec4 out_col;
 
@@ -56,15 +62,15 @@ void main() {
   // Normalized pixel coordinates (from 0 to 1, or is it -0.5 to 0.5?)
   vec2 uv = gl_FragCoord.xy / screen_size.xy - 0.5;
   uv.x *= screen_size.x / screen_size.y;
-  uv.x *= -1.0; // Flip x because for some reason x rotation seems to be inversed?
+  uv.x *= -1.0;// Note: Flip x because for some reason x rotation seems to be inversed?
 
   // Stars computation:
-  vec3 stars_direction = (view_projection * normalize(vec4(uv, -1.0, 0.0))).xyz;
-  float stars = pow(clamp(noise(stars_direction * stars_distance), 0.0f, 1.0f), stars_threshold) * stars_exposure;
+  vec3 stars_direction = (view_inverse * normalize(vec4(uv, -1.0, 0.0))).xyz;// Note: Also flip z here.
+  float stars = pow(clamp(noise(stars_direction * stars_noise_frequency), 0.0f, 1.0f), stars_threshold) * stars_exposure;
 
   // star color by randomized temperature
-  float stars_temperature = noise(stars_direction * 150.0) * 0.5 + 0.5;
-  vec3 stars_color = Unity_Blackbody_float(mix(1500.0, 65000.0, pow(stars_temperature, 4.0)));
+  float stars_temperature = noise(stars_direction * temperature_noise_frequency) * 0.5 + 0.5;
+  vec3 stars_color = Unity_Blackbody_float(mix(temperature_minimum, temperature_maximum, pow(stars_temperature, temperature_power)));
 
   // Output to screen
   out_col = vec4(stars_color * stars, 1.0);

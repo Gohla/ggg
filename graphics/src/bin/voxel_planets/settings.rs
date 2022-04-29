@@ -251,14 +251,26 @@ impl Settings {
     ui: &mut Ui,
   ) {
     ui.collapsing_open_with_grid("Stars renderer", "Grid", |ui| {
-      ui.label("Threshold");
+      ui.label("Stars threshold");
       ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_threshold, 0.1, 0.0..=1000.0);
       ui.end_row();
-      ui.label("Exposure");
+      ui.label("Stars exposure");
       ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_exposure, 0.1, 0.0..=1000.0);
       ui.end_row();
-      ui.label("Distance");
-      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_distance, 0.1, 0.0..=1000.0);
+      ui.label("Stars noise frequency");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_noise_frequency, 0.5, 0.0..=2000.0);
+      ui.end_row();
+      ui.label("Temperature noise frequency");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.temperature_noise_frequency, 0.5, 0.0..=2000.0);
+      ui.end_row();
+      ui.label("Temperature minimum");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.temperature_minimum, 1.0, 0.0..=100000.0);
+      ui.end_row();
+      ui.label("Temperature maximum");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.temperature_maximum, 1.0, 0.0..=100000.0);
+      ui.end_row();
+      ui.label("Temperature power");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.temperature_power, 0.01, 0.0..=20.0);
       ui.end_row();
     });
   }
