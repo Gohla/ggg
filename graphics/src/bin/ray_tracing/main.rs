@@ -10,8 +10,8 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
+use gfx::full_screen_triangle::FullScreenTriangle;
 use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -45,6 +45,7 @@ pub struct RayTracing {
   uniform_buffer: GfxBuffer,
   static_bind_group: BindGroup,
 
+  full_screen_triangle: FullScreenTriangle,
   render_pipeline: RenderPipeline,
 
   camera_aperture: f32,
@@ -70,9 +71,9 @@ impl app::Application for RayTracing {
       .with_label("Ray tracing static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation_for_bin!("vert")) };
+    let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
     let fragment_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation_for_bin!("frag")) };
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+    let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder()
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_layout_label("Ray tracing pipeline layout")
@@ -83,6 +84,7 @@ impl app::Application for RayTracing {
       uniform_buffer,
       static_bind_group,
 
+      full_screen_triangle,
       render_pipeline,
 
       camera_aperture,
@@ -140,7 +142,7 @@ impl app::Application for RayTracing {
     render_pass.push_debug_group("Trace rays");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);
-    render_pass.draw(0..3, 0..1);
+    self.full_screen_triangle.draw(&mut render_pass);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
   }

@@ -127,6 +127,13 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
 
   /// Ignores the previously set `color_attachments` and `depth_stencil_attachment` if `gfx` has a `depth_texture`.
   #[inline]
+  pub fn begin_render_pass_for_gfx_frame_simple(self, gfx: &'a Gfx, frame: &'a mut Frame, attach_depth_stencil: bool, clear: bool) -> RenderPass<'a> {
+    let ops = if clear { Operations::default() } else { Operations { load: LoadOp::Load, store: true } };
+    self.begin_render_pass_for_gfx_frame(gfx, frame, attach_depth_stencil, ops)
+  }
+
+  /// Ignores the previously set `color_attachments` and `depth_stencil_attachment` if `gfx` has a `depth_texture`.
+  #[inline]
   pub fn begin_render_pass_for_gfx_frame_with_clear(self, gfx: &'a Gfx, frame: &'a mut Frame, attach_depth_stencil: bool) -> RenderPass<'a> {
     self.begin_render_pass_for_gfx_frame(gfx, frame, attach_depth_stencil, Operations::default())
   }

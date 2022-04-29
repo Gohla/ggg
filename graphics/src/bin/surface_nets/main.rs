@@ -117,6 +117,7 @@ impl app::Application for SurfaceNetsDemo {
     self.voxel_renderer.render_chunk_vertices(
       gfx,
       &mut frame,
+      true,
       &chunk_vertices,
     );
 

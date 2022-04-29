@@ -18,8 +18,10 @@ pub mod bind_group;
 pub mod camera;
 pub mod texture_def;
 
-pub mod debug_renderer;
 pub mod display_math;
+
+pub mod debug_renderer;
+pub mod full_screen_triangle;
 
 #[derive(Debug)]
 pub struct Gfx {

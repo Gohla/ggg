@@ -94,9 +94,10 @@ impl VoxelRenderer {
     &self,
     gfx: &Gfx,
     frame: &mut Frame,
+    clear: bool,
     lod_mesh: &LodRenderData,
   ) {
-    let mut render_pass = self.create_render_pass(gfx, frame);
+    let mut render_pass = self.create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render LOD mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -112,6 +113,7 @@ impl VoxelRenderer {
     &self,
     gfx: &Gfx,
     frame: &mut Frame,
+    clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
     let vertex_buffer = BufferBuilder::new()
@@ -122,7 +124,7 @@ impl VoxelRenderer {
       .with_index_usage()
       .with_label("Transvoxel demo index buffer")
       .build_with_data(&gfx.device, &chunk_vertices.indices());
-    let mut render_pass = self.create_render_pass(gfx, frame);
+    let mut render_pass = self.create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -136,9 +138,10 @@ impl VoxelRenderer {
     &'a self,
     gfx: &'a Gfx,
     frame: &'a mut Frame,
+    clear: bool,
   ) -> RenderPass {
     RenderPassBuilder::new()
       .with_label("Voxel render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, frame, true)
+      .begin_render_pass_for_gfx_frame_simple(gfx, frame, true, clear)
   }
 }

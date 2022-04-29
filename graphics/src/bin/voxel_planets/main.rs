@@ -18,8 +18,10 @@ use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
 use crate::settings::Settings;
+use crate::stars::StarsRenderer;
 
 pub mod settings;
+pub mod stars;
 
 pub struct VoxelPlanets {
   camera: Camera,
@@ -30,6 +32,7 @@ pub struct VoxelPlanets {
 
   depth_texture: GfxTexture,
 
+  stars_renderer: StarsRenderer,
   voxel_renderer: VoxelRenderer,
 
   lod_render_data_manager: Box<dyn LodRenderDataManager<ChunkSize16>>,
@@ -65,6 +68,7 @@ impl app::Application for VoxelPlanets {
 
     let depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
 
+    let stars_renderer = StarsRenderer::new(gfx, &camera);
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
@@ -85,6 +89,7 @@ impl app::Application for VoxelPlanets {
 
       depth_texture,
 
+      stars_renderer,
       voxel_renderer,
 
       lod_render_data_manager,
@@ -97,6 +102,7 @@ impl app::Application for VoxelPlanets {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
     self.depth_texture = TextureBuilder::new_depth_32_float(viewport).build(&gfx.device);
+    self.stars_renderer.screen_resize(screen_size);
   }
 
 
@@ -129,8 +135,13 @@ impl app::Application for VoxelPlanets {
         self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
       }
       self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
+      self.settings.draw_stars_renderer_settings(ui);
     });
 
+    // Render stars
+    self.stars_renderer.render(gfx, &mut frame, &self.camera, &self.settings.stars_renderer_settings);
+
+    // Render voxels
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.settings.light.uniform);
     let model = self.lod_render_data.model;
@@ -138,9 +149,11 @@ impl app::Application for VoxelPlanets {
     self.voxel_renderer.render_lod_mesh(
       gfx,
       &mut frame,
+      false,
       &self.lod_render_data,
     );
 
+    // Debug render
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())

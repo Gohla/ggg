@@ -27,6 +27,8 @@ pub struct Camera {
   pub show_debug_gui: bool,
   // Internals
   position: Vec3,
+  view: Mat4,
+  view_inverse: Mat4,
   view_projection: Mat4,
   view_projection_inverse: Mat4,
 }
@@ -122,6 +124,8 @@ impl Camera {
       show_debug_gui: false,
 
       position: Vec3::zero(),
+      view: Mat4::identity(),
+      view_inverse: Mat4::identity().inversed(),
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
     }
@@ -159,9 +163,21 @@ impl Camera {
   #[inline]
   pub fn get_position(&self) -> Vec3 { self.position }
 
+  /// Gets the view matrix.
+  #[inline]
+  pub fn get_view_matrix(&self) -> Mat4 { self.view }
+
+  /// Gets the inversed view matrix.
+  #[inline]
+  pub fn get_view_inverse_matrix(&self) -> Mat4 { self.view_inverse }
+
   /// Gets the view-projection matrix.
   #[inline]
   pub fn get_view_projection_matrix(&self) -> Mat4 { self.view_projection }
+
+  /// Gets the inversed view-projection matrix.
+  #[inline]
+  pub fn get_view_projection_inverse_matrix(&self) -> Mat4 { self.view_projection_inverse }
 
   /// Converts screen coordinates (in pixels, relative to the top-left of the screen) to view coordinates (in meters,
   /// relative to the center of the screen).
@@ -212,13 +228,12 @@ impl Camera {
         Rotor3::from_euler_angles(0.0, self.arcball.rotation_around_x, self.arcball.rotation_around_y).rotate_vec(&mut position);
         position
       }
-      MovementType::Fly => {
-        Vec3::zero()
-      }
+      MovementType::Fly => Vec3::zero(),
     };
 
     // View matrix.
-    let view = look_at_lh(self.position, self.target, Vec3::unit_y());
+    self.view = look_at_lh(self.position, self.target, Vec3::unit_y());
+    self.view_inverse = self.view.inversed();
 
     // Projection matrix
     let aspect_ratio = width / height;
@@ -238,9 +253,8 @@ impl Camera {
       }
     };
 
-    let view_projection = projection * view;
-    self.view_projection = view_projection;
-    self.view_projection_inverse = view_projection.inversed();
+    self.view_projection = projection * self.view;
+    self.view_projection_inverse = self.view_projection.inversed();
 
     if !self.show_debug_gui { return; }
 
@@ -310,13 +324,13 @@ impl Camera {
       });
       ui.collapsing_with_grid("Matrices", "Grid", |ui| {
         ui.label("View matrix");
-        ui.show_mat4(&view);
+        ui.show_mat4(&self.view);
         ui.end_row();
         ui.label("Projection matrix");
         ui.show_mat4(&projection);
         ui.end_row();
         ui.label("View-projection matrix");
-        ui.show_mat4(&view_projection);
+        ui.show_mat4(&self.view_projection);
         ui.end_row();
         ui.label("View-projection matrix inverse");
         ui.show_mat4(&self.view_projection_inverse);

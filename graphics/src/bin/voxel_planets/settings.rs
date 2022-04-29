@@ -17,6 +17,8 @@ use voxel::transvoxel::Transvoxel;
 use voxel::uniform::LightSettings;
 use voxel::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings, Volume};
 
+use crate::stars::StarsRendererSettings;
+
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum VolumeType {
   Sphere,
@@ -56,8 +58,9 @@ pub struct Settings {
   pub lod_octmap_transform: Isometry3,
 
   pub lod_render_data_settings: LodRenderDataSettings,
-
   pub auto_update: bool,
+
+  pub stars_renderer_settings: StarsRendererSettings,
 }
 
 type C16 = GenericChunkSize<16>;
@@ -239,6 +242,23 @@ impl Settings {
       ui.end_row();
       ui.label("# draw commands");
       ui.monospace(format!("{}", lod_render_data.draws.len()));
+      ui.end_row();
+    });
+  }
+
+  pub fn draw_stars_renderer_settings(
+    &mut self,
+    ui: &mut Ui,
+  ) {
+    ui.collapsing_open_with_grid("Stars renderer", "Grid", |ui| {
+      ui.label("Threshold");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_threshold, 0.1, 0.0..=1000.0);
+      ui.end_row();
+      ui.label("Exposure");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_exposure, 0.1, 0.0..=1000.0);
+      ui.end_row();
+      ui.label("Distance");
+      ui.drag_unlabelled_range(&mut self.stars_renderer_settings.stars_distance, 0.1, 0.0..=1000.0);
       ui.end_row();
     });
   }

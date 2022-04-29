@@ -118,6 +118,7 @@ impl app::Application for TransvoxelDemo {
     self.voxel_renderer.render_chunk_vertices(
       gfx,
       &mut frame,
+      true,
       &chunk_vertices,
     );
 
