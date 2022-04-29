@@ -1,12 +1,13 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="3.DB voxel -- Octree-Sphere" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="z. voxel">
-    <option name="command" value="bench --package voxel --profile=devbench -- Octree-Sphere" />
+  <configuration default="false" name="0.DB voxel -- Octree-Sphere-Transvoxel" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
+    <option name="command" value="bench --package voxel --profile=devbench -- Octree-Sphere-Transvoxel" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
     <option name="allFeatures" value="false" />
     <option name="emulateTerminal" value="false" />
     <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
     <option name="backtrace" value="SHORT" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />

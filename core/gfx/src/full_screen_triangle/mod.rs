@@ -9,7 +9,7 @@ pub struct FullScreenTriangle {
 
 impl<'a> FullScreenTriangle {
   pub fn new(device: &Device) -> Self {
-    let vertex_shader = device.create_shader_module(&include_shader!("full_screen_quad/vert"));
+    let vertex_shader = device.create_shader_module(&include_shader!("full_screen_triangle/vert"));
     Self { vertex_shader }
   }
 

@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh, Vertex, voxel_index_from_xyz, VoxelIndex};
+use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex, voxel_index_from_xyz, VoxelIndex};
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
@@ -26,15 +26,15 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min: UVec3,
     step: u32,
     chunk_samples: &ChunkSamples<C>,
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
     [u16; Self::SHARED_INDICES_SIZE]:,
   {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       let mut cell_index_to_vertex_index = [u16::MAX; Self::SHARED_INDICES_SIZE];
-      Self::extract_global_positions(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_vertices);
-      Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_vertices);
+      Self::extract_global_positions(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
+      Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
   }
 
@@ -43,7 +43,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
   {
@@ -53,7 +53,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell = Cell::new(x, y, z);
           let cell_index = cell.to_index::<C>().into_usize();
           if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
-            let vertex_index = chunk_vertices.push_vertex(Vertex { position });
+            let vertex_index = chunk_mesh.push_vertex(Vertex { position });
             debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
             debug_assert!(cell_index_to_vertex_index[cell_index] == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
             debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
@@ -201,7 +201,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn extract_quads(
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -213,7 +213,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let min_voxel_index = cell.to_min_voxel_index::<C>();
           let vertex_index = cell_index_to_vertex_index[cell_index.into_usize()];
           if vertex_index == u16::MAX { continue; }
-          Self::extract_quad(cell, cell_index, min_voxel_index, chunk_sample_array, cell_index_to_vertex_index, chunk_vertices);
+          Self::extract_quad(cell, cell_index, min_voxel_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
         }
       }
     }
@@ -225,7 +225,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min_voxel_index: VoxelIndex,
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -234,7 +234,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       Self::maybe_make_quad(
         chunk_sample_array,
         cell_index_to_vertex_index,
-        chunk_vertices,
+        chunk_mesh,
         min_voxel_index,
         min_voxel_index + Self::ADD_X_VOXEL_INDEX_OFFSET,
         cell_index,
@@ -247,7 +247,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       Self::maybe_make_quad(
         chunk_sample_array,
         cell_index_to_vertex_index,
-        chunk_vertices,
+        chunk_mesh,
         min_voxel_index,
         min_voxel_index + Self::ADD_Y_VOXEL_INDEX_OFFSET,
         cell_index,
@@ -260,7 +260,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       Self::maybe_make_quad(
         chunk_sample_array,
         cell_index_to_vertex_index,
-        chunk_vertices,
+        chunk_mesh,
         min_voxel_index,
         min_voxel_index + Self::ADD_Z_VOXEL_INDEX_OFFSET,
         cell_index,
@@ -280,7 +280,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn maybe_make_quad(
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
     voxel_index_a: VoxelIndex,
     voxel_index_b: VoxelIndex,
     cell_index: CellIndex,
@@ -305,10 +305,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
     let v3 = cell_index_to_vertex_index[(cell_index - axis_c_cell_index_offset).into_usize()];
     let v4 = cell_index_to_vertex_index[(cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset).into_usize()];
     let (pos1, pos2, pos3, pos4) = (
-      chunk_vertices.vertices()[v1 as usize].position,
-      chunk_vertices.vertices()[v2 as usize].position,
-      chunk_vertices.vertices()[v3 as usize].position,
-      chunk_vertices.vertices()[v4 as usize].position,
+      chunk_mesh.vertices()[v1 as usize].position,
+      chunk_mesh.vertices()[v2 as usize].position,
+      chunk_mesh.vertices()[v3 as usize].position,
+      chunk_mesh.vertices()[v4 as usize].position,
     );
     // Split the quad along the shorter axis, rather than the longer one.
     let distance_a = (pos4 - pos1).mag_sq(); // pos1.distance_squared(pos4)
@@ -324,7 +324,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     } else {
       [v2, v4, v3, v2, v3, v1]
     };
-    chunk_vertices.extend_indices_from_slice(&quad);
+    chunk_mesh.extend_indices_from_slice(&quad);
   }
 }
 

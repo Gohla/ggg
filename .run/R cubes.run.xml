@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="R cubes" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="3.R cubes" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="1. demo">
     <option name="command" value="run --bin cubes" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
@@ -7,6 +7,7 @@
     <option name="allFeatures" value="false" />
     <option name="emulateTerminal" value="false" />
     <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
     <option name="backtrace" value="SHORT" />
     <envs />
     <option name="isRedirectInput" value="false" />

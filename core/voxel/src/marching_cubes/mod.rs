@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh, Vertex};
+use crate::chunk::{ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex};
 use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
@@ -35,7 +35,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     min: UVec3,
     step: u32,
     chunk_samples: &ChunkSamples<C>,
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:,
     [u16; Self::SHARED_INDICES_SIZE]:,
@@ -46,7 +46,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
         for v in 0..C::CELLS_IN_CHUNK_ROW {
           for u in 0..C::CELLS_IN_CHUNK_ROW {
             let cell = RegularCell::new(u, v, w);
-            Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_vertices);
+            Self::extract_cell(cell, min, step, chunk_sample_array, &mut shared_indices, chunk_mesh);
           }
         }
       }
@@ -60,7 +60,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) where
     [f32; C::VOXELS_IN_CHUNK_USIZE]:
   {
@@ -79,7 +79,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     let global_voxels = Self::global_coordinates(min, step, &local_coordinates);
     let mut cell_vertices_indices = [0; 12];
     for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
-      let index = Self::create_or_reuse_vertex(vd, cell, &global_voxels, &values, shared_indices, chunk_vertices);
+      let index = Self::create_or_reuse_vertex(vd, cell, &global_voxels, &values, shared_indices, chunk_mesh);
       cell_vertices_indices[i] = index;
     }
     for t in 0..triangle_count {
@@ -89,9 +89,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
       let global_index_1 = cell_vertices_indices[v1_index_in_cell as usize];
       let global_index_2 = cell_vertices_indices[v2_index_in_cell as usize];
       let global_index_3 = cell_vertices_indices[v3_index_in_cell as usize];
-      chunk_vertices.push_index(global_index_1);
-      chunk_vertices.push_index(global_index_2);
-      chunk_vertices.push_index(global_index_3);
+      chunk_mesh.push_index(global_index_1);
+      chunk_mesh.push_index(global_index_2);
+      chunk_mesh.push_index(global_index_3);
     }
   }
 
@@ -170,11 +170,11 @@ impl<C: ChunkSize> MarchingCubes<C> {
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
     shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) -> u16 {
     if vertex_data.new_vertex() {
       // Create a new vertex and index, and share the index.
-      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_vertices);
+      let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_mesh);
       let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index() as usize);
       debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
       debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
@@ -201,7 +201,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
         index
       } else {
         // Create a new vertex and index, but this vertex will never be shared, as it occurs on the minimal boundary.
-        let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_vertices);
+        let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_mesh);
         index
       }
     }
@@ -212,7 +212,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     vertex_data: &RegularVertexData,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
-    chunk_vertices: &mut ChunkMesh,
+    chunk_mesh: &mut ChunkMesh,
   ) -> u16 {
     let voxel_a_index = vertex_data.voxel_a_index();
     let voxel_b_index = vertex_data.voxel_b_index();
@@ -222,7 +222,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     let pos_high = global_voxels[voxel_b_index as usize];
     let value_high = values[voxel_b_index as usize];
     let position = Self::vertex_position(pos_low, value_low, pos_high, value_high);
-    chunk_vertices.push_vertex(Vertex::new(position))
+    chunk_mesh.push_vertex(Vertex::new(position))
   }
 
   #[inline]

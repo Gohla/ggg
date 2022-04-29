@@ -64,7 +64,7 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   //mesh_cache: LruCache<AABB, Vec<Vertex>>,
 }
 
-impl<V: Volume + Clone + Send + 'static, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
+impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
@@ -97,7 +97,7 @@ impl<V: Volume + Clone + Send + 'static, C: ChunkSize, E: LodExtractor<C>> LodOc
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
-  pub fn do_update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
+  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
     let position = self.transform_inversed.transform_vec(position);
 
     for (aabb, lod_chunk) in self.rx.try_iter() {
@@ -203,7 +203,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
 
   #[inline]
   fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk, bool))> + '_>) {
-    let (transform, chunks) = self.do_update(position);
+    let (transform, chunks) = self.update(position);
     (transform, Box::new(chunks))
   }
 
