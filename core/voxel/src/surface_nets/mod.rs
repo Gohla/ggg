@@ -371,5 +371,10 @@ impl Voxel {
   pub const fn new(x: u32, y: u32, z: u32) -> Self {
     Self { x, y, z }
   }
+
+  #[inline]
+  pub fn to_index<C: ChunkSize>(&self) -> VoxelIndex {
+    C::voxel_index_from_xyz(self.x, self.y, self.z)
+  }
 }
 

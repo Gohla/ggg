@@ -3,9 +3,10 @@ use ultraviolet::{UVec3, Vec4};
 
 use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
+use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize, ChunkMesh};
-use voxel::surface_nets::SurfaceNets;
+use voxel::chunk::{ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize};
+use voxel::surface_nets::{Cell, SurfaceNets};
 
 use crate::C;
 
@@ -18,6 +19,7 @@ pub const STEP: u32 = 1;
 pub struct SurfaceNetsDebugging {
   surface_nets: SN,
   samples: ChunkSampleArray<C>,
+  cell: Cell,
 }
 
 impl SurfaceNetsDebugging {
@@ -31,7 +33,7 @@ impl SurfaceNetsDebugging {
 
   fn draw_window_contents(&mut self, ui: &mut Ui) {
     self.draw_cell_gui(ui);
-    // self.draw_data_gui(ui);
+    self.draw_data_gui(ui);
   }
 
   fn draw_cell_gui(&mut self, ui: &mut Ui) {
@@ -61,7 +63,7 @@ impl SurfaceNetsDebugging {
             ui.label(format!("{}", x));
           }
           ui.end_row();
-          for y in 0..C::VOXELS_IN_CHUNK_ROW {
+          for y in (0..C::VOXELS_IN_CHUNK_ROW).rev() {
             ui.label(format!("Y={}", y));
             for x in 0..C::VOXELS_IN_CHUNK_ROW {
               let sample = self.samples.sample_mut(UVec3::new(x, y, z));
@@ -80,83 +82,55 @@ impl SurfaceNetsDebugging {
     });
   }
 
-  // fn draw_data_gui(&mut self, ui: &mut Ui) {
-  //   let local_coordinates = SN::local_coordinates(RegularCell::new(0, 0, 0));
-  //   let global_coordinates = SN::global_coordinates(UVec3::zero(), STEP, &local_coordinates);
-  //   let values = SN::sample(&self.samples, &local_coordinates);
-  //   let case = SN::case(&values);
-  //   let cell_class = marching_cubes::tables::REGULAR_CELL_CLASS[case as usize] as usize;
-  //   let triangulation_info = marching_cubes::tables::REGULAR_CELL_DATA[cell_class];
-  //   let vertex_count = triangulation_info.get_vertex_count() as usize;
-  //   let triangle_count = triangulation_info.get_triangle_count() as usize;
-  //   let vertices_data = marching_cubes::tables::REGULAR_VERTEX_DATA[case as usize];
-  //
-  //   ui.collapsing_open_with_grid("Data", "Data Grid", |ui| {
-  //     ui.label("Case");
-  //     ui.monospace(format!("{case} (class: {cell_class})"));
-  //     ui.end_row();
-  //     ui.label("Counts");
-  //     ui.monospace(format!("Vertices: {vertex_count}, triangles: {triangle_count}"));
-  //     ui.end_row();
-  //   });
-  //
-  //   ui.collapsing_open_with_grid("Voxels", "Voxels Grid", |ui| {
-  //     ui.label("#");
-  //     ui.label("local");
-  //     ui.label("global");
-  //     ui.label("value");
-  //     ui.end_row();
-  //     for i in 0..8 {
-  //       let local = local_coordinates[i];
-  //       ui.monospace(format!("{}", i));
-  //       ui.monospace(format!("{}", local.display()));
-  //       ui.monospace(format!("{}", global_coordinates[i].display()));
-  //       let value = self.samples.sample_mut(local);
-  //       let response = ui.drag("", value, 0.01);
-  //       if response.secondary_clicked() {
-  //         *value *= -1.0;
-  //       }
-  //       if response.middle_clicked() {
-  //         *value = 0.0;
-  //       }
-  //       ui.end_row();
-  //     }
-  //   });
-  //
-  //   ui.collapsing_open_with_grid("Vertices", "Vertices", |ui| {
-  //     ui.label("#");
-  //     ui.label("-x?");
-  //     ui.label("-y?");
-  //     ui.label("-z?");
-  //     ui.label("new?");
-  //     ui.label("vtx idx");
-  //     ui.label("vox a idx");
-  //     ui.label("vox b idx");
-  //     ui.end_row();
-  //     for (i, vd) in vertices_data[0..vertex_count].iter().enumerate() {
-  //       ui.monospace(format!("{}", i));
-  //       ui.monospace(format!("{}", vd.subtract_u()));
-  //       ui.monospace(format!("{}", vd.subtract_v()));
-  //       ui.monospace(format!("{}", vd.subtract_w()));
-  //       ui.monospace(format!("{}", vd.new_vertex()));
-  //       ui.monospace(format!("{}", vd.vertex_index()));
-  //       ui.monospace(format!("{}", vd.voxel_a_index()));
-  //       ui.monospace(format!("{}", vd.voxel_b_index()));
-  //       ui.end_row();
-  //     }
-  //   });
-  //
-  //   ui.collapsing_open_with_grid("Triangulation", "Triangulation Grid", |ui| {
-  //     ui.label("#");
-  //     ui.label("triangle idxs");
-  //     ui.end_row();
-  //     for i in (0..triangle_count * 3).step_by(3) {
-  //       ui.monospace(format!("{}", i / 3));
-  //       ui.monospace(format!("{} {} {}", triangulation_info.vertex_index[i + 0], triangulation_info.vertex_index[i + 1], triangulation_info.vertex_index[i + 2]));
-  //       ui.end_row();
-  //     }
-  //   });
-  // }
+  fn draw_data_gui(&mut self, ui: &mut Ui) {
+    ui.collapsing_open("Cell Data", |ui| {
+      ui.horizontal(|ui| {
+        ui.label("Selected Cell");
+        ui.drag_range("x: ", &mut self.cell.x, 1, 0..=C::CELLS_IN_CHUNK_ROW - 1);
+        ui.drag_range("y: ", &mut self.cell.y, 1, 0..=C::CELLS_IN_CHUNK_ROW - 1);
+        ui.drag_range("z: ", &mut self.cell.z, 1, 0..=C::CELLS_IN_CHUNK_ROW - 1);
+      });
+
+      let local_voxel_positions = SN::local_voxel_positions(self.cell);
+      let values = SN::sample(&self.samples, &local_voxel_positions);
+      let case = SN::case(&values);
+      let global_voxel_positions = SN::global_voxel_positions(UVec3::zero(), STEP, &local_voxel_positions);
+
+      ui.grid("Cell Data Grid", |ui| {
+        ui.label("Case");
+        ui.monospace(format!("{}", case));
+        ui.end_row();
+        ui.label("Cell index");
+        ui.monospace(format!("{}", self.cell.to_index::<C>()));
+        ui.end_row();
+      });
+
+      ui.collapsing_open_with_grid("Voxels", "Voxels Grid", |ui| {
+        ui.label("#");
+        ui.label("voxel idx");
+        ui.label("local");
+        ui.label("global");
+        ui.label("value");
+        ui.end_row();
+        for i in 0..8 {
+          let local = local_voxel_positions[i];
+          ui.monospace(format!("{}", i));
+          ui.monospace(format!("{}", local.display()));
+          ui.monospace(format!("{}", global_voxel_positions[i].display()));
+          let value = self.samples.sample_mut(local);
+          let response = ui.drag("", value, 0.01);
+          if response.secondary_clicked() {
+            *value *= -1.0;
+          }
+          if response.middle_clicked() {
+            *value = 0.0;
+          }
+          ui.end_row();
+        }
+      });
+    });
+  }
+
 
   pub fn extract_chunk(&self, chunk_vertices: &mut ChunkMesh) {
     self.surface_nets.extract_chunk(MIN, STEP, &ChunkSamples::Mixed(self.samples), chunk_vertices);
