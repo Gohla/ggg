@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, Sender};
 
+use lru::LruCache;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use ultraviolet::{Isometry3, Vec3};
 
@@ -17,7 +18,7 @@ pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,
   pub thread_pool_threads: usize,
-  pub mesh_cache_size: usize,
+  pub chunk_mesh_cache_size: usize,
 }
 
 impl LodOctmapSettings {
@@ -34,7 +35,7 @@ impl Default for LodOctmapSettings {
       total_size: 4096,
       lod_factor: 1.0,
       thread_pool_threads: 10,
-      mesh_cache_size: 1024,
+      chunk_mesh_cache_size: 8192,
     }
   }
 }
@@ -54,14 +55,14 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
 
   active_aabbs: HashSet<AABB>,
   keep_aabbs: HashSet<AABB>,
-  lod_chunk_vertices: HashMap<AABB, (E::Chunk, bool)>,
+  lod_chunk_meshes: HashMap<AABB, (E::Chunk, bool)>,
 
   requested_aabbs: HashSet<AABB>,
   thread_pool: ThreadPool,
   tx: Sender<(AABB, E::Chunk)>,
   rx: Receiver<(AABB, E::Chunk)>,
 
-  //mesh_cache: LruCache<AABB, Vec<Vertex>>,
+  chunk_mesh_cache: LruCache<AABB, E::Chunk>,
 }
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
@@ -83,14 +84,14 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
       active_aabbs: HashSet::new(),
       keep_aabbs: HashSet::new(),
-      lod_chunk_vertices: HashMap::new(),
+      lod_chunk_meshes: HashMap::new(),
 
       requested_aabbs: HashSet::new(),
       thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
       tx,
       rx,
 
-      //mesh_cache: LruCache::new(settings.mesh_cache_size),
+      chunk_mesh_cache: LruCache::new(settings.chunk_mesh_cache_size),
     }
   }
 
@@ -100,8 +101,8 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
     let position = self.transform_inversed.transform_vec(position);
 
-    for (aabb, lod_chunk) in self.rx.try_iter() {
-      self.lod_chunk_vertices.insert(aabb, (lod_chunk, true));
+    for (aabb, lod_chunk_mesh) in self.rx.try_iter() {
+      self.lod_chunk_meshes.insert(aabb, (lod_chunk_mesh, true));
       self.requested_aabbs.remove(&aabb);
     }
 
@@ -111,25 +112,27 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     self.update_root_node(position);
 
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      if let Some((lod_chunk_vertices, filled)) = self.lod_chunk_vertices.get_mut(removed) {
-        lod_chunk_vertices.clear();
-        *filled = false;
+      if let Some((lod_chunk_mesh, filled)) = self.lod_chunk_meshes.remove(removed) {
+        if filled {
+          self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);
+          // TODO: reuse the chunk mush returned by push by clearing it and using it for new chunk meshes?
+        }
       }
     }
 
-    let chunks = self.lod_chunk_vertices.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
+    let chunks = self.lod_chunk_meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
     (self.transform, chunks)
   }
 
   pub fn clear(&mut self) {
     self.keep_aabbs.clear();
     self.active_aabbs.clear();
-    for (_, (vertices, filled)) in &mut self.lod_chunk_vertices {
+    for (_, (vertices, filled)) in &mut self.lod_chunk_meshes {
       vertices.clear();
       *filled = false;
     }
+    self.chunk_mesh_cache.clear();
   }
-
 
   fn update_root_node(&mut self, position: Vec3) {
     let root = AABB::from_size(self.total_size);
@@ -175,10 +178,15 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 
   fn update_chunk(&mut self, aabb: AABB) -> bool {
-    let (chunk, filled) = self.lod_chunk_vertices.entry(aabb).or_default();
+    let (chunk_mesh, filled) = self.lod_chunk_meshes.entry(aabb).or_default();
     if *filled { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
-    let chunk = std::mem::take(chunk);
+    if let Some(cached_chunk_mesh) = self.chunk_mesh_cache.pop(&aabb) {
+      *chunk_mesh = cached_chunk_mesh;
+      *filled = true;
+      return true;
+    }
+    let chunk = std::mem::take(chunk_mesh);
     self.request_chunk(aabb, chunk);
     return false;
   }
