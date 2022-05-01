@@ -10,6 +10,7 @@ common = { path = "../common" }
 os = { path = "../os" }
 gfx = { path = "../gfx" }
 gui = { path = "../gui" }
+gui_widget = { path = "../gui_widget" }
 wgpu = "0.12"
 raw-window-handle = "0.4"
 egui = "0.18"
