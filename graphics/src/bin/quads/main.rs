@@ -13,7 +13,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -80,6 +80,7 @@ const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 
 pub struct Quads {
   camera: Camera,
+  camera_debugging: CameraDebugging,
 
   diffuse_bind_group: BindGroup,
 
@@ -101,6 +102,7 @@ impl app::Application for Quads {
   fn new(os: &Os, gfx: &Gfx) -> Self {
     let viewport = os.window.get_inner_size().physical;
     let camera = Camera::with_defaults_arcball_perspective(viewport);
+    let camera_debugging = CameraDebugging::default();
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
@@ -173,6 +175,7 @@ impl app::Application for Quads {
 
     Self {
       camera,
+      camera_debugging,
 
       diffuse_bind_group,
 
@@ -203,11 +206,12 @@ impl app::Application for Quads {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
+    self.camera_debugging.add_to_menu(ui);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera.update(&input.camera, frame.time.delta);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera.get_view_projection_matrix() }]);
 
     egui::Window::new("Quads").show(&gui_frame, |ui| {

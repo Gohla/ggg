@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::RangeInclusive;
 
-use egui::{CollapsingHeader, CollapsingResponse, color_picker, CtxRef, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
+use egui::{Align2, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
 use egui::color_picker::Alpha;
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
@@ -11,7 +11,7 @@ pub trait CtxRefWidgetsExt {
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
 }
 
-impl CtxRefWidgetsExt for &CtxRef {
+impl CtxRefWidgetsExt for &Context {
   #[inline]
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
     Window::new(title).show(self, add_contents)
@@ -54,6 +54,9 @@ pub trait UiWidgetsExt {
 
 
   fn edit_color_vec4(&mut self, vec: &mut Vec4, alpha: Alpha);
+
+
+  fn select_align2(&mut self, align: &mut Option<egui::Align2>);
 }
 
 impl UiWidgetsExt for Ui {
@@ -208,5 +211,26 @@ impl UiWidgetsExt for Ui {
     color_picker::color_edit_button_srgba(self, &mut color, alpha);
     let color: Rgba = color.into();
     *vec = Vec4::new(color.r(), color.g(), color.b(), color.a());
+  }
+
+
+  #[inline]
+  fn select_align2(&mut self, anchor: &mut Option<Align2>) {
+    ComboBox::from_id_source("Anchor")
+      .selected_text(match anchor {
+        None => "None",
+        Some(Align2::LEFT_TOP) => "Left Top",
+        Some(Align2::LEFT_BOTTOM) => "Left Bottom",
+        Some(Align2::RIGHT_TOP) => "Right Top",
+        Some(Align2::RIGHT_BOTTOM) => "Right Bottom",
+        Some(_) => "Other",
+      })
+      .show_ui(self, |ui| {
+        ui.selectable_value(anchor, None, "None");
+        ui.selectable_value(anchor, Some(Align2::LEFT_TOP), "Left Top");
+        ui.selectable_value(anchor, Some(Align2::LEFT_BOTTOM), "Left Bottom");
+        ui.selectable_value(anchor, Some(Align2::RIGHT_TOP), "Right Top");
+        ui.selectable_value(anchor, Some(Align2::RIGHT_BOTTOM), "Right Bottom");
+      });
   }
 }

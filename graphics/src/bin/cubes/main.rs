@@ -16,7 +16,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gui_widget::UiWidgetsExt;
@@ -64,6 +64,7 @@ impl Instance {
 
 pub struct Cubes {
   camera: Camera,
+  camera_debugging: CameraDebugging,
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
@@ -89,6 +90,7 @@ impl app::Application for Cubes {
     let viewport = os.window.get_inner_size().physical;
     let mut camera = Camera::with_defaults_arcball_perspective(viewport);
     camera.arcball.mouse_scroll_distance_speed = 100.0;
+    let camera_debugging = CameraDebugging::default();
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
@@ -152,6 +154,7 @@ impl app::Application for Cubes {
 
     Self {
       camera,
+      camera_debugging,
 
       uniform_buffer,
       instance_buffer,
@@ -185,11 +188,12 @@ impl app::Application for Cubes {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
+    self.camera_debugging.add_to_menu(ui);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera.update(&input.camera, frame.time.delta);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {

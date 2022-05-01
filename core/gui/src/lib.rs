@@ -1,10 +1,13 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::mem::size_of;
+use std::num::NonZeroU32;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedMesh, CtxRef, Event, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, Vec2};
-use egui::epaint::{Mesh, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, FilterMode, IndexFormat, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
+use egui::{ClippedPrimitive, Context, Event, ImageData, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta, Vec2};
+use egui::epaint::{Mesh, Primitive, Vertex};
+use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
@@ -14,10 +17,10 @@ use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
-use gfx::texture::TextureBuilder;
+use gfx::texture::{GfxTexture, TextureBuilder};
 
 pub struct Gui {
-  context: CtxRef,
+  context: Context,
   input: EguiRawInput,
 
   index_buffer: Option<GfxBuffer>,
@@ -26,8 +29,7 @@ pub struct Gui {
   _static_bind_group_layout: BindGroupLayout,
   static_bind_group: BindGroup,
   texture_bind_group_layout: BindGroupLayout,
-  font_image_bind_group: Option<BindGroup>,
-  previous_font_image_version: u64,
+  textures: HashMap<TextureId, (GfxTexture, BindGroup)>,
   _pipeline_layout: PipelineLayout,
   render_pipeline: RenderPipeline,
 }
@@ -64,6 +66,7 @@ impl Gui {
       ])
       .with_label("GUI texture bind group layout")
       .build(device);
+    let textures = HashMap::new();
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
       .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
@@ -91,7 +94,7 @@ impl Gui {
       .with_label("GUI render pipeline")
       .build(device);
     Self {
-      context: CtxRef::default(),
+      context: Context::default(),
       input: EguiRawInput::default(),
       index_buffer: None,
       vertex_buffer: None,
@@ -99,8 +102,7 @@ impl Gui {
       _static_bind_group_layout: static_bind_group_layout,
       static_bind_group,
       texture_bind_group_layout,
-      font_image_bind_group: None,
-      previous_font_image_version: 0,
+      textures,
       _pipeline_layout: pipeline_layout,
       render_pipeline,
     }
@@ -130,7 +132,7 @@ impl Gui {
 
     if process_mouse_input {
       // Mouse wheel delta // TODO: properly handle line to pixel conversion?
-      if !input.mouse_wheel_pixel_delta.is_zero() {
+      if !input.mouse_wheel_pixel_delta.is_zero() || !input.mouse_wheel_line_delta.is_zero() {
         self.input.events.push(Event::Scroll(Vec2::new(
           (input.mouse_wheel_pixel_delta.logical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
           (input.mouse_wheel_pixel_delta.logical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
@@ -233,7 +235,7 @@ impl Gui {
     screen_size: ScreenSize,
     elapsed_seconds: f64,
     delta_seconds: f64,
-  ) -> CtxRef {
+  ) -> Context {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
     self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
@@ -259,42 +261,20 @@ impl Gui {
     encoder: &mut CommandEncoder,
     surface_texture_view: &TextureView,
   ) {
-    // Update font image if no font image was created yet, or if the font image has changed.
-    let font_image = self.context.font_image();
-    if self.font_image_bind_group.is_none() || font_image.version != self.previous_font_image_version {
-      self.previous_font_image_version = font_image.version;
-      // Convert into Rgba8UnormSrgb format.
-      let mut pixels: Vec<u8> = Vec::with_capacity(font_image.pixels.len() * 4);
-      for srgba in font_image.srgba_pixels(1.0) {
-        pixels.push(srgba.r());
-        pixels.push(srgba.g());
-        pixels.push(srgba.b());
-        pixels.push(srgba.a());
-      }
-      // Create and write texture.
-      let texture = TextureBuilder::new()
-        .with_2d_size(font_image.width as u32, font_image.height as u32)
-        .with_rgba8_unorm_srgb_format()
-        .with_sampled_usage()
-        .with_texture_label("GUI font image")
-        .with_texture_view_label("GUI font image view")
-        .build(device);
-      texture.write_2d_rgba_texture_data(queue, pixels.as_slice());
-      // Create texture bind group.
-      let font_image_bind_group = BindGroupBuilder::new(&self.texture_bind_group_layout)
-        .with_entries(&[texture.create_bind_group_entry(0)])
-        .with_label("GUI font image bind group")
-        .build(device);
-      self.font_image_bind_group = Some(font_image_bind_group)
-    }
+    // End the frame to get output.
+    let full_output = self.context.end_frame();
 
-    // Get vertices to draw.
-    let (_output, shapes) = self.context.end_frame();
-    let clipped_meshes: Vec<ClippedMesh> = self.context.tessellate(shapes);
+    // Update textures
+    self.set_textures(device, queue, &full_output.textures_delta);
+
+    // Get primitives to render.
+    let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes);
 
     // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
     let index_buffer = {
-      let count: usize = clipped_meshes.iter().map(|cm| cm.1.indices.len()).sum();
+      let count: usize = clipped_primitives.iter()
+        .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
+        .sum();
       let size = (count * size_of::<u32>()) as BufferAddress;
       let mut buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(size, device));
       if buffer.size < size {
@@ -305,7 +285,9 @@ impl Gui {
       buffer
     };
     let vertex_buffer = {
-      let count: usize = clipped_meshes.iter().map(|cm| cm.1.vertices.len()).sum();
+      let count: usize = clipped_primitives.iter()
+        .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
+        .sum();
       let size = (count * size_of::<Vertex>()) as BufferAddress;
       let mut buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(size, device));
       if buffer.size < size {
@@ -325,18 +307,21 @@ impl Gui {
     #[derive(Debug)]
     struct Draw {
       clip_rect: Rect,
+      texture_id: TextureId,
       indices: Range<u32>,
       base_vertex: u64,
     }
-    let mut draws = Vec::with_capacity(clipped_meshes.len());
-    for ClippedMesh(clip_rect, Mesh { indices, vertices, .. }) in &clipped_meshes {
-      index_buffer.write_data(queue, index_buffer_offset, indices);
-      vertex_buffer.write_bytes(queue, vertex_buffer_offset, as_byte_slice(vertices));
-      draws.push(Draw { clip_rect: *clip_rect, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
-      index_offset += indices.len() as u32;
-      index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
-      vertex_offset += vertices.len() as u64;
-      vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
+    let mut draws = Vec::with_capacity(clipped_primitives.len());
+    for ClippedPrimitive { clip_rect, primitive } in clipped_primitives {
+      if let Primitive::Mesh(Mesh { indices, vertices, texture_id, .. }) = primitive {
+        index_buffer.write_data(queue, index_buffer_offset, &indices);
+        vertex_buffer.write_bytes(queue, vertex_buffer_offset, bytemuck::cast_slice(&vertices));
+        draws.push(Draw { clip_rect, texture_id, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
+        index_offset += indices.len() as u32;
+        index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
+        vertex_offset += vertices.len() as u64;
+        vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
+      }
     }
 
     // Render
@@ -347,13 +332,14 @@ impl Gui {
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
-      render_pass.set_bind_group(1, self.font_image_bind_group.as_ref().unwrap(), &[]);
+      let mut bound_texture_id = TextureId::default();
+      render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
       let scale_factor: f64 = screen_size.scale.into();
       let scale_factor = scale_factor as f32;
       let physical_width = screen_size.physical.width as u32;
       let physical_height = screen_size.physical.height as u32;
-      for Draw { clip_rect, indices, base_vertex } in draws {
+      for Draw { clip_rect, texture_id, indices, base_vertex } in draws {
         // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
         // Transform clip rect to physical pixels.
         let clip_min_x = scale_factor * clip_rect.min.x;
@@ -387,6 +373,10 @@ impl Gui {
         }
 
         render_pass.set_scissor_rect(x, y, width, height);
+        if texture_id != bound_texture_id {
+          bound_texture_id = texture_id;
+          render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
+        }
         // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
         render_pass.set_vertex_buffer(0, vertex_buffer.offset::<Vertex>(base_vertex));
         render_pass.draw_indexed(indices, 0, 0..1);
@@ -397,6 +387,108 @@ impl Gui {
     // Store index and vertex buffers (outside of render pass because it held a reference to these buffers).
     self.index_buffer = Some(index_buffer);
     self.vertex_buffer = Some(vertex_buffer);
+
+    // Free unused textures.
+    self.free_textures(&full_output.textures_delta);
+  }
+
+  fn set_textures(&mut self, device: &Device, queue: &Queue, textures_delta: &TexturesDelta) {
+    // From: https://github.com/hasenbanck/egui_wgpu_backend/blob/b2d3e7967351690c6425f37cd6d4ffb083a7e8e6/src/lib.rs#L379
+    for (texture_id, image_delta) in textures_delta.set.iter() {
+      let image_size = image_delta.image.size();
+      let origin = match image_delta.pos {
+        Some([x, y]) => Origin3d {
+          x: x as u32,
+          y: y as u32,
+          z: 0,
+        },
+        None => Origin3d::ZERO,
+      };
+      let alpha_srgb_pixels: Option<Vec<_>> = match &image_delta.image {
+        ImageData::Color(_) => None,
+        ImageData::Font(f) => Some(f.srgba_pixels(1.0).collect()),
+      };
+      let image_data: &[u8] = match &image_delta.image {
+        ImageData::Color(c) => bytemuck::cast_slice(c.pixels.as_slice()),
+        ImageData::Font(_) => {
+          // unwrap should never fail as alpha_srgb_pixels will have been set to `Some` above.
+          bytemuck::cast_slice(alpha_srgb_pixels.as_ref().unwrap().as_slice())
+        }
+      };
+      let image_size = Extent3d {
+        width: image_size[0] as u32,
+        height: image_size[1] as u32,
+        depth_or_array_layers: 1,
+      };
+      let image_data_layout = ImageDataLayout {
+        offset: 0,
+        bytes_per_row: NonZeroU32::new(4 * image_size.width),
+        rows_per_image: None,
+      };
+      let label_base = match texture_id {
+        TextureId::Managed(m) => format!("EGUI managed texture {}", m),
+        TextureId::User(u) => format!("EGUI user texture {}", u),
+      };
+      match self.textures.entry(*texture_id) {
+        Entry::Occupied(mut o) => match image_delta.pos {
+          None => {
+            let (texture, bind_group) = create_texture_and_bind_group(
+              device,
+              queue,
+              &label_base,
+              origin,
+              image_data,
+              image_data_layout,
+              image_size,
+              &self.texture_bind_group_layout,
+            );
+            let (texture, _) = o.insert((texture, bind_group));
+            texture.texture.destroy();
+          }
+          Some(_) => {
+            queue.write_texture(
+              ImageCopyTexture {
+                texture: &o.get().0.texture,
+                mip_level: 0,
+                origin,
+                aspect: TextureAspect::All,
+              },
+              image_data,
+              image_data_layout,
+              image_size,
+            );
+          }
+        },
+        Entry::Vacant(v) => {
+          let (texture, bind_group) = create_texture_and_bind_group(
+            device,
+            queue,
+            &label_base,
+            origin,
+            image_data,
+            image_data_layout,
+            image_size,
+            &self.texture_bind_group_layout,
+          );
+          v.insert((texture, bind_group));
+        }
+      }
+    }
+  }
+
+  fn get_texture_bind_group(&self, texture_id: TextureId) -> &BindGroup {
+    &self.textures
+      .get(&texture_id)
+      .unwrap_or_else(|| panic!("Cannot get bind group for {:?}; texture with that ID does not exist", texture_id)).1
+  }
+
+  fn free_textures(&mut self, textures_delta: &TexturesDelta) {
+    for texture_id in textures_delta.free.iter() {
+      let (texture, _bind_group) = self.textures.
+        remove(&texture_id)
+        .unwrap_or_else(|| panic!("Cannot free texture for {:?}; texture with that ID does not exist", texture_id));
+      texture.texture.destroy();
+    }
   }
 }
 
@@ -433,10 +525,37 @@ impl Uniform {
   }
 }
 
-// Needed since we can't use bytemuck for external types.
-#[inline]
-fn as_byte_slice<T>(slice: &[T]) -> &[u8] {
-  let len = slice.len() * std::mem::size_of::<T>();
-  let ptr = slice.as_ptr() as *const u8;
-  unsafe { std::slice::from_raw_parts(ptr, len) }
+fn create_texture_and_bind_group(
+  device: &Device,
+  queue: &Queue,
+  label_base: &str,
+  origin: Origin3d,
+  image_data: &[u8],
+  image_data_layout: ImageDataLayout,
+  image_size: Extent3d,
+  texture_bind_group_layout: &BindGroupLayout,
+) -> (GfxTexture, BindGroup) {
+  let texture = TextureBuilder::new()
+    .with_size(image_size)
+    .with_rgba8_unorm_srgb_format()
+    .with_sampled_usage()
+    .with_texture_label(label_base)
+    .with_texture_view_label(&format!("{} view", label_base))
+    .build(device);
+  queue.write_texture(
+    ImageCopyTexture {
+      texture: &texture.texture,
+      mip_level: 0,
+      origin,
+      aspect: TextureAspect::All,
+    },
+    image_data,
+    image_data_layout,
+    image_size,
+  );
+  let bind_group = BindGroupBuilder::new(texture_bind_group_layout)
+    .with_entries(&[texture.create_bind_group_entry(0)])
+    .with_label(&format!("{} bind group", label_base))
+    .build(device);
+  (texture, bind_group)
 }

@@ -1,4 +1,4 @@
-use egui::{CollapsingHeader, CtxRef, Grid, menu, Ui, Window};
+use egui::{CollapsingHeader, Context, Grid, menu, Ui, Window};
 
 use common::input::RawInput;
 use common::timing::TimingStats;
@@ -20,7 +20,7 @@ impl DebugGui {
 
   pub fn show_timing(
     &mut self,
-    ctx: &CtxRef,
+    ctx: &Context,
     timing_stats: &TimingStats,
   ) {
     if !self.show_timing { return; }
@@ -101,7 +101,7 @@ impl DebugGui {
 
   pub fn show_input(
     &mut self,
-    ctx: &CtxRef,
+    ctx: &Context,
     input: &RawInput,
   ) {
     if !self.show_input { return; }

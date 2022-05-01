@@ -1,7 +1,7 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
 
-use egui::Ui;
+use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::{CommandBuffer, Features, PowerPreference};
 
@@ -9,7 +9,7 @@ use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
 use voxel::chunk::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
@@ -24,6 +24,7 @@ pub mod stars;
 
 pub struct VoxelPlanets {
   camera: Camera,
+  camera_debugging: CameraDebugging,
   debug_renderer: DebugRenderer,
 
   camera_uniform: CameraUniform,
@@ -50,6 +51,7 @@ impl app::Application for VoxelPlanets {
     camera.arcball.distance = -extends * 2.0;
     camera.arcball.mouse_scroll_distance_speed = 1000.0;
     camera.far = 10000.0;
+    let camera_debugging = CameraDebugging::default();
     let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
@@ -77,6 +79,7 @@ impl app::Application for VoxelPlanets {
 
     Self {
       camera,
+      camera_debugging,
       debug_renderer,
 
       camera_uniform,
@@ -105,29 +108,32 @@ impl app::Application for VoxelPlanets {
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
+    self.camera_debugging.add_to_menu(ui);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera.update(&input.camera, frame.time.delta);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
-    egui::Window::new("Voxel Planets").show(&gui_frame, |ui| {
-      self.settings.draw_light_gui(ui);
-      let mut recreate_lod_render_data_manager = false;
-      recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
-      recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
-      if recreate_lod_render_data_manager {
-        self.lod_render_data_manager = self.settings.create_lod_render_data_manager();
-      }
-      self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
-      if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true
-        self.debug_renderer.clear();
-        self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
-      }
-      self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
-      self.settings.draw_stars_renderer_settings(ui);
-    });
+    egui::Window::new("Voxel Planets")
+      .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
+      .show(&gui_frame, |ui| {
+        self.settings.draw_light_gui(ui);
+        let mut recreate_lod_render_data_manager = false;
+        recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
+        recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
+        if recreate_lod_render_data_manager {
+          self.lod_render_data_manager = self.settings.create_lod_render_data_manager();
+        }
+        self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
+        if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true
+          self.debug_renderer.clear();
+          self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
+        }
+        self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
+        self.settings.draw_stars_renderer_settings(ui);
+      });
 
     // Render stars
     self.stars_renderer.render(gfx, &mut frame, &self.camera, &self.settings.stars_renderer_settings);

@@ -9,7 +9,7 @@ use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use voxel::chunk::{ChunkMesh, GenericChunkSize};
 use voxel::render::VoxelRenderer;
@@ -21,6 +21,7 @@ mod marching_cubes_debugging;
 
 pub struct TransvoxelDemo {
   camera: Camera,
+  camera_debugging: CameraDebugging,
   debug_renderer: DebugRenderer,
 
   camera_uniform: CameraUniform,
@@ -47,6 +48,7 @@ impl app::Application for TransvoxelDemo {
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
     camera.arcball.distance = -2.0;
+    let camera_debugging = CameraDebugging::default();
     let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
@@ -68,6 +70,7 @@ impl app::Application for TransvoxelDemo {
 
     Self {
       camera,
+      camera_debugging,
       debug_renderer,
 
       camera_uniform,
@@ -93,12 +96,13 @@ impl app::Application for TransvoxelDemo {
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
+    self.camera_debugging.add_to_menu(ui);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera.update(&input.camera, frame.time.delta);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
     self.camera_uniform.update_from_camera_sys(&self.camera);
 
     // Debug GUI
@@ -128,7 +132,7 @@ impl app::Application for TransvoxelDemo {
     self.marching_cubes_debugging.debug_draw(&mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
-      chunk_vertices.indices().into_iter().map(|i|*i as u32),
+      chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);

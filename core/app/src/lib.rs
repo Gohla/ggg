@@ -1,7 +1,7 @@
 use std::sync::mpsc::Receiver;
 
 use dotenv;
-use egui::{CtxRef, TopBottomPanel, Ui};
+use egui::{Context, TopBottomPanel, Ui};
 use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -37,11 +37,11 @@ pub struct Tick {
 }
 
 pub struct GuiFrame {
-  pub context: CtxRef,
+  pub context: Context,
 }
 
 impl std::ops::Deref for GuiFrame {
-  type Target = CtxRef;
+  type Target = Context;
   #[inline]
   fn deref(&self) -> &Self::Target { &self.context }
 }

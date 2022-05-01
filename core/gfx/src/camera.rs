@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 use std::f32::consts::{FRAC_PI_2, PI};
 
-use egui::{ComboBox, CtxRef};
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
 
 use common::input::{MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
 use common::timing::Duration;
-use gui_widget::*;
+
+// Camera
 
 #[derive(Debug)]
 pub struct Camera {
@@ -23,12 +23,12 @@ pub struct Camera {
   pub orthographic: Orthographic,
   pub near: f32,
   pub far: f32,
-  // Debug GUI
-  pub show_debug_gui: bool,
   // Internals
   position: Vec3,
   view: Mat4,
   view_inverse: Mat4,
+  projection: Mat4,
+  projection_inverse: Mat4,
   view_projection: Mat4,
   view_projection_inverse: Mat4,
 }
@@ -121,11 +121,11 @@ impl Camera {
       near,
       far,
 
-      show_debug_gui: false,
-
       position: Vec3::zero(),
       view: Mat4::identity(),
       view_inverse: Mat4::identity().inversed(),
+      projection: Mat4::identity(),
+      projection_inverse: Mat4::identity().inversed(),
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
     }
@@ -202,7 +202,6 @@ impl Camera {
     &mut self,
     input: &CameraInput,
     frame_delta: Duration,
-    gui_context: &CtxRef,
   ) {
     let (width, height): (f64, f64) = self.viewport.into();
     let width = width as f32;
@@ -237,7 +236,7 @@ impl Camera {
 
     // Projection matrix
     let aspect_ratio = width / height;
-    let projection = match self.projection_type {
+    self.projection = match self.projection_type {
       ProjectionType::Orthographic => {
         let zoom_factor = (self.target - self.position).mag().abs();
         let width = aspect_ratio * zoom_factor;
@@ -252,101 +251,17 @@ impl Camera {
         perspective_lh_yup_wgpu_dx(self.perspective.vertical_fov_radians, aspect_ratio, self.near, self.far)
       }
     };
+    self.projection_inverse = self.projection.inversed();
 
-    self.view_projection = projection * self.view;
+    self.view_projection = self.projection * self.view;
     self.view_projection_inverse = self.view_projection.inversed();
-
-    if !self.show_debug_gui { return; }
-
-    gui_context.window("Camera", |ui| {
-      ui.collapsing_open_with_grid("View", "Grid", |ui| {
-        ui.label("Movement mode");
-        ComboBox::from_id_source("Movement mode")
-          .selected_text(format!("{:?}", self.movement_type))
-          .show_ui(ui, |ui| {
-            ui.selectable_value(&mut self.movement_type, MovementType::Arcball, "Arcball");
-            ui.selectable_value(&mut self.movement_type, MovementType::Fly, "Fly");
-          });
-        ui.end_row();
-        match self.movement_type {
-          MovementType::Arcball => {
-            ui.label("Distance");
-            ui.horizontal(|ui| {
-              ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
-              ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
-              ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
-            });
-            ui.end_row();
-            ui.label("Rotation");
-            ui.horizontal(|ui| {
-              ui.drag("x: ", &mut self.arcball.rotation_around_x, 0.01);
-              ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
-              ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
-              ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
-            });
-            ui.end_row();
-          }
-          MovementType::Fly => {}
-        }
-        ui.label("Position");
-        ui.show_vec3(&self.position);
-        ui.end_row();
-        ui.label("Target");
-        ui.drag_vec3(0.1, &mut self.target);
-        ui.end_row();
-      });
-      ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
-        ui.label("Projection mode");
-        ComboBox::from_id_source("Projection mode")
-          .selected_text(format!("{:?}", self.projection_type))
-          .show_ui(ui, |ui| {
-            ui.selectable_value(&mut self.projection_type, ProjectionType::Perspective, "Perspective");
-            ui.selectable_value(&mut self.projection_type, ProjectionType::Orthographic, "Orthographic");
-          });
-        ui.end_row();
-        match self.projection_type {
-          ProjectionType::Perspective => {
-            ui.label("Vertical FOV");
-            ui.drag_angle(&mut self.perspective.vertical_fov_radians);
-            ui.end_row();
-          }
-          ProjectionType::Orthographic => {}
-        }
-        ui.label("Viewport");
-        ui.monospace(format!("{:.2}x{:.2} ({:.2})", self.viewport.width, self.viewport.height, aspect_ratio));
-        ui.end_row();
-        ui.label("Frustum");
-        ui.horizontal(|ui| {
-          ui.drag("near: ", &mut self.near, 0.001);
-          ui.drag("far: ", &mut self.far, 1.0);
-        });
-        ui.end_row();
-      });
-      ui.collapsing_with_grid("Matrices", "Grid", |ui| {
-        ui.label("View matrix");
-        ui.show_mat4(&self.view);
-        ui.end_row();
-        ui.label("Projection matrix");
-        ui.show_mat4(&projection);
-        ui.end_row();
-        ui.label("View-projection matrix");
-        ui.show_mat4(&self.view_projection);
-        ui.end_row();
-        ui.label("View-projection matrix inverse");
-        ui.show_mat4(&self.view_projection_inverse);
-        ui.end_row();
-      });
-    });
   }
 }
 
+// Input
+
 #[derive(Default, Clone, Debug)]
 pub struct CameraInput {
-  // up: bool,
-  // right: bool,
-  // down: bool,
-  // left: bool,
-
   mouse_buttons: HashSet<MouseButton>,
   mouse_position_delta: ScreenDelta,
   mouse_wheel_scroll_delta: f32,
@@ -355,17 +270,132 @@ pub struct CameraInput {
 impl From<&RawInput> for CameraInput {
   fn from(input: &RawInput) -> Self {
     CameraInput {
-      // up: input.is_keyboard_button_down(KeyboardButton::W),
-      // right: input.is_keyboard_button_down(KeyboardButton::D),
-      // down: input.is_keyboard_button_down(KeyboardButton::S),
-      // left: input.is_keyboard_button_down(KeyboardButton::A),
-
       mouse_buttons: input.mouse_buttons.clone(),
       mouse_position_delta: input.mouse_position_delta,
       mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
     }
   }
 }
+
+// Debugging
+
+#[cfg(feature = "debugging_gui")]
+#[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct CameraDebugging {
+  pub show_window: bool,
+  pub window_anchor: Option<egui::Align2>,
+}
+
+#[cfg(feature = "debugging_gui")]
+impl CameraDebugging {
+  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &mut Camera) {
+    if !self.show_window { return; }
+    let mut window = egui::Window::new("Camera");
+    if let Some(anchor) = self.window_anchor {
+      window = window.anchor(anchor, egui::Vec2::ZERO);
+    }
+    window
+      .open(&mut self.show_window)
+      .auto_sized()
+      .show(ctx, |ui| camera.draw_debugging_gui(ui, &mut self.window_anchor));
+  }
+
+  pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {
+    ui.checkbox(&mut self.show_window, "Camera");
+  }
+}
+
+#[cfg(feature = "debugging_gui")]
+impl Camera {
+  pub fn draw_debugging_gui(&mut self, ui: &mut egui::Ui, window_anchor: &mut Option<egui::Align2>) {
+    use egui::ComboBox;
+    use gui_widget::*;
+    ui.horizontal(|ui| {
+      ui.label("Anchor");
+      ui.select_align2(window_anchor);
+    });
+    ui.collapsing_open_with_grid("View", "Grid", |ui| {
+      ui.label("Movement mode");
+      ComboBox::from_id_source("Movement mode")
+        .selected_text(format!("{:?}", self.movement_type))
+        .show_ui(ui, |ui| {
+          ui.selectable_value(&mut self.movement_type, MovementType::Arcball, "Arcball");
+          ui.selectable_value(&mut self.movement_type, MovementType::Fly, "Fly");
+        });
+      ui.end_row();
+      match self.movement_type {
+        MovementType::Arcball => {
+          ui.label("Distance");
+          ui.horizontal(|ui| {
+            ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
+            ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
+          });
+          ui.end_row();
+          ui.label("Rotation");
+          ui.horizontal(|ui| {
+            ui.drag("x: ", &mut self.arcball.rotation_around_x, 0.01);
+            ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
+            ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
+            ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
+          });
+          ui.end_row();
+        }
+        MovementType::Fly => {}
+      }
+      ui.label("Position");
+      ui.show_vec3(&self.position);
+      ui.end_row();
+      ui.label("Target");
+      ui.drag_vec3(0.1, &mut self.target);
+      ui.end_row();
+    });
+    ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
+      ui.label("Projection mode");
+      ComboBox::from_id_source("Projection mode")
+        .selected_text(format!("{:?}", self.projection_type))
+        .show_ui(ui, |ui| {
+          ui.selectable_value(&mut self.projection_type, ProjectionType::Perspective, "Perspective");
+          ui.selectable_value(&mut self.projection_type, ProjectionType::Orthographic, "Orthographic");
+        });
+      ui.end_row();
+      match self.projection_type {
+        ProjectionType::Perspective => {
+          ui.label("Vertical FOV");
+          ui.drag_angle(&mut self.perspective.vertical_fov_radians);
+          ui.end_row();
+        }
+        ProjectionType::Orthographic => {}
+      }
+      ui.label("Viewport");
+      ui.monospace(format!("{:.2}x{:.2} ({:.2})", self.viewport.width, self.viewport.height, self.viewport.ratio()));
+      ui.end_row();
+      ui.label("Frustum");
+      ui.horizontal(|ui| {
+        ui.drag("near: ", &mut self.near, 0.001);
+        ui.drag("far: ", &mut self.far, 1.0);
+      });
+      ui.end_row();
+    });
+    ui.collapsing_with_grid("Matrices", "Grid", |ui| {
+      ui.label("View matrix");
+      ui.show_mat4(&self.view);
+      ui.end_row();
+      ui.label("Projection matrix");
+      ui.show_mat4(&self.projection);
+      ui.end_row();
+      ui.label("View-projection matrix");
+      ui.show_mat4(&self.view_projection);
+      ui.end_row();
+      ui.label("View-projection matrix inverse");
+      ui.show_mat4(&self.view_projection_inverse);
+      ui.end_row();
+    });
+  }
+}
+
+// Internals
 
 #[inline]
 fn look_at_lh(

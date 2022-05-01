@@ -104,7 +104,11 @@ pub struct MouseWheelDelta {
 }
 
 impl MouseWheelDelta {
+  #[inline]
   pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { horizontal: x, vertical: y } }
+
+  #[inline]
+  pub fn is_zero(&self) -> bool { self.horizontal != 0.0 && self.vertical == 0.0 }
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

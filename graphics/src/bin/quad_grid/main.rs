@@ -15,7 +15,7 @@ use common::input::RawInput;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
@@ -71,6 +71,7 @@ pub struct Input {
 
 pub struct QuadGrid {
   camera: Camera,
+  camera_debugging: CameraDebugging,
 
   uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
@@ -87,6 +88,7 @@ impl app::Application for QuadGrid {
   fn new(_os: &Os, gfx: &Gfx) -> Self {
     let viewport = gfx.surface.get_size().physical;
     let camera = Camera::with_defaults_arcball_perspective(viewport);
+    let camera_debugging = CameraDebugging::default();
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
@@ -158,6 +160,7 @@ impl app::Application for QuadGrid {
 
     Self {
       camera,
+      camera_debugging,
       uniform_buffer,
       _instance_buffer: instance_buffer,
       bind_group,
@@ -177,11 +180,12 @@ impl app::Application for QuadGrid {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    ui.checkbox(&mut self.camera.show_debug_gui, "Camera");
+    self.camera_debugging.add_to_menu(ui);
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta, &gui_frame);
+    self.camera.update(&input.camera, frame.time.delta);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()

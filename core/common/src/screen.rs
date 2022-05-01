@@ -120,6 +120,9 @@ impl PhysicalSize {
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.width == 0 && self.height == 0 }
+
+  #[inline]
+  pub fn ratio(&self) -> f64 { self.width as f64 / self.height as f64 }
 }
 
 impl From<(u64, u64)> for PhysicalSize {

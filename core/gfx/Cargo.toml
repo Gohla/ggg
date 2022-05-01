@@ -7,10 +7,11 @@ publish = false
 
 [dependencies]
 common = { path = "../../core/common" }
-gui_widget = { path = "../../core/gui_widget" }
 wgpu = "0.12"
 raw-window-handle = "0.4"
-egui = "0.16.1"
+egui = { version = "0.18", features = ["serde"], optional = true }
+gui_widget = { path = "../../core/gui_widget", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 image = { version = "0.23", default-features = false }
 ultraviolet = "0.8"
 bytemuck = "1.5"
@@ -18,3 +19,7 @@ thiserror = "1"
 
 [build-dependencies]
 gfxc = { path = "../gfxc" }
+
+[features]
+default = ["debugging_gui", "serde"]
+debugging_gui = ["egui", "gui_widget"]
