@@ -3,6 +3,7 @@ name = "voxel"
 version = "0.1.0"
 authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
 edition = "2021"
+rust-version = "1.60"
 publish = false
 
 [dependencies]
@@ -17,6 +18,7 @@ bytemuck = { version = "1.5", features = ["derive"] }
 rayon = "1.5"
 lru = "0.7"
 flagset = "0.4"
+serde = { version = "1", features = ["derive"], optional = true }
 tracing = "0.1"
 
 [build-dependencies]
@@ -28,3 +30,8 @@ criterion = { version = "0.3.5", features = ["cargo_bench_support", "html_report
 [[bench]]
 name = "benches"
 harness = false
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "ultraviolet/serde"]
+

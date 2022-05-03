@@ -44,6 +44,7 @@ pub trait Volume: Clone + Send + 'static {
 // Sphere
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct SphereSettings {
   pub radius: f32,
 }
@@ -80,6 +81,7 @@ impl Volume for Sphere {
 // Noise
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct NoiseSettings {
   pub seed: i32,
   pub lacunarity: f32,

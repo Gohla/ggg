@@ -25,6 +25,7 @@ pub trait LodRenderDataManager<C: ChunkSize> {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LodRenderDataSettings {
   pub debug_render_vertices: bool,
   pub debug_render_vertex_color: Vec4,

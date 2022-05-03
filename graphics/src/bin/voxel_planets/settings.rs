@@ -1,5 +1,6 @@
 use egui::{ComboBox, Ui};
 use egui::color_picker::Alpha;
+use serde::{Deserialize, Serialize};
 use ultraviolet::Isometry3;
 
 use gui_widget::UiWidgetsExt;
@@ -19,7 +20,7 @@ use voxel::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings, Volume};
 
 use crate::stars::StarsRendererSettings;
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum VolumeType {
   Sphere,
   Noise,
@@ -30,7 +31,7 @@ impl Default for VolumeType {
   fn default() -> Self { Self::Sphere }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum ExtractorType {
   MarchingCubes,
   Transvoxel,
@@ -41,7 +42,7 @@ impl Default for ExtractorType {
   fn default() -> Self { Self::MarchingCubes }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Settings {
   pub light: LightSettings,
 

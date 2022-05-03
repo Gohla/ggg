@@ -14,6 +14,7 @@ use crate::volume::Volume;
 // Settings
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,

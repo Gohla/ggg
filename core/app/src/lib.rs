@@ -1,7 +1,11 @@
+#![feature(never_type)]
+
 use std::sync::mpsc::Receiver;
 
 use dotenv;
 use egui::{Context, TopBottomPanel, Ui};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -17,6 +21,7 @@ use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
 use gui::Gui;
 use os::context::OsContext;
+use os::directory::Directories;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::OsInputSys;
 use os::window::{OsWindow, WindowCreateError};
@@ -24,10 +29,12 @@ use os::window::{OsWindow, WindowCreateError};
 use crate::debug_gui::DebugGui;
 
 mod debug_gui;
+mod config;
 
 #[derive(Debug)]
 pub struct Os {
   pub window: OsWindow,
+  pub directories: Directories,
 }
 
 #[derive(Debug)]
@@ -48,9 +55,17 @@ impl std::ops::Deref for GuiFrame {
 
 #[allow(unused_variables)]
 pub trait Application {
-  fn new(os: &Os, gfx: &Gfx) -> Self;
+  /// Type of configuration that is deserialized and passed into `new`, and gotten from `get_config` to be serialized.
+  type Config: Default + Serialize + DeserializeOwned + Send + 'static;
+
+  /// Creates an instance of the application with given `data`.
+  fn new(os: &Os, gfx: &Gfx, config: Self::Config) -> Self;
+
+  /// Gets the configuration of the application, so that the framework can serialize it.
+  fn get_config(&self) -> &Self::Config;
 
 
+  /// Notifies the application about a screen resize or rescale event.
   fn screen_resize(&mut self, os: &Os, gfx: &Gfx, screen_size: ScreenSize) {}
 
 
@@ -60,18 +75,24 @@ pub trait Application {
   /// Return true to prevent the GUI from receiving mouse events.
   fn is_capturing_mouse(&self) -> bool { return false; }
 
+  /// The type of input that this application creates, to be passed into `simulate` and `render`.
   type Input;
 
+  /// Processes raw `input` into `Self::Input`.
   fn process_input(&mut self, input: RawInput) -> Self::Input;
 
 
+  /// Allow the application to add elements to the debug menu via `ui`.
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {}
+
+  /// Allow the application to add elements to the menu bar via `ui`.
   fn add_to_menu(&mut self, ui: &mut Ui) {}
 
 
+  /// Simulates a single `tick` of the application.
   fn simulate(&mut self, tick: Tick, input: &Self::Input) {}
 
-  /// Can return additional command buffers.
+  /// Renders a single `frame` of the application. May return additional command buffers to be submitted.
   fn render<'a>(&mut self, os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
@@ -183,7 +204,8 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
     let input_sys = OsInputSys::new(input_event_rx);
     (event_sys, event_rx, input_sys)
   };
-  let os = Os { window };
+  let directories = Directories::new(&options.name);
+  let os = Os { window, directories };
 
   let instance = Instance::new(options.graphics_backends);
   let surface = unsafe { instance.create_surface(os.window.get_inner()) };
@@ -238,9 +260,9 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
 
   let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture: depth_texture, multisampled_framebuffer, sample_count };
 
-  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size)?;
+  let app_config = config::deserialize_app_config::<A>(os.directories.config_dir());
 
-  Ok(())
+  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, app_config)?;
 }
 
 // Native codepath
@@ -256,15 +278,14 @@ fn run_app<A: Application + 'static>(
   gfx: Gfx,
   gui: Gui,
   screen_size: ScreenSize,
-) -> Result<(), CreateError> {
-  // Run app loop in a new thread, while Winit takes over the current thread.
-  std::thread::Builder::new()
+  app_config: A::Config,
+) -> Result<!, CreateError> { // Run app loop in a new thread, while Winit takes over the current thread.
+  let app_thread_join_handle = std::thread::Builder::new()
     .name(name)
     .spawn(move || {
-      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size);
+      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, app_config);
     })?;
-  os_event_sys.run(os_context); // Hijacks the current thread. All code after the this line is ignored!
-  Ok(()) // This is ignored, but required to make the compiler happy.
+  os_event_sys.run(os_context, app_thread_join_handle);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -275,8 +296,9 @@ fn run_app_in_loop<A: Application>(
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
+  app_config: A::Config,
 ) {
-  let mut app = A::new(&os, &gfx);
+  let mut app = A::new(&os, &gfx, app_config);
   let mut debug_gui = DebugGui::default();
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
@@ -302,6 +324,8 @@ fn run_app_in_loop<A: Application>(
     );
     if stop { break; }
   }
+
+  config::serialize_app_config::<A>(os.directories.config_dir(), app.get_config());
 }
 
 // WASM codepath
@@ -317,10 +341,11 @@ fn run_app<A: Application + 'static>(
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
-) -> Result<(), CreateError> {
+  app_config: A::Config,
+) -> Result<!, CreateError> {
   // We do not have control over the loop in WASM, and there are no threads. Let Winit take control and run app cycle
   // as part of the Winit event loop.
-  let mut app = A::new(&os, &gfx);
+  let mut app = A::new(&os, &gfx, app_config);
   let mut debug_gui = DebugGui::default();
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
@@ -342,7 +367,6 @@ fn run_app<A: Application + 'static>(
     &mut resized,
     &mut minimized,
   ));
-  Ok(()) // This is ignored, but required to make the compiler happy.
 }
 
 // Shared codepath

@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="1.B voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="0.0.B voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="command" value="build --package graphics --bin voxel_planets" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />

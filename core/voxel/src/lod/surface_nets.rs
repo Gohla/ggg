@@ -9,6 +9,7 @@ use crate::volume::Volume;
 // Settings
 
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct SurfaceNetsExtractorSettings {}
 
 // Extractor

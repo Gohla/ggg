@@ -85,7 +85,9 @@ pub struct QuadGrid {
 }
 
 impl app::Application for QuadGrid {
-  fn new(_os: &Os, gfx: &Gfx) -> Self {
+  type Config = ();
+
+  fn new(_os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = gfx.surface.get_size().physical;
     let camera = Camera::with_defaults_arcball_perspective(viewport);
     let camera_debugging = CameraDebugging::default();
@@ -170,6 +172,8 @@ impl app::Application for QuadGrid {
     }
   }
 
+  fn get_config(&self) -> &Self::Config { &() }
+
 
   type Input = Input;
 
@@ -182,6 +186,7 @@ impl app::Application for QuadGrid {
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
+
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera.update(&input.camera, frame.time.delta);

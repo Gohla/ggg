@@ -43,7 +43,9 @@ pub type C = GenericChunkSize<2>;
 const EXTENDS: f32 = C::CELLS_IN_CHUNK_ROW_F32 / 2.0;
 
 impl app::Application for SurfaceNetsDemo {
-  fn new(os: &Os, gfx: &Gfx) -> Self {
+  type Config = ();
+
+  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
@@ -83,10 +85,14 @@ impl app::Application for SurfaceNetsDemo {
     }
   }
 
+  fn get_config(&self) -> &Self::Config { &() }
+
+
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
   }
+
 
   type Input = Input;
 
@@ -95,9 +101,11 @@ impl app::Application for SurfaceNetsDemo {
     Input { camera }
   }
 
+
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
+
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera

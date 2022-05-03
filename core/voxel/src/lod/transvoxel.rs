@@ -11,6 +11,7 @@ use crate::volume::Volume;
 // Settings
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct TransvoxelExtractorSettings {
   pub extract_regular_chunks: bool,
   pub extract_transition_lo_x_chunks: bool,

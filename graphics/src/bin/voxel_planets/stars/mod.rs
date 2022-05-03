@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 use ultraviolet::{Mat4, Vec4};
 use wgpu::{BindGroup, RenderPipeline, ShaderStages};
 
@@ -18,7 +19,7 @@ pub struct StarsRenderer {
   render_pipeline: RenderPipeline,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct StarsRendererSettings {
   pub stars_threshold: f32,
   pub stars_exposure: f32,
@@ -38,7 +39,7 @@ impl Default for StarsRendererSettings {
       temperature_noise_frequency: 100.0,
       temperature_minimum: 1500.0,
       temperature_maximum: 65000.0,
-      temperature_power: 4.0
+      temperature_power: 4.0,
     }
   }
 }

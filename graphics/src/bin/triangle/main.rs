@@ -43,7 +43,9 @@ pub struct Triangle {
 }
 
 impl app::Application for Triangle {
-  fn new(_os: &Os, gfx: &Gfx) -> Self {
+  type Config = ();
+
+  fn new(_os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
@@ -63,9 +65,13 @@ impl app::Application for Triangle {
     }
   }
 
+  fn get_config(&self) -> &Self::Config { &() }
+
+
   type Input = ();
 
   fn process_input(&mut self, _raw_input: RawInput) -> () {}
+
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut render_pass = RenderPassBuilder::new()

@@ -43,7 +43,9 @@ pub struct Input {
 }
 
 impl app::Application for VoxelPlanets {
-  fn new(os: &Os, gfx: &Gfx) -> Self {
+  type Config = Settings;
+
+  fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_perspective(viewport);
@@ -55,7 +57,6 @@ impl app::Application for VoxelPlanets {
     let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
-    let mut settings = Settings::default();
     settings.light.rotation_y_degree = 270.0;
     settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
     settings.lod_octmap_settings.lod_factor = 1.0;
@@ -93,6 +94,8 @@ impl app::Application for VoxelPlanets {
     }
   }
 
+  fn get_config(&self) -> &Self::Config { &self.settings }
+
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     self.camera.viewport = screen_size.physical;
@@ -107,9 +110,11 @@ impl app::Application for VoxelPlanets {
     Input { camera }
   }
 
+
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
+
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera.update(&input.camera, frame.time.delta);

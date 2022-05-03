@@ -99,7 +99,9 @@ pub struct Input {
 }
 
 impl app::Application for Quads {
-  fn new(os: &Os, gfx: &Gfx) -> Self {
+  type Config = ();
+
+  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
     let camera = Camera::with_defaults_arcball_perspective(viewport);
     let camera_debugging = CameraDebugging::default();
@@ -189,6 +191,8 @@ impl app::Application for Quads {
       instance_buffer,
     }
   }
+
+  fn get_config(&self) -> &Self::Config { &() }
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {

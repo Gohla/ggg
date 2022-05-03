@@ -33,6 +33,7 @@ impl CameraUniform {
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LightUniform {
   pub color: Vec3,
   pub ambient: f32,
@@ -53,6 +54,7 @@ impl Default for LightUniform {
 }
 
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LightSettings {
   pub rotation_x_degree: f32,
   pub rotation_y_degree: f32,

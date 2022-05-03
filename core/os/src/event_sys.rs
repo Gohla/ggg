@@ -1,4 +1,5 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread::JoinHandle;
 
 use tracing::debug;
 use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
@@ -19,6 +20,7 @@ pub struct OsEventSys {
   window_id: WindowId,
   modifiers: ModifiersState,
   inner_size: ScreenSize,
+  app_thread_join_handle: Option<JoinHandle<()>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -56,12 +58,14 @@ impl OsEventSys {
       window_id: window.id(),
       modifiers: ModifiersState::empty(),
       inner_size: window.get_inner_size(),
+      app_thread_join_handle: None,
     };
     (os_event_sys, input_event_rx, os_event_rx, )
   }
 
   #[cfg(not(target_arch = "wasm32"))]
-  pub fn run(mut self, os_context: OsContext) {
+  pub fn run(mut self, os_context: OsContext, app_thread_join_handle: JoinHandle<()>) -> ! {
+    self.app_thread_join_handle = Some(app_thread_join_handle);
     os_context.event_loop.run(move |event, _, control_flow| {
       // Event loop does nothing else, so just wait until the next event. Set before `event_loop` as it can override it
       // to `ControlFlow::Exit`.
@@ -127,7 +131,7 @@ impl OsEventSys {
           }
           WindowEvent::KeyboardInput { input, .. } => {
             if let Some(virtual_keycode) = input.virtual_keycode {
-              let button: common::input::KeyboardButton = unsafe { std::mem::transmute(virtual_keycode) };
+              let button: KeyboardButton = unsafe { std::mem::transmute(virtual_keycode) };
               let state = input.state.into();
               self.input_event_tx.send(OsInputEvent::KeyboardInput { button, state })
                 .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
@@ -194,6 +198,14 @@ impl OsEventSys {
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           _ => {}
+        }
+      }
+      Event::LoopDestroyed => {
+        let join_handle = self.app_thread_join_handle.take();
+        if let Some(join_handle) = join_handle {
+          if let Err(e) = join_handle.join() {
+            std::panic::resume_unwind(e);
+          }
         }
       }
       _ => {}

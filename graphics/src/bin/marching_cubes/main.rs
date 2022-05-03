@@ -19,7 +19,7 @@ use crate::marching_cubes_debugging::MarchingCubesDebugging;
 
 mod marching_cubes_debugging;
 
-pub struct TransvoxelDemo {
+pub struct MarchingCubesDemo {
   camera: Camera,
   camera_debugging: CameraDebugging,
   debug_renderer: DebugRenderer,
@@ -42,8 +42,10 @@ pub type C1 = GenericChunkSize<1>;
 
 const EXTENDS: f32 = 0.5;
 
-impl app::Application for TransvoxelDemo {
-  fn new(os: &Os, gfx: &Gfx) -> Self {
+impl app::Application for MarchingCubesDemo {
+  type Config = ();
+
+  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
     let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
@@ -83,10 +85,14 @@ impl app::Application for TransvoxelDemo {
     }
   }
 
+  fn get_config(&self) -> &Self::Config { &() }
+
+
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;
     self.camera.viewport = viewport;
   }
+
 
   type Input = Input;
 
@@ -95,9 +101,11 @@ impl app::Application for TransvoxelDemo {
     Input { camera }
   }
 
+
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
+
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
@@ -142,8 +150,8 @@ impl app::Application for TransvoxelDemo {
 }
 
 fn main() {
-  app::run::<TransvoxelDemo>(Options {
-    name: "Transvoxel".to_string(),
+  app::run::<MarchingCubesDemo>(Options {
+    name: "Marching Cubes".to_string(),
     request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
     sample_count: 4,
     ..Options::default()
