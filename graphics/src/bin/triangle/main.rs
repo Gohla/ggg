@@ -65,8 +65,6 @@ impl app::Application for Triangle {
     }
   }
 
-  fn get_config(&self) -> &Self::Config { &() }
-
 
   type Input = ();
 

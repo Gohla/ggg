@@ -42,7 +42,7 @@ impl Default for ExtractorType {
   fn default() -> Self { Self::MarchingCubes }
 }
 
-#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
   pub light: LightSettings,
 
@@ -62,6 +62,26 @@ pub struct Settings {
   pub auto_update: bool,
 
   pub stars_renderer_settings: StarsRendererSettings,
+}
+
+impl Default for Settings {
+  fn default() -> Self {
+    Self {
+      light: Default::default(),
+      volume_type: Default::default(),
+      sphere_settings: Default::default(),
+      noise_settings: Default::default(),
+      extractor_type: Default::default(),
+      marching_cubes_settings: Default::default(),
+      transvoxel_settings: Default::default(),
+      surface_nets_settings: Default::default(),
+      lod_octmap_settings: Default::default(),
+      lod_octmap_transform: Default::default(),
+      lod_render_data_settings: Default::default(),
+      auto_update: true,
+      stars_renderer_settings: Default::default(),
+    }
+  }
 }
 
 type C16 = GenericChunkSize<16>;

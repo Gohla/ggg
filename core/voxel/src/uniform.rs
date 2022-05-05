@@ -53,13 +53,24 @@ impl Default for LightUniform {
   }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LightSettings {
   pub rotation_x_degree: f32,
   pub rotation_y_degree: f32,
   pub rotation_z_degree: f32,
   pub uniform: LightUniform,
+}
+
+impl Default for LightSettings {
+  fn default() -> Self {
+    Self {
+      rotation_x_degree: 0.0,
+      rotation_y_degree: 270.0,
+      rotation_z_degree: 0.0,
+      uniform: Default::default()
+    }
+  }
 }
 
 impl LightSettings {

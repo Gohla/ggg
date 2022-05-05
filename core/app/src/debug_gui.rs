@@ -1,10 +1,11 @@
 use egui::{CollapsingHeader, Context, Grid, menu, Ui, Window};
+use serde::{Deserialize, Serialize};
 
 use common::input::RawInput;
 use common::timing::TimingStats;
 use gui_widget::UiWidgetsExt;
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
 pub struct DebugGui {
   pub show_timing_window: bool,
   pub timing_window_anchor: Option<egui::Align2>,

@@ -42,15 +42,15 @@ impl std::ops::Deref for GuiFrame {
 }
 
 #[allow(unused_variables)]
-pub trait Application {
+pub trait Application: Sized {
   /// Type of configuration that is deserialized and passed into `new`, and gotten from `get_config` to be serialized.
   type Config: Default + Serialize + DeserializeOwned + Send + 'static;
 
   /// Creates an instance of the application with given `data`.
   fn new(os: &Os, gfx: &Gfx, config: Self::Config) -> Self;
 
-  /// Gets the configuration of the application, so that the framework can serialize it.
-  fn get_config(&self) -> &Self::Config;
+  /// Takes the configuration of the application, so that the framework can serialize it.
+  fn into_config(self) -> Self::Config { Self::Config::default() }
 
 
   /// Notifies the application about a screen resize or rescale event.

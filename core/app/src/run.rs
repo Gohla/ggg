@@ -2,6 +2,7 @@ use std::sync::mpsc::Receiver;
 
 use dotenv;
 use egui::TopBottomPanel;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -123,10 +124,17 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
 
   let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture: depth_texture, multisampled_framebuffer, sample_count };
 
-  let app_config = config::deserialize_app_config::<A>(os.directories.config_dir());
+  let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir());
 
-  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, app_config)?;
+  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, config)?;
 }
+
+#[derive(Default, Serialize, Deserialize)]
+struct Config<A: Default> {
+  app_config: A,
+  debug_gui: DebugGui,
+}
+
 
 // Native codepath
 
@@ -141,12 +149,12 @@ fn run_app<A: Application + 'static>(
   gfx: Gfx,
   gui: Gui,
   screen_size: ScreenSize,
-  app_config: A::Config,
+  config: Config<A::Config>,
 ) -> Result<!, CreateError> { // Run app loop in a new thread, while Winit takes over the current thread.
   let app_thread_join_handle = std::thread::Builder::new()
     .name(name)
     .spawn(move || {
-      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, app_config);
+      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, config);
     })?;
   os_event_sys.run(os_context, app_thread_join_handle);
 }
@@ -159,10 +167,10 @@ fn run_app_in_loop<A: Application>(
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
-  app_config: A::Config,
+  config: Config<A::Config>,
 ) {
-  let mut app = A::new(&os, &gfx, app_config);
-  let mut debug_gui = DebugGui::default();
+  let mut app = A::new(&os, &gfx, config.app_config);
+  let mut debug_gui = config.debug_gui;
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
   let mut timing_stats = TimingStats::new();
@@ -188,7 +196,8 @@ fn run_app_in_loop<A: Application>(
     if stop { break; }
   }
 
-  config::serialize_app_config::<A>(os.directories.config_dir(), app.get_config());
+  let config = Config { app_config: app.into_config(), debug_gui };
+  config::serialize_config::<Config<A::Config>>(os.directories.config_dir(), &config);
 }
 
 // WASM codepath
@@ -215,6 +224,7 @@ fn run_app<A: Application + 'static>(
   let mut timing_stats = TimingStats::new();
   let mut resized = false;
   let mut minimized = false;
+
   os_event_sys.run(os_context, move || run_app_cycle(
     &os_event_rx,
     &mut os_input_sys,

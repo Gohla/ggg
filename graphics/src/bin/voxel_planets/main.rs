@@ -2,7 +2,7 @@
 #![allow(incomplete_features)]
 
 use egui::{Align2, Ui};
-use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
+use ultraviolet::{Isometry3, Rotor3, Vec3};
 use wgpu::{CommandBuffer, Features, PowerPreference};
 
 use app::{GuiFrame, Options, Os};
@@ -46,10 +46,11 @@ impl app::Application for VoxelPlanets {
   type Config = Settings;
 
   fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
-    let viewport = os.window.get_inner_size().physical;
-
-    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
     let extends = 4096.0 / 2.0;
+    settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
+
+    let viewport = os.window.get_inner_size().physical;
+    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
     camera.arcball.distance = -extends * 2.0;
     camera.arcball.mouse_scroll_distance_speed = 1000.0;
     camera.far = 10000.0;
@@ -57,14 +58,7 @@ impl app::Application for VoxelPlanets {
     let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
     let camera_uniform = CameraUniform::from_camera_sys(&camera);
-    settings.light.rotation_y_degree = 270.0;
-    settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
-    settings.lod_octmap_settings.lod_factor = 1.0;
-    //settings.octree_settings.thread_pool_threads = 1;
-    settings.lod_render_data_settings.debug_render_octree_nodes = true;
-    settings.lod_render_data_settings.debug_render_octree_node_color = Vec4::new(0.0, 0.1, 0.0, 0.1);
-    settings.lod_render_data_settings.debug_render_octree_node_empty_color = Vec4::new(0.1, 0.0, 0.0, 0.1);
-    settings.auto_update = true;
+
 
     let stars_renderer = StarsRenderer::new(gfx, &camera);
     let voxel_renderer = VoxelRenderer::new(
@@ -94,7 +88,7 @@ impl app::Application for VoxelPlanets {
     }
   }
 
-  fn get_config(&self) -> &Self::Config { &self.settings }
+  fn into_config(self) -> Self::Config { self.settings }
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {

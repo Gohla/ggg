@@ -33,6 +33,32 @@ pub struct Camera {
   view_projection_inverse: Mat4,
 }
 
+impl Default for Camera {
+  fn default() -> Self {
+    Self {
+      viewport: Default::default(),
+      movement_type: MovementType::Arcball,
+      arcball: Default::default(),
+      fly: Default::default(),
+      target: Vec3::zero(),
+
+      projection_type: ProjectionType::Perspective,
+      perspective: Default::default(),
+      orthographic: Default::default(),
+      near: 0.1,
+      far: 1000.0,
+
+      position: Vec3::zero(),
+      view: Mat4::identity(),
+      view_inverse: Mat4::identity().inversed(),
+      projection: Mat4::identity(),
+      projection_inverse: Mat4::identity().inversed(),
+      view_projection: Mat4::identity(),
+      view_projection_inverse: Mat4::identity().inversed(),
+    }
+  }
+}
+
 #[derive(Debug)]
 pub struct Arcball {
   pub mouse_scroll_distance_speed: f32,
@@ -101,19 +127,19 @@ impl Camera {
     movement_type: MovementType,
     arcball: Arcball,
     fly: Fly,
-    at: Vec3,
+    target: Vec3,
     projection_type: ProjectionType,
     perspective: Perspective,
     orthographic: Orthographic,
     near: f32,
     far: f32,
-  ) -> Camera {
-    Camera {
+  ) -> Self {
+    Self {
       viewport,
       movement_type,
       arcball,
       fly,
-      target: at,
+      target,
 
       projection_type,
       perspective,
@@ -121,13 +147,7 @@ impl Camera {
       near,
       far,
 
-      position: Vec3::zero(),
-      view: Mat4::identity(),
-      view_inverse: Mat4::identity().inversed(),
-      projection: Mat4::identity(),
-      projection_inverse: Mat4::identity().inversed(),
-      view_projection: Mat4::identity(),
-      view_projection_inverse: Mat4::identity().inversed(),
+      ..Self::default()
     }
   }
 
@@ -136,18 +156,12 @@ impl Camera {
     movement_type: MovementType,
     projection_type: ProjectionType,
   ) -> Camera {
-    Self::new(
+    Self {
       viewport,
       movement_type,
-      Arcball::default(),
-      Fly::default(),
-      Vec3::zero(),
       projection_type,
-      Perspective::default(),
-      Orthographic::default(),
-      0.1,
-      1000.0,
-    )
+      ..Self::default()
+    }
   }
 
   pub fn with_defaults_arcball_perspective(viewport: PhysicalSize) -> Self {

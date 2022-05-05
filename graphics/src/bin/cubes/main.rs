@@ -174,8 +174,6 @@ impl app::Application for Cubes {
     }
   }
 
-  fn get_config(&self) -> &Self::Config { &() }
-
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
     let viewport = screen_size.physical;

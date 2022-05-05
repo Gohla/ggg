@@ -172,8 +172,6 @@ impl app::Application for QuadGrid {
     }
   }
 
-  fn get_config(&self) -> &Self::Config { &() }
-
 
   type Input = Input;
 

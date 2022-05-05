@@ -1,31 +1,39 @@
+use std::fs::{create_dir_all, File};
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
+use ron::de::from_reader;
+use ron::ser::{PrettyConfig, to_writer_pretty};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use tracing::error;
 
-use crate::Application;
+const CONFIG_FILE_PATH: &str = "config.ron";
 
-pub(crate) fn deserialize_app_config<A: Application>(config_dir: &Path) -> A::Config {
-  let path = config_dir.to_path_buf().join("config.ron");
-  if let Ok(file) = std::fs::File::open(path) {
-    let reader = std::io::BufReader::new(file);
-    if let Ok(config) = ron::de::from_reader(reader) {
-      config
-    } else {
-      A::Config::default()
+pub(crate) fn deserialize_config<T: DeserializeOwned + Default>(config_dir: &Path) -> T {
+  let path = config_dir.to_path_buf().join(CONFIG_FILE_PATH);
+  if !path.exists() { return T::default(); }
+  match File::open(&path) {
+    Ok(file) => match from_reader(BufReader::new(file)) {
+      Ok(config) => config,
+      Err(e) => {
+        error!("Cannot deserialize application config, returning default config; failed to deserialize: {:?}", e);
+        T::default()
+      }
     }
-  } else {
-    A::Config::default()
+    Err(e) => {
+      error!("Cannot deserialize application config, returning default config; failed to open config file '{}': {:?}", path.display(), e);
+      T::default()
+    }
   }
 }
 
-pub(crate) fn serialize_app_config<A: Application>(config_dir: &Path, config: &A::Config) {
-  let path = config_dir.to_path_buf().join("config.ron");
-  std::fs::create_dir_all(config_dir).ok();
-  match std::fs::File::create(path.clone()) {
+pub(crate) fn serialize_config<T: Serialize>(config_dir: &Path, config: &T) {
+  let path = config_dir.to_path_buf().join(CONFIG_FILE_PATH);
+  create_dir_all(config_dir).ok();
+  match File::create(&path) {
     Ok(file) => {
-      let writer = std::io::BufWriter::new(file);
-      let pretty_config = ron::ser::PrettyConfig::default();
-      match ron::ser::to_writer_pretty(writer, config, pretty_config) {
+      match to_writer_pretty(BufWriter::new(file), config, PrettyConfig::default()) {
         Err(e) => error!("Cannot serialize application config; failed to serialize: {:?}", e),
         _ => {}
       }

@@ -95,8 +95,6 @@ impl app::Application for RayTracing {
     }
   }
 
-  fn get_config(&self) -> &Self::Config { &() }
-
 
   type Input = Input;
 
