@@ -89,7 +89,8 @@ impl app::Application for QuadGrid {
 
   fn new(_os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = gfx.surface.get_size().physical;
-    let camera = Camera::with_defaults_arcball_perspective(viewport);
+    let mut camera = Camera::with_defaults_arcball_perspective();
+    camera.viewport = viewport;
     let camera_debugging = CameraDebugging::default();
 
     let uniform_buffer = BufferBuilder::new()

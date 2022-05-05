@@ -16,7 +16,7 @@ wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.18"
 image = { version = "0.23", default-features = false, features = ["bmp", "png"] }
 rand = { version = "0.8", default-features = false, features = ["small_rng"] }
-ultraviolet = { version = "0.8", features = ["bytemuck", "int"] }
+ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"

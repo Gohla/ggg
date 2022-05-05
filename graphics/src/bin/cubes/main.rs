@@ -90,7 +90,8 @@ impl app::Application for Cubes {
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
+    let mut camera = Camera::with_defaults_arcball_perspective();
+    camera.viewport = viewport;
     camera.arcball.mouse_scroll_distance_speed = 100.0;
     let camera_debugging = CameraDebugging::default();
 

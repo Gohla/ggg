@@ -9,7 +9,8 @@ use common::timing::Duration;
 
 // Camera
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Camera {
   // View
   pub viewport: PhysicalSize,
@@ -59,7 +60,8 @@ impl Default for Camera {
   }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Arcball {
   pub mouse_scroll_distance_speed: f32,
   pub debug_gui_distance_speed: f32,
@@ -84,16 +86,19 @@ impl Default for Arcball {
   }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Fly {}
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum MovementType {
   Arcball,
   Fly,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Perspective {
   pub vertical_fov_radians: f32,
 }
@@ -106,7 +111,8 @@ impl Default for Perspective {
   }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Orthographic {}
 
 impl Default for Orthographic {
@@ -116,6 +122,7 @@ impl Default for Orthographic {
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ProjectionType {
   Perspective,
   Orthographic,
@@ -152,24 +159,22 @@ impl Camera {
   }
 
   pub fn with_defaults(
-    viewport: PhysicalSize,
     movement_type: MovementType,
     projection_type: ProjectionType,
   ) -> Camera {
     Self {
-      viewport,
       movement_type,
       projection_type,
       ..Self::default()
     }
   }
 
-  pub fn with_defaults_arcball_perspective(viewport: PhysicalSize) -> Self {
-    Self::with_defaults(viewport, MovementType::Arcball, ProjectionType::Perspective)
+  pub fn with_defaults_arcball_perspective() -> Self {
+    Self::with_defaults(MovementType::Arcball, ProjectionType::Perspective)
   }
 
-  pub fn with_defaults_arcball_orthographic(viewport: PhysicalSize) -> Self {
-    Self::with_defaults(viewport, MovementType::Arcball, ProjectionType::Orthographic)
+  pub fn with_defaults_arcball_orthographic() -> Self {
+    Self::with_defaults(MovementType::Arcball, ProjectionType::Orthographic)
   }
 
 

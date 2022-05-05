@@ -7,6 +7,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 //
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Scale(f64);
 
 impl Scale {
@@ -98,6 +99,7 @@ impl Default for Scale {
 // Physical size: size in physical (real) pixels on the device.
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalSize {
   pub width: u64,
   pub height: u64,
@@ -169,6 +171,7 @@ impl From<PhysicalSize> for [f64; 2] {
 // Logical size: size after scaling. That is, the physical size divided by the scale factor.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct LogicalSize {
   pub width: f64,
@@ -255,6 +258,7 @@ impl From<LogicalSize> for [f64; 2] {
 // Screen size: combination of physical size, scale, and logical size.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenSize {
   pub physical: PhysicalSize,
   pub scale: Scale,
@@ -317,6 +321,7 @@ impl From<ScreenSize> for Scale {
 // Position in physical screen space.
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalPosition {
   pub x: i64,
   pub y: i64,
@@ -409,6 +414,7 @@ impl From<PhysicalPosition> for [f64; 2] {
 // Position in logical screen space.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct LogicalPosition {
   pub x: f64,
@@ -510,6 +516,7 @@ impl From<LogicalPosition> for [f64; 2] {
 // Screen position: combination of physical position, scale, and logical position.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenPosition {
   pub physical: PhysicalPosition,
   pub logical: LogicalPosition,
@@ -591,6 +598,7 @@ impl From<ScreenPosition> for PhysicalPosition {
 // Delta in physical screen space.
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalDelta {
   pub x: i64,
   pub y: i64,
@@ -666,6 +674,7 @@ impl From<PhysicalDelta> for [i64; 2] {
 // Delta in logical screen space.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct LogicalDelta {
   pub x: f64,
@@ -757,6 +766,7 @@ impl From<LogicalDelta> for [f64; 2] {
 // Screen delta: combination of physical delta, scale, and logical delta.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenDelta {
   pub physical: PhysicalDelta,
   pub logical: LogicalDelta,

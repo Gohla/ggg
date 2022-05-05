@@ -9,11 +9,11 @@ publish = false
 common = { path = "../../core/common" }
 wgpu = "0.12"
 raw-window-handle = "0.4"
-egui = { version = "0.18", features = ["serde"], optional = true }
+egui = { version = "0.18", optional = true }
 gui_widget = { path = "../../core/gui_widget", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 image = { version = "0.23", default-features = false }
-ultraviolet = "0.8"
+ultraviolet = "0.9"
 bytemuck = "1.5"
 thiserror = "1"
 
@@ -21,5 +21,6 @@ thiserror = "1"
 gfxc = { path = "../gfxc" }
 
 [features]
-default = ["debugging_gui", "serde"]
+default = ["serde", "debugging_gui"]
+serde = ["dep:serde", "common/serde", "egui/serde", "ultraviolet/serde"]
 debugging_gui = ["egui", "gui_widget"]

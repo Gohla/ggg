@@ -48,12 +48,13 @@ impl app::Application for MarchingCubesDemo {
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
 
-    let mut camera = Camera::with_defaults_arcball_orthographic(viewport);
+    let mut camera = Camera::with_defaults_arcball_orthographic();
+    camera.viewport = viewport;
     camera.arcball.distance = -2.0;
     let camera_debugging = CameraDebugging::default();
     let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
 
-    let camera_uniform = CameraUniform::from_camera_sys(&camera);
+    let camera_uniform = CameraUniform::from_camera(&camera);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;
     light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
@@ -109,7 +110,7 @@ impl app::Application for MarchingCubesDemo {
     // Update camera
     self.camera.update(&input.camera, frame.time.delta);
     self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
-    self.camera_uniform.update_from_camera_sys(&self.camera);
+    self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI
     self.marching_cubes_debugging.show_gui_window(gui_frame);

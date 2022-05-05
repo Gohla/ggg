@@ -8,4 +8,4 @@ publish = false
 [dependencies]
 common = { path = "../../core/common" }
 egui = "0.18"
-ultraviolet = "0.8"
+ultraviolet = "0.9"

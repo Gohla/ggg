@@ -9,7 +9,7 @@ use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::CameraInput;
 use gfx::debug_renderer::DebugRenderer;
 use voxel::chunk::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
@@ -23,13 +23,11 @@ pub mod settings;
 pub mod stars;
 
 pub struct VoxelPlanets {
-  camera: Camera,
-  camera_debugging: CameraDebugging,
-  debug_renderer: DebugRenderer,
-
-  camera_uniform: CameraUniform,
   settings: Settings,
 
+  camera_uniform: CameraUniform,
+
+  debug_renderer: DebugRenderer,
   stars_renderer: StarsRenderer,
   voxel_renderer: VoxelRenderer,
 
@@ -47,20 +45,16 @@ impl app::Application for VoxelPlanets {
 
   fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
     let extends = 4096.0 / 2.0;
+    settings.camera.viewport = os.window.get_inner_size().physical;
+    settings.camera.arcball.distance = -extends * 2.0;
+    settings.camera.arcball.mouse_scroll_distance_speed = 1000.0;
+    settings.camera.far = 10000.0;
     settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
 
-    let viewport = os.window.get_inner_size().physical;
-    let mut camera = Camera::with_defaults_arcball_perspective(viewport);
-    camera.arcball.distance = -extends * 2.0;
-    camera.arcball.mouse_scroll_distance_speed = 1000.0;
-    camera.far = 10000.0;
-    let camera_debugging = CameraDebugging::default();
-    let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
+    let camera_uniform = CameraUniform::from_camera(&settings.camera);
 
-    let camera_uniform = CameraUniform::from_camera_sys(&camera);
-
-
-    let stars_renderer = StarsRenderer::new(gfx, &camera);
+    let mut debug_renderer = DebugRenderer::new(gfx, settings.camera.get_view_projection_matrix());
+    let stars_renderer = StarsRenderer::new(gfx, &settings.camera);
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
@@ -70,16 +64,13 @@ impl app::Application for VoxelPlanets {
     );
 
     let mut lod_render_data_manager = settings.create_lod_render_data_manager();
-    let lod_render_data = lod_render_data_manager.update(camera.get_position(), &settings.lod_render_data_settings, &mut debug_renderer, &gfx.device);
+    let lod_render_data = lod_render_data_manager.update(settings.camera.get_position(), &settings.lod_render_data_settings, &mut debug_renderer, &gfx.device);
 
     Self {
-      camera,
-      camera_debugging,
-      debug_renderer,
-
-      camera_uniform,
       settings,
+      camera_uniform,
 
+      debug_renderer,
       stars_renderer,
       voxel_renderer,
 
@@ -92,7 +83,7 @@ impl app::Application for VoxelPlanets {
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.viewport = screen_size.physical;
+    self.settings.camera.viewport = screen_size.physical;
     self.stars_renderer.screen_resize(screen_size);
   }
 
@@ -106,14 +97,14 @@ impl app::Application for VoxelPlanets {
 
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    self.camera_debugging.add_to_menu(ui);
+    self.settings.camera_debugging.add_to_menu(ui);
   }
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
-    self.camera_uniform.update_from_camera_sys(&self.camera);
+    self.settings.camera.update(&input.camera, frame.time.delta);
+    self.settings.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.settings.camera);
+    self.camera_uniform.update_from_camera(&self.settings.camera);
 
     egui::Window::new("Voxel Planets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
@@ -128,14 +119,14 @@ impl app::Application for VoxelPlanets {
         self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
         if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true
           self.debug_renderer.clear();
-          self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
+          self.lod_render_data = self.lod_render_data_manager.update(self.settings.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);
         }
         self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
         self.settings.draw_stars_renderer_settings(ui);
       });
 
     // Render stars
-    self.stars_renderer.render(gfx, &mut frame, &self.camera, &self.settings.stars_renderer_settings);
+    self.stars_renderer.render(gfx, &mut frame, &self.settings.camera, &self.settings.stars_renderer_settings);
 
     // Render voxels
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
@@ -150,7 +141,7 @@ impl app::Application for VoxelPlanets {
     );
 
     // Debug render
-    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * model);
+    self.debug_renderer.render(gfx, &mut frame, self.settings.camera.get_view_projection_matrix() * model);
 
     Box::new(std::iter::empty())
   }

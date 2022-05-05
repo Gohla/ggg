@@ -3,6 +3,7 @@ use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
 use ultraviolet::Isometry3;
 
+use gfx::camera::{Camera, CameraDebugging};
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::GenericChunkSize;
 use voxel::lod::builder::LodManagerBuilder;
@@ -44,6 +45,9 @@ impl Default for ExtractorType {
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
+  pub camera: Camera,
+  pub camera_debugging: CameraDebugging,
+
   pub light: LightSettings,
 
   pub volume_type: VolumeType,
@@ -67,6 +71,8 @@ pub struct Settings {
 impl Default for Settings {
   fn default() -> Self {
     Self {
+      camera: Camera::with_defaults_arcball_perspective(),
+      camera_debugging: Default::default(),
       light: Default::default(),
       volume_type: Default::default(),
       sphere_settings: Default::default(),

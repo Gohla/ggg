@@ -103,7 +103,8 @@ impl app::Application for Quads {
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let viewport = os.window.get_inner_size().physical;
-    let camera = Camera::with_defaults_arcball_perspective(viewport);
+    let mut camera = Camera::with_defaults_arcball_perspective();
+    camera.viewport = viewport;
     let camera_debugging = CameraDebugging::default();
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
