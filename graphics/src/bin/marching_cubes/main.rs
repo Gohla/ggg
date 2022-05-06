@@ -9,7 +9,7 @@ use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use voxel::chunk::{ChunkMesh, GenericChunkSize};
 use voxel::render::VoxelRenderer;
@@ -20,14 +20,15 @@ use crate::marching_cubes_debugging::MarchingCubesDebugging;
 mod marching_cubes_debugging;
 
 pub struct MarchingCubesDemo {
-  camera: Camera,
+  camera_settings: CameraSettings,
   camera_debugging: CameraDebugging,
-  debug_renderer: DebugRenderer,
+  camera: Camera,
 
   camera_uniform: CameraUniform,
   light_settings: LightSettings,
   model_uniform: ModelUniform,
 
+  debug_renderer: DebugRenderer,
   voxel_renderer: VoxelRenderer,
 
   marching_cubes_debugging: MarchingCubesDebugging,
@@ -46,13 +47,12 @@ impl app::Application for MarchingCubesDemo {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let viewport = os.window.get_inner_size().physical;
-
-    let mut camera = Camera::with_defaults_arcball_orthographic();
-    camera.viewport = viewport;
-    camera.arcball.distance = -2.0;
-    let camera_debugging = CameraDebugging::default();
-    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
+    let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
+    let mut camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    camera_debugging.set_default_settings(&mut camera_settings, |camera_settings| {
+      camera_settings.arcball.distance = -2.0;
+    });
+    let camera = Camera::new(os.window.get_inner_size().physical);
 
     let camera_uniform = CameraUniform::from_camera(&camera);
     let mut light_settings = LightSettings::default();
@@ -61,6 +61,7 @@ impl app::Application for MarchingCubesDemo {
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
+    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
@@ -72,14 +73,15 @@ impl app::Application for MarchingCubesDemo {
     let marching_cubes_debugging = MarchingCubesDebugging::default();
 
     Self {
-      camera,
+      camera_settings,
       camera_debugging,
-      debug_renderer,
+      camera,
 
       camera_uniform,
       light_settings,
       model_uniform,
 
+      debug_renderer,
       voxel_renderer,
 
       marching_cubes_debugging,
@@ -88,11 +90,10 @@ impl app::Application for MarchingCubesDemo {
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    let viewport = screen_size.physical;
-    self.camera.viewport = viewport;
+    self.camera.set_viewport(screen_size.physical);
   }
 
-
+  
   type Input = Input;
 
   fn process_input(&mut self, input: RawInput) -> Input {
@@ -108,8 +109,8 @@ impl app::Application for MarchingCubesDemo {
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI

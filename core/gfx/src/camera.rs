@@ -7,14 +7,12 @@ use common::input::{MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
 use common::timing::Duration;
 
-// Camera
+// Camera settings
 
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Camera {
+pub struct CameraSettings {
   // View
-  #[cfg_attr(feature = "serde", serde(skip))]
-  pub viewport: PhysicalSize,
   pub movement_type: MovementType,
   pub arcball: Arcball,
   pub fly: Fly,
@@ -25,27 +23,11 @@ pub struct Camera {
   pub orthographic: Orthographic,
   pub near: f32,
   pub far: f32,
-  // Internals
-  #[cfg_attr(feature = "serde", serde(skip))]
-  position: Vec3,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  view: Mat4,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  view_inverse: Mat4,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  projection: Mat4,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  projection_inverse: Mat4,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  view_projection: Mat4,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  view_projection_inverse: Mat4,
 }
 
-impl Default for Camera {
+impl Default for CameraSettings {
   fn default() -> Self {
     Self {
-      viewport: Default::default(),
       movement_type: MovementType::Arcball,
       arcball: Default::default(),
       fly: Default::default(),
@@ -56,15 +38,55 @@ impl Default for Camera {
       orthographic: Default::default(),
       near: 0.1,
       far: 1000.0,
-
-      position: Vec3::zero(),
-      view: Mat4::identity(),
-      view_inverse: Mat4::identity().inversed(),
-      projection: Mat4::identity(),
-      projection_inverse: Mat4::identity().inversed(),
-      view_projection: Mat4::identity(),
-      view_projection_inverse: Mat4::identity().inversed(),
     }
+  }
+}
+
+impl CameraSettings {
+  pub fn new(
+    movement_type: MovementType,
+    arcball: Arcball,
+    fly: Fly,
+    target: Vec3,
+    projection_type: ProjectionType,
+    perspective: Perspective,
+    orthographic: Orthographic,
+    near: f32,
+    far: f32,
+  ) -> Self {
+    Self {
+      movement_type,
+      arcball,
+      fly,
+      target,
+
+      projection_type,
+      perspective,
+      orthographic,
+      near,
+      far,
+
+      ..Self::default()
+    }
+  }
+
+  pub fn with_defaults(
+    movement_type: MovementType,
+    projection_type: ProjectionType,
+  ) -> Self {
+    Self {
+      movement_type,
+      projection_type,
+      ..Self::default()
+    }
+  }
+
+  pub fn with_defaults_arcball_perspective() -> Self {
+    Self::with_defaults(MovementType::Arcball, ProjectionType::Perspective)
+  }
+
+  pub fn with_defaults_arcball_orthographic() -> Self {
+    Self::with_defaults(MovementType::Arcball, ProjectionType::Orthographic)
   }
 }
 
@@ -114,7 +136,7 @@ pub struct Perspective {
 impl Default for Perspective {
   fn default() -> Self {
     Self {
-      vertical_fov_radians: 45.0f32.to_radians(),
+      vertical_fov_radians: 70.0f32.to_radians(),
     }
   }
 }
@@ -136,55 +158,38 @@ pub enum ProjectionType {
   Orthographic,
 }
 
+
+// Camera
+
+#[derive(Copy, Clone, Debug)]
+pub struct Camera {
+  viewport: PhysicalSize,
+  position: Vec3,
+  view: Mat4,
+  view_inverse: Mat4,
+  projection: Mat4,
+  projection_inverse: Mat4,
+  view_projection: Mat4,
+  view_projection_inverse: Mat4,
+}
+
 impl Camera {
-  pub fn new(
-    viewport: PhysicalSize,
-    movement_type: MovementType,
-    arcball: Arcball,
-    fly: Fly,
-    target: Vec3,
-    projection_type: ProjectionType,
-    perspective: Perspective,
-    orthographic: Orthographic,
-    near: f32,
-    far: f32,
-  ) -> Self {
+  #[inline]
+  pub fn new(viewport: PhysicalSize) -> Self {
     Self {
       viewport,
-      movement_type,
-      arcball,
-      fly,
-      target,
-
-      projection_type,
-      perspective,
-      orthographic,
-      near,
-      far,
-
-      ..Self::default()
+      position: Vec3::zero(),
+      view: Mat4::identity(),
+      view_inverse: Mat4::identity().inversed(),
+      projection: Mat4::identity(),
+      projection_inverse: Mat4::identity().inversed(),
+      view_projection: Mat4::identity(),
+      view_projection_inverse: Mat4::identity().inversed(),
     }
   }
 
-  pub fn with_defaults(
-    movement_type: MovementType,
-    projection_type: ProjectionType,
-  ) -> Camera {
-    Self {
-      movement_type,
-      projection_type,
-      ..Self::default()
-    }
-  }
-
-  pub fn with_defaults_arcball_perspective() -> Self {
-    Self::with_defaults(MovementType::Arcball, ProjectionType::Perspective)
-  }
-
-  pub fn with_defaults_arcball_orthographic() -> Self {
-    Self::with_defaults(MovementType::Arcball, ProjectionType::Orthographic)
-  }
-
+  #[inline]
+  pub fn set_viewport(&mut self, viewport: PhysicalSize) { self.viewport = viewport; }
 
   /// Gets the position of the camera (i.e., the eye of the camera).
   #[inline]
@@ -227,6 +232,7 @@ impl Camera {
 
   pub fn update(
     &mut self,
+    settings: &mut CameraSettings,
     input: &CameraInput,
     frame_delta: Duration,
   ) {
@@ -234,48 +240,48 @@ impl Camera {
     let width = width as f32;
     let height = height as f32;
 
-    self.position = match self.movement_type {
+    self.position = match settings.movement_type {
       MovementType::Arcball => {
         let frame_delta = frame_delta.as_s() as f32;
-        let distance_speed = self.arcball.mouse_scroll_distance_speed * frame_delta;
-        self.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
+        let distance_speed = settings.arcball.mouse_scroll_distance_speed * frame_delta;
+        settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
         if input.mouse_buttons.contains(&MouseButton::Left) {
-          let rotation_speed = self.arcball.mouse_movement_rotation_speed * frame_delta;
-          self.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
-          self.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
+          let rotation_speed = settings.arcball.mouse_movement_rotation_speed * frame_delta;
+          settings.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
+          settings.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
         }
-        self.arcball.rotation_around_x = self.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
-        self.arcball.rotation_around_y = self.arcball.rotation_around_y % (PI * 2.0);
+        settings.arcball.rotation_around_x = settings.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
+        settings.arcball.rotation_around_y = settings.arcball.rotation_around_y % (PI * 2.0);
         let mut position = {
-          let mut position = self.target;
-          position.z += self.arcball.distance;
+          let mut position = settings.target;
+          position.z += settings.arcball.distance;
           position
         };
-        Rotor3::from_euler_angles(0.0, self.arcball.rotation_around_x, self.arcball.rotation_around_y).rotate_vec(&mut position);
+        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).rotate_vec(&mut position);
         position
       }
       MovementType::Fly => Vec3::zero(),
     };
 
     // View matrix.
-    self.view = look_at_lh(self.position, self.target, Vec3::unit_y());
+    self.view = look_at_lh(self.position, settings.target, Vec3::unit_y());
     self.view_inverse = self.view.inversed();
 
     // Projection matrix
     let aspect_ratio = width / height;
-    self.projection = match self.projection_type {
+    self.projection = match settings.projection_type {
       ProjectionType::Orthographic => {
-        let zoom_factor = (self.target - self.position).mag().abs();
+        let zoom_factor = (settings.target - self.position).mag().abs();
         let width = aspect_ratio * zoom_factor;
         let height = zoom_factor;
         let left = -width / 2.0;
         let right = width / 2.0;
         let bottom = -height / 2.0;
         let top = height / 2.0;
-        orthographic_lh_yup_wgpu_dx(left, right, bottom, top, self.near, self.far)
+        orthographic_lh_yup_wgpu_dx(left, right, bottom, top, settings.near, settings.far)
       }
       ProjectionType::Perspective => {
-        perspective_lh_yup_wgpu_dx(self.perspective.vertical_fov_radians, aspect_ratio, self.near, self.far)
+        perspective_lh_yup_wgpu_dx(settings.perspective.vertical_fov_radians, aspect_ratio, settings.near, settings.far)
       }
     };
     self.projection_inverse = self.projection.inversed();
@@ -313,12 +319,19 @@ pub struct CameraDebugging {
   pub show_window: bool,
   pub window_anchor: Option<egui::Align2>,
   #[cfg_attr(feature = "serde", serde(skip))]
-  pub default: Camera,
+  pub default_settings: CameraSettings,
 }
 
 #[cfg(feature = "debugging_gui")]
 impl CameraDebugging {
-  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &mut Camera) {
+  pub fn with_default_settings(default_settings: CameraSettings) -> Self {
+    Self {
+      default_settings,
+      ..CameraDebugging::default()
+    }
+  }
+
+  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &Camera, camera_settings: &mut CameraSettings) {
     if !self.show_window { return; }
     let mut window = egui::Window::new("Camera");
     if let Some(anchor) = self.window_anchor {
@@ -327,26 +340,27 @@ impl CameraDebugging {
     window
       .open(&mut self.show_window)
       .auto_sized()
-      .show(ctx, |ui| camera.draw_debugging_gui(ui, &mut self.window_anchor, &self.default));
+      .show(ctx, |ui| camera_settings.draw_debugging_gui(ui, camera, &mut self.window_anchor, &self.default_settings));
   }
 
   pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {
     ui.checkbox(&mut self.show_window, "Camera");
   }
 
-  pub fn set_defaults(&mut self, camera: &mut Camera, set_fn: impl Fn(&mut Camera)) {
-    set_fn(&mut self.default);
-    set_fn(camera);
+  pub fn set_default_settings(&mut self, camera_settings: &mut CameraSettings, set_fn: impl Fn(&mut CameraSettings)) {
+    set_fn(&mut self.default_settings);
+    set_fn(camera_settings);
   }
 }
 
 #[cfg(feature = "debugging_gui")]
-impl Camera {
+impl CameraSettings {
   pub fn draw_debugging_gui(
     &mut self,
     ui: &mut egui::Ui,
+    camera: &Camera,
     window_anchor: &mut Option<egui::Align2>,
-    default: &Camera,
+    default_settings: &CameraSettings,
   ) {
     use egui::ComboBox;
     use gui_widget::*;
@@ -354,7 +368,7 @@ impl Camera {
       ui.label("Anchor");
       ui.select_align2(window_anchor);
       if ui.button("Reset to defaults").double_clicked() {
-        *self = *default;
+        *self = *default_settings;
       }
     });
     ui.collapsing_open_with_grid("View", "Grid", |ui| {
@@ -396,7 +410,7 @@ impl Camera {
       ui.drag_vec3(0.1, &mut self.target);
       ui.end_row();
       ui.label("Position");
-      ui.show_vec3(&self.position);
+      ui.show_vec3(&camera.position);
       ui.end_row();
     });
     ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
@@ -417,7 +431,7 @@ impl Camera {
         ProjectionType::Orthographic => {}
       }
       ui.label("Viewport");
-      ui.monospace(format!("{:.2}x{:.2} ({:.2})", self.viewport.width, self.viewport.height, self.viewport.ratio()));
+      ui.monospace(format!("{:.2}x{:.2} ({:.2})", camera.viewport.width, camera.viewport.height, camera.viewport.ratio()));
       ui.end_row();
       ui.label("Frustum");
       ui.horizontal(|ui| {
@@ -428,16 +442,16 @@ impl Camera {
     });
     ui.collapsing_with_grid("Matrices", "Grid", |ui| {
       ui.label("View matrix");
-      ui.show_mat4(&self.view);
+      ui.show_mat4(&camera.view);
       ui.end_row();
       ui.label("Projection matrix");
-      ui.show_mat4(&self.projection);
+      ui.show_mat4(&camera.projection);
       ui.end_row();
       ui.label("View-projection matrix");
-      ui.show_mat4(&self.view_projection);
+      ui.show_mat4(&camera.view_projection);
       ui.end_row();
       ui.label("View-projection matrix inverse");
-      ui.show_mat4(&self.view_projection_inverse);
+      ui.show_mat4(&camera.view_projection_inverse);
       ui.end_row();
     });
   }

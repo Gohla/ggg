@@ -12,10 +12,11 @@ use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline,
 use app::{GuiFrame, Options, Os};
 use common::idx_assigner::Item;
 use common::input::RawInput;
+use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
@@ -37,9 +38,9 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
+  pub fn from_camera(camera: &Camera) -> Self {
     Self {
-      view_projection: camera_sys.get_view_projection_matrix(),
+      view_projection: camera.get_view_projection_matrix(),
     }
   }
 }
@@ -70,8 +71,9 @@ pub struct Input {
 }
 
 pub struct QuadGrid {
-  camera: Camera,
+  camera_settings: CameraSettings,
   camera_debugging: CameraDebugging,
+  camera: Camera,
 
   uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
@@ -87,16 +89,15 @@ pub struct QuadGrid {
 impl app::Application for QuadGrid {
   type Config = ();
 
-  fn new(_os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let viewport = gfx.surface.get_size().physical;
-    let mut camera = Camera::with_defaults_arcball_perspective();
-    camera.viewport = viewport;
-    let camera_debugging = CameraDebugging::default();
+  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
+    let camera_settings = CameraSettings::with_defaults_arcball_perspective();
+    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    let camera = Camera::new(os.window.get_inner_size().physical);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Quad grid uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera)]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
@@ -162,8 +163,9 @@ impl app::Application for QuadGrid {
     };
 
     Self {
-      camera,
+      camera_settings,
       camera_debugging,
+      camera,
       uniform_buffer,
       _instance_buffer: instance_buffer,
       bind_group,
@@ -171,6 +173,11 @@ impl app::Application for QuadGrid {
       render_pipeline,
       index_buffer,
     }
+  }
+
+
+  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
+    self.camera.set_viewport(screen_size.physical);
   }
 
 
@@ -188,9 +195,9 @@ impl app::Application for QuadGrid {
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Quad grid render pass")

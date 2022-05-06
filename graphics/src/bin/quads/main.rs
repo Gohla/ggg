@@ -13,7 +13,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -56,6 +56,14 @@ struct Uniform {
   view_projection: Mat4,
 }
 
+impl Uniform {
+  pub fn from_camera(camera: &Camera) -> Self {
+    Self {
+      view_projection: camera.get_view_projection_matrix(),
+    }
+  }
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Instance {
@@ -79,8 +87,9 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 
 pub struct Quads {
-  camera: Camera,
+  camera_settings: CameraSettings,
   camera_debugging: CameraDebugging,
+  camera: Camera,
 
   diffuse_bind_group: BindGroup,
 
@@ -102,10 +111,9 @@ impl app::Application for Quads {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let viewport = os.window.get_inner_size().physical;
-    let mut camera = Camera::with_defaults_arcball_perspective();
-    camera.viewport = viewport;
-    let camera_debugging = CameraDebugging::default();
+    let camera_settings = CameraSettings::with_defaults_arcball_perspective();
+    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    let camera = Camera::new(os.window.get_inner_size().physical);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
@@ -177,8 +185,9 @@ impl app::Application for Quads {
       ;
 
     Self {
-      camera,
+      camera_settings,
       camera_debugging,
+      camera,
 
       diffuse_bind_group,
 
@@ -195,8 +204,7 @@ impl app::Application for Quads {
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    let viewport = screen_size.physical;
-    self.camera.viewport = viewport;
+    self.camera.set_viewport(screen_size.physical);
   }
 
 
@@ -213,9 +221,9 @@ impl app::Application for Quads {
   }
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { view_projection: self.camera.get_view_projection_matrix() }]);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Quads").show(&gui_frame, |ui| {
       ui.label("Hello, world!");

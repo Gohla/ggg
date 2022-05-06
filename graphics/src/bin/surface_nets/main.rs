@@ -9,7 +9,7 @@ use app::{GuiFrame, Options, Os};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use voxel::chunk::{ChunkMesh, ChunkSize, GenericChunkSize};
 use voxel::render::VoxelRenderer;
@@ -20,14 +20,16 @@ use crate::surface_nets_debugging::SurfaceNetsDebugging;
 mod surface_nets_debugging;
 
 pub struct SurfaceNetsDemo {
-  camera: Camera,
+  camera_settings: CameraSettings,
   camera_debugging: CameraDebugging,
-  debug_renderer: DebugRenderer,
-
-  camera_uniform: CameraUniform,
   light_settings: LightSettings,
+
+  camera: Camera,
+  camera_uniform: CameraUniform,
+
   model_uniform: ModelUniform,
 
+  debug_renderer: DebugRenderer,
   voxel_renderer: VoxelRenderer,
 
   surface_nets_debugging: SurfaceNetsDebugging,
@@ -46,21 +48,19 @@ impl app::Application for SurfaceNetsDemo {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let viewport = os.window.get_inner_size().physical;
-
-    let mut camera = Camera::with_defaults_arcball_orthographic();
-    camera.viewport = viewport;
-    camera.arcball.distance = -2.0;
-    let camera_debugging = CameraDebugging::default();
-    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
-
-    let camera_uniform = CameraUniform::from_camera(&camera);
+    let camera_settings = CameraSettings::with_defaults_arcball_orthographic();
+    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;
     light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
+
+    let camera = Camera::new(os.window.get_inner_size().physical);
+    let camera_uniform = CameraUniform::from_camera(&camera);
+
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
+    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
@@ -72,14 +72,16 @@ impl app::Application for SurfaceNetsDemo {
     let surface_nets_debugging = SurfaceNetsDebugging::default();
 
     Self {
-      camera,
+      camera_settings,
       camera_debugging,
-      debug_renderer,
-
-      camera_uniform,
       light_settings,
+
+      camera,
+      camera_uniform,
+
       model_uniform,
 
+      debug_renderer,
       voxel_renderer,
 
       surface_nets_debugging,
@@ -88,8 +90,7 @@ impl app::Application for SurfaceNetsDemo {
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    let viewport = screen_size.physical;
-    self.camera.viewport = viewport;
+    self.camera.set_viewport(screen_size.physical);
   }
 
 
@@ -108,8 +109,8 @@ impl app::Application for SurfaceNetsDemo {
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI

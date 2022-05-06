@@ -16,7 +16,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraDebugging, CameraInput};
+use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gui_widget::UiWidgetsExt;
@@ -40,7 +40,7 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn from_camera_sys(camera_sys: &Camera) -> Self {
+  pub fn from_camera(camera_sys: &Camera) -> Self {
     Self {
       camera_position: camera_sys.get_position().into_homogeneous_point(),
       view_projection: camera_sys.get_view_projection_matrix(),
@@ -63,8 +63,9 @@ impl Instance {
 }
 
 pub struct Cubes {
-  camera: Camera,
+  camera_settings: CameraSettings,
   camera_debugging: CameraDebugging,
+  camera: Camera,
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
@@ -89,11 +90,12 @@ impl app::Application for Cubes {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let viewport = os.window.get_inner_size().physical;
-    let mut camera = Camera::with_defaults_arcball_perspective();
-    camera.viewport = viewport;
-    camera.arcball.mouse_scroll_distance_speed = 100.0;
-    let camera_debugging = CameraDebugging::default();
+    let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
+    let mut camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    camera_debugging.set_default_settings(&mut camera_settings, |camera_settings| {
+      camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
+    });
+    let camera = Camera::new(os.window.get_inner_size().physical);
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
@@ -102,7 +104,7 @@ impl app::Application for Cubes {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera_sys(&camera)]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
@@ -156,8 +158,9 @@ impl app::Application for Cubes {
     };
 
     Self {
-      camera,
+      camera_settings,
       camera_debugging,
+      camera,
 
       uniform_buffer,
       instance_buffer,
@@ -177,8 +180,7 @@ impl app::Application for Cubes {
 
 
   fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    let viewport = screen_size.physical;
-    self.camera.viewport = viewport;
+    self.camera.set_viewport(screen_size.physical);
   }
 
 
@@ -196,9 +198,9 @@ impl app::Application for Cubes {
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera.update(&input.camera, frame.time.delta);
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &mut self.camera);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera_sys(&self.camera)]);
+    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
+    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {
       ui.grid("Grid", |ui| {
