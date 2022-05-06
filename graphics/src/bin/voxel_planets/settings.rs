@@ -203,9 +203,25 @@ impl Settings {
             ui.checkbox(&mut self.transvoxel_settings.extract_transition_hi_z_chunks, "Hi Z");
             ui.end_row();
           });
+          ui.end_row();
         }
         ExtractorType::SurfaceNets => {}
       }
+      return ui.button("Update").clicked();
+    }).body_returned.map(|i| i.inner).unwrap_or(false)
+  }
+
+  pub fn draw_lod_octmap_gui(
+    &mut self,
+    ui: &mut Ui,
+  ) -> bool {
+    ui.collapsing_open_with_grid("LOD octmap", "Grid", |ui| {
+      ui.label("Thread pool threads");
+      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.thread_pool_threads, 1, 1..=2usize.pow(8));
+      ui.end_row();
+      ui.label("Chunk mesh cache size");
+      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.chunk_mesh_cache_size, 1, 1..=2usize.pow(16));
+      ui.end_row();
       return ui.button("Update").clicked();
     }).body_returned.map(|i| i.inner).unwrap_or(false)
   }
@@ -219,6 +235,7 @@ impl Settings {
       ui.label("LOD factor");
       ui.drag_unlabelled_range(lod_chunk_mesh_manager.get_lod_factor_mut(), 0.1, 0.0..=4.0);
       ui.end_row();
+      self.lod_octmap_settings.lod_factor = lod_chunk_mesh_manager.get_lod_factor();
       ui.label("Max LOD level");
       ui.monospace(format!("{}", lod_chunk_mesh_manager.get_max_lod_level()));
       ui.end_row();

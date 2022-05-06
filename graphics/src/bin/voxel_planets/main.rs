@@ -108,11 +108,13 @@ impl app::Application for VoxelPlanets {
 
     egui::Window::new("Voxel Planets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
+      .auto_sized()
       .show(&gui_frame, |ui| {
         self.settings.draw_light_gui(ui);
         let mut recreate_lod_render_data_manager = false;
         recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
+        recreate_lod_render_data_manager |= self.settings.draw_lod_octmap_gui(ui);
         if recreate_lod_render_data_manager {
           self.lod_render_data_manager = self.settings.create_lod_render_data_manager();
         }

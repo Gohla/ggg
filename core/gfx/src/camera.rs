@@ -346,8 +346,10 @@ impl Camera {
       match self.movement_type {
         MovementType::Arcball => {
           ui.label("Distance");
+          ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
+          ui.end_row();
+          ui.label("Distance Change");
           ui.horizontal(|ui| {
-            ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
             ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
           });
@@ -356,6 +358,10 @@ impl Camera {
           ui.horizontal(|ui| {
             ui.drag("x: ", &mut self.arcball.rotation_around_x, 0.01);
             ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
+          });
+          ui.end_row();
+          ui.label("Rotation Change");
+          ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
           });
@@ -363,11 +369,11 @@ impl Camera {
         }
         MovementType::Fly => {}
       }
-      ui.label("Position");
-      ui.show_vec3(&self.position);
-      ui.end_row();
       ui.label("Target");
       ui.drag_vec3(0.1, &mut self.target);
+      ui.end_row();
+      ui.label("Position");
+      ui.show_vec3(&self.position);
       ui.end_row();
     });
     ui.collapsing_open_with_grid("Projection", "Grid", |ui| {

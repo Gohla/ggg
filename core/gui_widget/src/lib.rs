@@ -132,8 +132,8 @@ impl UiWidgetsExt for Ui {
   #[inline]
   fn show_vec2(&mut self, vec: &Vec2) {
     self.horizontal(|ui| {
-      ui.show_prefixed_f32_lp_7_2("x: ", vec.x);
-      ui.show_prefixed_f32_lp_7_2("y: ", vec.y);
+      ui.show_prefixed_f32_lp_7_2("x", vec.x);
+      ui.show_prefixed_f32_lp_7_2("y", vec.y);
     });
   }
 
@@ -148,9 +148,9 @@ impl UiWidgetsExt for Ui {
   #[inline]
   fn show_vec3(&mut self, vec: &Vec3) {
     self.horizontal(|ui| {
-      ui.show_prefixed_f32_lp_7_2("x: ", vec.x);
-      ui.show_prefixed_f32_lp_7_2("y: ", vec.y);
-      ui.show_prefixed_f32_lp_7_2("z: ", vec.z);
+      ui.show_prefixed_f32_lp_7_2("x", vec.x);
+      ui.show_prefixed_f32_lp_7_2("y", vec.y);
+      ui.show_prefixed_f32_lp_7_2("z", vec.z);
     });
   }
 
@@ -166,10 +166,10 @@ impl UiWidgetsExt for Ui {
   #[inline]
   fn show_vec4(&mut self, vec: &Vec4) {
     self.horizontal(|ui| {
-      ui.show_prefixed_f32_lp_7_2("x: ", vec.x);
-      ui.show_prefixed_f32_lp_7_2("y: ", vec.y);
-      ui.show_prefixed_f32_lp_7_2("z: ", vec.z);
-      ui.show_prefixed_f32_lp_7_2("w: ", vec.w);
+      ui.show_prefixed_f32_lp_7_2("x", vec.x);
+      ui.show_prefixed_f32_lp_7_2("y", vec.y);
+      ui.show_prefixed_f32_lp_7_2("z", vec.z);
+      ui.show_prefixed_f32_lp_7_2("w", vec.w);
     });
   }
 

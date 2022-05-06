@@ -105,7 +105,7 @@ pub struct Options {
 impl Default for Options {
   fn default() -> Self {
     #[cfg(not(target_arch = "wasm32"))]
-      let size = LogicalSize::new(1280.0, 720.0);
+      let size = LogicalSize::new(1920.0, 1080.0);
     #[cfg(target_arch = "wasm32")]
       let size = os::window::get_browser_inner_size();
     #[allow(unused_mut)] let mut options = Options {
