@@ -45,10 +45,12 @@ impl app::Application for VoxelPlanets {
 
   fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
     let extends = 4096.0 / 2.0;
-    settings.camera.viewport = os.window.get_inner_size().physical;
-    settings.camera.arcball.distance = -extends * 2.0;
-    settings.camera.arcball.mouse_scroll_distance_speed = 1000.0;
-    settings.camera.far = 10000.0;
+    settings.camera_debugging.set_defaults(&mut settings.camera, |camera| {
+      camera.viewport = os.window.get_inner_size().physical;
+      camera.arcball.distance = -extends * 2.0;
+      camera.arcball.mouse_scroll_distance_speed = 1000.0;
+      camera.far = 10000.0;
+    });
     settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
 
     let camera_uniform = CameraUniform::from_camera(&settings.camera);

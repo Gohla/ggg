@@ -13,6 +13,7 @@ use common::timing::Duration;
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Camera {
   // View
+  #[cfg_attr(feature = "serde", serde(skip))]
   pub viewport: PhysicalSize,
   pub movement_type: MovementType,
   pub arcball: Arcball,
@@ -25,12 +26,19 @@ pub struct Camera {
   pub near: f32,
   pub far: f32,
   // Internals
+  #[cfg_attr(feature = "serde", serde(skip))]
   position: Vec3,
+  #[cfg_attr(feature = "serde", serde(skip))]
   view: Mat4,
+  #[cfg_attr(feature = "serde", serde(skip))]
   view_inverse: Mat4,
+  #[cfg_attr(feature = "serde", serde(skip))]
   projection: Mat4,
+  #[cfg_attr(feature = "serde", serde(skip))]
   projection_inverse: Mat4,
+  #[cfg_attr(feature = "serde", serde(skip))]
   view_projection: Mat4,
+  #[cfg_attr(feature = "serde", serde(skip))]
   view_projection_inverse: Mat4,
 }
 
@@ -304,6 +312,8 @@ impl From<&RawInput> for CameraInput {
 pub struct CameraDebugging {
   pub show_window: bool,
   pub window_anchor: Option<egui::Align2>,
+  #[cfg_attr(feature = "serde", serde(skip))]
+  pub default: Camera,
 }
 
 #[cfg(feature = "debugging_gui")]
@@ -317,22 +327,35 @@ impl CameraDebugging {
     window
       .open(&mut self.show_window)
       .auto_sized()
-      .show(ctx, |ui| camera.draw_debugging_gui(ui, &mut self.window_anchor));
+      .show(ctx, |ui| camera.draw_debugging_gui(ui, &mut self.window_anchor, &self.default));
   }
 
   pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {
     ui.checkbox(&mut self.show_window, "Camera");
   }
+
+  pub fn set_defaults(&mut self, camera: &mut Camera, set_fn: impl Fn(&mut Camera)) {
+    set_fn(&mut self.default);
+    set_fn(camera);
+  }
 }
 
 #[cfg(feature = "debugging_gui")]
 impl Camera {
-  pub fn draw_debugging_gui(&mut self, ui: &mut egui::Ui, window_anchor: &mut Option<egui::Align2>) {
+  pub fn draw_debugging_gui(
+    &mut self,
+    ui: &mut egui::Ui,
+    window_anchor: &mut Option<egui::Align2>,
+    default: &Camera,
+  ) {
     use egui::ComboBox;
     use gui_widget::*;
     ui.horizontal(|ui| {
       ui.label("Anchor");
       ui.select_align2(window_anchor);
+      if ui.button("Reset to defaults").double_clicked() {
+        *self = *default;
+      }
     });
     ui.collapsing_open_with_grid("View", "Grid", |ui| {
       ui.label("Movement mode");
@@ -348,7 +371,7 @@ impl Camera {
           ui.label("Distance");
           ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
           ui.end_row();
-          ui.label("Distance Change");
+          ui.label("Distance change");
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
@@ -360,7 +383,7 @@ impl Camera {
             ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
           });
           ui.end_row();
-          ui.label("Rotation Change");
+          ui.label("Rotation change");
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
