@@ -22,6 +22,8 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
 tracing-log = "0.1"
+profiling = "1"
+tracy-client = { version = "0.13", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.tracing-wasm]
 version = "0.2"
@@ -32,3 +34,6 @@ version = "0.1"
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
 version = "0.12"
 features = ["webgl"]
+
+[features]
+profile-with-tracy = ["profiling/profile-with-tracy", "dep:tracy-client"]

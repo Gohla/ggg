@@ -36,7 +36,10 @@ pub enum CreateError {
   ThreadCreateFail(#[from] std::io::Error),
 }
 
-pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
+#[profiling::function]
+pub async fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
+  profiling::register_thread!();
+  
   #[cfg(target_arch = "wasm32")] {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
   }
@@ -154,6 +157,7 @@ fn run_app<A: Application + 'static>(
   let app_thread_join_handle = std::thread::Builder::new()
     .name(name)
     .spawn(move || {
+      profiling::register_thread!();
       run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, config);
     })?;
   os_event_sys.run(os_context, app_thread_join_handle);
@@ -245,6 +249,7 @@ fn run_app<A: Application + 'static>(
 
 // Shared codepath
 
+#[profiling::function]
 fn run_app_cycle<A: Application>(
   os_event_rx: &Receiver<OsEvent>,
   os_input_sys: &mut OsInputSys,
@@ -260,6 +265,8 @@ fn run_app_cycle<A: Application>(
   resized: &mut bool,
   minimized: &mut bool,
 ) -> bool {
+  profiling::finish_frame!();
+  
   // Timing
   let frame_time = frame_timer.frame();
   timing_stats.frame(frame_time);

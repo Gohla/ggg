@@ -16,6 +16,7 @@ image = { version = "0.23", default-features = false }
 ultraviolet = "0.9"
 bytemuck = "1.5"
 thiserror = "1"
+profiling = "1"
 
 [build-dependencies]
 gfxc = { path = "../gfxc" }

@@ -87,6 +87,7 @@ impl<MM> SimpleLodRenderDataManager<MM> {
 impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLodRenderDataManager<MM> where
   MM: LodChunkMeshManager<C, Extractor=E>
 {
+  #[profiling::function]
   fn update(
     &mut self,
     position: Vec3,
@@ -147,6 +148,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
   }
 }
 
+#[profiling::function]
 pub(crate) fn copy_chunk_vertices(
   chunk_vertices: &ChunkMesh,
   vertices: &mut Vec<Vertex>,

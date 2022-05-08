@@ -62,7 +62,7 @@ impl OsEventSys {
     };
     (os_event_sys, input_event_rx, os_event_rx, )
   }
-
+  
   #[cfg(not(target_arch = "wasm32"))]
   pub fn run(mut self, os_context: OsContext, app_thread_join_handle: JoinHandle<()>) -> ! {
     self.app_thread_join_handle = Some(app_thread_join_handle);
@@ -70,14 +70,14 @@ impl OsEventSys {
       // Event loop does nothing else, so just wait until the next event. Set before `event_loop` as it can override it
       // to `ControlFlow::Exit`.
       *control_flow = ControlFlow::Wait;
-      self.event_loop(event, control_flow);
+      self.event_cycle(event, control_flow);
     });
   }
 
   #[cfg(target_arch = "wasm32")]
   pub fn run(mut self, os_context: OsContext, mut cycle: impl FnMut() -> bool + 'static) {
     os_context.event_loop.run(move |event, _, control_flow| {
-      self.event_loop(event, control_flow);
+      self.event_cycle(event, control_flow);
       if *control_flow == ControlFlow::Exit { // Close was requested in `event_loop`.
         return;
       }
@@ -90,7 +90,8 @@ impl OsEventSys {
     });
   }
 
-  fn event_loop(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
+  #[profiling::function]
+  fn event_cycle(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
     match event {
       Event::WindowEvent { event, window_id, .. } if window_id == self.window_id => {
         match event {

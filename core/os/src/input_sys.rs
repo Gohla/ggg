@@ -18,6 +18,7 @@ impl OsInputSys {
     };
   }
 
+  #[profiling::function]
   pub fn update(&mut self) -> RawInput {
     let mut input_state = if let Some(ref prev_state) = self.prev_state {
       let mut prev_state = prev_state.clone();

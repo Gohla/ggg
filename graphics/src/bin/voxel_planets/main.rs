@@ -45,6 +45,7 @@ pub struct Input {
 impl app::Application for VoxelPlanets {
   type Config = Settings;
 
+  #[profiling::function]
   fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
     let extends = 4096.0 / 2.0;
     settings.camera_debugging.set_default_settings(&mut settings.camera_settings, |camera_settings| {
@@ -97,6 +98,7 @@ impl app::Application for VoxelPlanets {
 
   type Input = Input;
 
+  #[profiling::function]
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
@@ -108,6 +110,7 @@ impl app::Application for VoxelPlanets {
   }
 
 
+  #[profiling::function]
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.settings.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.settings.camera_settings);
     self.camera.update(&mut self.settings.camera_settings, &input.camera, frame.time.delta);

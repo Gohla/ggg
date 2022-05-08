@@ -90,6 +90,7 @@ impl VoxelRenderer {
     self.model_uniform_buffer.write_whole_data(queue, &[model_uniform]);
   }
 
+  #[profiling::function]
   pub fn render_lod_mesh(
     &self,
     gfx: &Gfx,
@@ -109,6 +110,7 @@ impl VoxelRenderer {
     render_pass.pop_debug_group();
   }
 
+  #[profiling::function]
   pub fn render_chunk_vertices(
     &self,
     gfx: &Gfx,
@@ -134,6 +136,7 @@ impl VoxelRenderer {
     render_pass.pop_debug_group();
   }
 
+  #[profiling::function]
   fn create_render_pass<'a>(
     &'a self,
     gfx: &'a Gfx,

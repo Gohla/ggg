@@ -20,6 +20,7 @@ lru = "0.7"
 flagset = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 tracing = "0.1"
+profiling = "1"
 
 [build-dependencies]
 gfxc = { path = "../gfxc" }

@@ -20,6 +20,10 @@ ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
+profiling = "1"
 
 [build-dependencies]
 gfxc = { path = "../core/gfxc" }
+
+[features]
+profile-with-tracy = ["app/profile-with-tracy"]

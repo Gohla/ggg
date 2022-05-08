@@ -99,6 +99,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   #[inline]
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
+  #[profiling::function]
   pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
     let position = self.transform_inversed.transform_vec(position);
 
@@ -135,6 +136,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     self.chunk_mesh_cache.clear();
   }
 
+  #[profiling::function]
   fn update_root_node(&mut self, position: Vec3) {
     let root = AABB::from_size(self.total_size);
     let (filled, activated) = self.update_nodes(root, 0, position);
@@ -143,6 +145,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     }
   }
 
+  #[profiling::function]
   fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) -> (bool, bool) {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
@@ -178,6 +181,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size() as f32
   }
 
+  #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     let (chunk_mesh, filled) = self.lod_chunk_meshes.entry(aabb).or_default();
     if *filled { return true; }
@@ -192,6 +196,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     return false;
   }
 
+  #[profiling::function]
   fn request_chunk(&mut self, aabb: AABB, mut chunk: E::Chunk) {
     self.requested_aabbs.insert(aabb);
     let total_size = self.total_size;

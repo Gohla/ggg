@@ -27,6 +27,7 @@ impl DebugGui {
     });
   }
 
+  #[profiling::function]
   pub fn show_timing(
     &mut self,
     ctx: &Context,
@@ -118,6 +119,7 @@ impl DebugGui {
       });
   }
 
+  #[profiling::function]
   pub fn show_input(
     &mut self,
     ctx: &Context,

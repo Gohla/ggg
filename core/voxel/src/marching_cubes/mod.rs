@@ -30,6 +30,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
   #[inline]
   pub fn new() -> Self { Self::default() }
 
+  #[profiling::function]
   pub fn extract_chunk(
     &self,
     min: UVec3,

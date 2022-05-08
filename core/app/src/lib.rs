@@ -145,6 +145,9 @@ pub fn run_with_defaults<A: Application + 'static>(name: &str) -> Result<(), Cre
 }
 
 pub fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
-  futures::executor::block_on(run::run_async::<A>(options))
+  #[cfg(feature = "profile-with-tracy")]
+  tracy_client::Client::start();
+  
+  futures::executor::block_on(run::run::<A>(options))
 }
 

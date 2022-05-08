@@ -122,6 +122,7 @@ impl Gui {
 // Input processing.
 
 impl Gui {
+  #[profiling::function]
   pub fn process_input(&mut self, input: &RawInput, process_keyboard_input: bool, process_mouse_input: bool) {
     if process_keyboard_input {
       // Keyboard modifiers
@@ -240,6 +241,7 @@ impl Gui {
 // Begin GUI frame, returning the context to start building the GUI.
 
 impl Gui {
+  #[profiling::function]
   pub fn begin_frame(
     &mut self,
     screen_size: ScreenSize,
@@ -263,6 +265,7 @@ impl Gui {
 // Rendering the built GUI.
 
 impl Gui {
+  #[profiling::function]
   pub fn render(
     &mut self,
     screen_size: ScreenSize,

@@ -11,6 +11,10 @@ default-members = [
 resolver = "2"
 
 
+[patch.crates-io]
+profiling = { git = "https://github.com/Imberflur/profiling.git", branch = "update-tracy" }
+
+
 # Development profile: no debug information, some optimisations. Very low compile-time.
 [profile.dev]
 opt-level = 2
