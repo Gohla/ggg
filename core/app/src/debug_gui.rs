@@ -18,7 +18,12 @@ impl DebugGui {
     menu::menu_button(ui, "Debug", |ui| {
       ui.checkbox(&mut self.show_timing_window, "Timing");
       ui.checkbox(&mut self.show_input_window, "Input");
+      ui.separator();
       add_contents(ui);
+      ui.separator();
+      if ui.button("Reset GUI state (double click)").double_clicked() {
+        *ui.ctx().memory() = egui::Memory::default();
+      }
     });
   }
 

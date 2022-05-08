@@ -106,10 +106,11 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
   let screen_size = os.window.get_inner_size();
   let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
 
-  let gui = Gui::new(&device, surface.get_texture_format());
-
+  let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
+  let gui = Gui::new(&device, surface.get_texture_format(), Some(egui_memory));
+  
   let sample_count = options.sample_count;
-  let depth_texture = options.depth_stencil_texture_format.map(|format| {
+  let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {
     TextureBuilder::new_depth(screen_size.physical, format)
       .with_sample_count(sample_count)
       .build(&device)
@@ -121,10 +122,9 @@ pub async fn run_async<A: Application + 'static>(options: Options) -> Result<(),
       .build(&device)
     )
   } else { None };
+  let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisampled_framebuffer, sample_count };
 
-  let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture: depth_texture, multisampled_framebuffer, sample_count };
-
-  let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir());
+  let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
 
   run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, config)?;
 }
@@ -197,7 +197,8 @@ fn run_app_in_loop<A: Application>(
   }
 
   let config = Config { app_config: app.into_config(), debug_gui };
-  config::serialize_config::<Config<A::Config>>(os.directories.config_dir(), &config);
+  config::serialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH, &config);
+  config::serialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH, &gui.context.memory());
 }
 
 // WASM codepath

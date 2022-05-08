@@ -13,7 +13,7 @@ gui = { path = "../gui" }
 gui_widget = { path = "../gui_widget" }
 wgpu = "0.12"
 raw-window-handle = "0.4"
-egui = "0.18"
+egui = { version = "0.18", features = ["persistence"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 ron = "0.7"

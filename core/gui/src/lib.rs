@@ -20,7 +20,7 @@ use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 
 pub struct Gui {
-  context: Context,
+  pub context: Context,
   input: EguiRawInput,
 
   index_buffer: Option<GfxBuffer>,
@@ -37,7 +37,16 @@ pub struct Gui {
 // Creation
 
 impl Gui {
-  pub fn new(device: &Device, swap_chain_texture_format: TextureFormat) -> Self {
+  pub fn new(
+    device: &Device,
+    swap_chain_texture_format: TextureFormat,
+    memory: Option<egui::Memory>,
+  ) -> Self {
+    let context = Context::default();
+    if let Some(memory) = memory {
+      *context.memory() = memory;
+    }
+    
     let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
     let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
     let uniform_buffer = BufferBuilder::new()
@@ -93,8 +102,9 @@ impl Gui {
       .with_layout_label("GUI pipeline layout")
       .with_label("GUI render pipeline")
       .build(device);
+    
     Self {
-      context: Context::default(),
+      context,
       input: EguiRawInput::default(),
       index_buffer: None,
       vertex_buffer: None,
