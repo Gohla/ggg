@@ -367,7 +367,7 @@ impl CameraSettings {
     ui.horizontal(|ui| {
       ui.label("Anchor");
       ui.select_align2(window_anchor);
-      if ui.button("Reset to defaults").double_clicked() {
+      if ui.button("Reset to defaults (double click)").double_clicked() {
         *self = *default_settings;
       }
     });

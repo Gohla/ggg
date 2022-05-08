@@ -31,7 +31,8 @@ pub struct VoxelPlanets {
   debug_renderer: DebugRenderer,
   stars_renderer: StarsRenderer,
   voxel_renderer: VoxelRenderer,
-
+  
+  lod_octmap_transform: Isometry3,
   lod_render_data_manager: Box<dyn LodRenderDataManager<ChunkSize16>>,
   lod_render_data: LodRenderData,
 }
@@ -51,7 +52,7 @@ impl app::Application for VoxelPlanets {
       camera_settings.arcball.mouse_scroll_distance_speed = 1000.0;
       camera_settings.far = 10000.0;
     });
-    settings.lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
+    let lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
 
     let camera = Camera::new(os.window.get_inner_size().physical);
     let camera_uniform = CameraUniform::from_camera(&camera);
@@ -66,7 +67,7 @@ impl app::Application for VoxelPlanets {
       None,
     );
 
-    let mut lod_render_data_manager = settings.create_lod_render_data_manager();
+    let mut lod_render_data_manager = settings.create_lod_render_data_manager(lod_octmap_transform);
     let lod_render_data = lod_render_data_manager.update(camera.get_position(), &settings.lod_render_data_settings, &mut debug_renderer, &gfx.device);
 
     Self {
@@ -79,6 +80,7 @@ impl app::Application for VoxelPlanets {
       stars_renderer,
       voxel_renderer,
 
+      lod_octmap_transform,
       lod_render_data_manager,
       lod_render_data,
     }
@@ -115,13 +117,14 @@ impl app::Application for VoxelPlanets {
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
       .auto_sized()
       .show(&gui_frame, |ui| {
-        self.settings.draw_light_gui(ui);
         let mut recreate_lod_render_data_manager = false;
+        recreate_lod_render_data_manager |= self.settings.draw_reset_to_defaults_button(ui);
+        self.settings.draw_light_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_lod_octmap_gui(ui);
         if recreate_lod_render_data_manager {
-          self.lod_render_data_manager = self.settings.create_lod_render_data_manager();
+          self.lod_render_data_manager = self.settings.create_lod_render_data_manager(self.lod_octmap_transform);
         }
         self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
         if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true

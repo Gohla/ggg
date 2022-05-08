@@ -1,4 +1,4 @@
-use egui::{ComboBox, Ui};
+use egui::{Align2, ComboBox, Ui};
 use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
 use ultraviolet::Isometry3;
@@ -60,7 +60,6 @@ pub struct Settings {
   pub surface_nets_settings: SurfaceNetsExtractorSettings,
 
   pub lod_octmap_settings: LodOctmapSettings,
-  pub lod_octmap_transform: Isometry3,
 
   pub lod_render_data_settings: LodRenderDataSettings,
   pub auto_update: bool,
@@ -72,7 +71,12 @@ impl Default for Settings {
   fn default() -> Self {
     Self {
       camera_settings: CameraSettings::with_defaults_arcball_perspective(),
-      camera_debugging: Default::default(),
+      camera_debugging: CameraDebugging {
+        show_window: true,
+        window_anchor: Some(Align2::LEFT_BOTTOM),
+        ..Default::default()
+      },
+
       light: Default::default(),
       volume_type: Default::default(),
       sphere_settings: Default::default(),
@@ -82,7 +86,6 @@ impl Default for Settings {
       transvoxel_settings: Default::default(),
       surface_nets_settings: Default::default(),
       lod_octmap_settings: Default::default(),
-      lod_octmap_transform: Default::default(),
       lod_render_data_settings: Default::default(),
       auto_update: true,
       stars_renderer_settings: Default::default(),
@@ -95,30 +98,45 @@ type C16 = GenericChunkSize<16>;
 impl Settings {
   pub fn create_lod_render_data_manager(
     &self,
+    transform: Isometry3,
   ) -> Box<dyn LodRenderDataManager<C16>> {
     let builder = LodManagerBuilder::new::<C16>();
     match self.volume_type {
-      VolumeType::Sphere => self.build_lod_render_data_manager(builder.with_volume(Sphere::new(self.sphere_settings))),
-      VolumeType::Noise => self.build_lod_render_data_manager(builder.with_volume(Noise::new(self.noise_settings))),
-      VolumeType::SpherePlusNoise => self.build_lod_render_data_manager(builder.with_volume(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings)))),
+      VolumeType::Sphere => self.build_lod_render_data_manager(builder.with_volume(Sphere::new(self.sphere_settings)), transform),
+      VolumeType::Noise => self.build_lod_render_data_manager(builder.with_volume(Noise::new(self.noise_settings)), transform),
+      VolumeType::SpherePlusNoise => self.build_lod_render_data_manager(builder.with_volume(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings))), transform),
     }
   }
 
   fn build_lod_render_data_manager<V: Volume, E>(
     &self,
     builder: LodManagerBuilder<C16, V, E>,
+    transform: Isometry3,
   ) -> Box<dyn LodRenderDataManager<C16>> {
     match self.extractor_type {
       ExtractorType::MarchingCubes => builder
         .with_extractor(MarchingCubesExtractor::new(MarchingCubes::<C16>::default(), self.marching_cubes_settings))
-        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+        .build_boxed(self.lod_octmap_settings, transform),
       ExtractorType::Transvoxel => builder
         .with_extractor(TransvoxelExtractor::new(MarchingCubes::<C16>::default(), Transvoxel::<C16>::default(), self.transvoxel_settings))
-        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+        .build_boxed(self.lod_octmap_settings, transform),
       ExtractorType::SurfaceNets => builder
         .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), self.surface_nets_settings))
-        .build_boxed(self.lod_octmap_settings, self.lod_octmap_transform),
+        .build_boxed(self.lod_octmap_settings, transform),
     }
+  }
+
+  /// Returns true if reset button was double clicked.
+  pub fn draw_reset_to_defaults_button(&mut self, ui: &mut Ui) -> bool {
+    if ui.button("Reset to defaults (double click)").double_clicked() {
+      *self = Self {
+        camera_settings: self.camera_settings,
+        camera_debugging: self.camera_debugging,
+        ..Self::default()
+      };
+      return true;
+    }
+    return false;
   }
 
   pub fn draw_light_gui(&mut self, ui: &mut Ui) {
