@@ -1,6 +1,3 @@
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ultraviolet::{Isometry3, UVec3, Vec3};
 
@@ -19,7 +16,7 @@ pub fn sphere_benchmark(c: &mut Criterion) {
   let sphere = Sphere::new(SphereSettings { radius: 64.0 });
   let start = UVec3::new(0, 0, 0);
   let end = UVec3::new(64, 64, 64);
-  c.bench_function("Sphere-64", |b| b.iter(|| {
+  c.bench_function("Volume-Sphere-64", |b| b.iter(|| {
     for x in start.x..=end.x {
       for y in start.y..=end.y {
         for z in start.z..=end.z {
@@ -121,11 +118,7 @@ pub fn octree_benchmark(c: &mut Criterion) {
   group.finish();
 }
 
-fn preallocate_octmap<V: Volume, C: ChunkSize, E: LodExtractor<C>>(mut octree: LodOctmap<V, C, E>, position: Vec3) -> LodOctmap<V, C, E> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
-  [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
-{
+fn preallocate_octmap<V: Volume, C: ChunkSize, E: LodExtractor<C>>(mut octree: LodOctmap<V, C, E>, position: Vec3) -> LodOctmap<V, C, E> {
   drop(octree.update(position));
   octree.clear();
   octree
