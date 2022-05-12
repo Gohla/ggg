@@ -20,10 +20,7 @@ pub struct MarchingCubesExtractor<C: ChunkSize> {
   _settings: MarchingCubesExtractorSettings,
 }
 
-impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
-{
+impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   type Chunk = MarchingCubesLodChunkVertices;
 
   #[inline]

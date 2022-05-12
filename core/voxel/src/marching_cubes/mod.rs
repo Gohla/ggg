@@ -15,6 +15,7 @@ use std::marker::PhantomData;
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::{ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex};
+use crate::chunk::Sliceable;
 use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
@@ -25,8 +26,6 @@ pub struct MarchingCubes<C: ChunkSize> {
 }
 
 impl<C: ChunkSize> MarchingCubes<C> {
-  pub const SHARED_INDICES_SIZE: usize = 4 * C::CELLS_IN_CHUNK_USIZE;
-
   #[inline]
   pub fn new() -> Self { Self::default() }
 
@@ -37,12 +36,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
     step: u32,
     chunk_samples: &ChunkSamples<C>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-    [u16; Self::SHARED_INDICES_SIZE]:,
-  {
+  ) {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      let mut shared_indices = [u16::MAX; Self::SHARED_INDICES_SIZE]; // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
+      let mut shared_indices = C::create_marching_cubes_shared_indices_array(u16::MAX); // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
       for w in 0..C::CELLS_IN_CHUNK_ROW {
         for v in 0..C::CELLS_IN_CHUNK_ROW {
           for u in 0..C::CELLS_IN_CHUNK_ROW {
@@ -60,11 +56,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-    shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
+    shared_indices: &mut C::MarchingCubesSharedIndicesArray<u16>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  ) {
     let local_coordinates = Self::local_coordinates(cell);
     let values = Self::sample(chunk_sample_array, &local_coordinates);
     let case = Self::case(&values);
@@ -122,9 +116,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
   }
 
   #[inline]
-  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
     [
       chunk_sample_array.sample(local_coordinates[0]),
       chunk_sample_array.sample(local_coordinates[1]),
@@ -170,16 +162,16 @@ impl<C: ChunkSize> MarchingCubes<C> {
     cell: RegularCell,
     global_voxels: &[UVec3; 8],
     values: &[f32; 8],
-    shared_indices: &mut [u16; Self::SHARED_INDICES_SIZE],
+    shared_indices: &mut C::MarchingCubesSharedIndicesArray<u16>,
     chunk_mesh: &mut ChunkMesh,
   ) -> u16 {
     if vertex_data.new_vertex() {
       // Create a new vertex and index, and share the index.
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_mesh);
       let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index() as usize);
-      debug_assert!(shared_indices_index < shared_indices.len(), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
-      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
-      shared_indices[shared_indices_index] = index;
+      debug_assert!(shared_indices_index < shared_indices.slice().len(), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
+      debug_assert!(shared_indices.slice()[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
+      shared_indices.slice_mut()[shared_indices_index] = index;
       index
     } else {
       let subtract_u = vertex_data.subtract_u();
@@ -196,8 +188,8 @@ impl<C: ChunkSize> MarchingCubes<C> {
           previous_cell
         };
         let shared_indices_index = Self::shared_index(previous_cell, vertex_data.vertex_index() as usize);
-        debug_assert!(shared_indices_index < shared_indices.len(), "Tried to read out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
-        let index = shared_indices[shared_indices_index];
+        debug_assert!(shared_indices_index < shared_indices.slice().len(), "Tried to read out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
+        let index = shared_indices.slice()[shared_indices_index];
         debug_assert!(index != u16::MAX, "Tried to read unset shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
         index
       } else {

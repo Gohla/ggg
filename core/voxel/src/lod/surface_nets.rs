@@ -20,10 +20,7 @@ pub struct SurfaceNetsExtractor<C: ChunkSize> {
   _settings: SurfaceNetsExtractorSettings,
 }
 
-impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; SurfaceNets::<C>::SHARED_INDICES_SIZE]:,
-{
+impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   type Chunk = SurfaceNetsLodChunkMesh;
 
   #[inline]

@@ -46,11 +46,7 @@ pub struct TransvoxelExtractor<C: ChunkSize> {
   settings: TransvoxelExtractorSettings,
 }
 
-impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  [u16; MarchingCubes::<C>::SHARED_INDICES_SIZE]:,
-  [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
-{
+impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   type Chunk = TransvoxelLodChunkVertices;
 
   #[inline]
@@ -126,10 +122,7 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
     hires_step: u32,
     lores_step: u32,
     chunk_vertices: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-    [u16; Transvoxel::<C>::SHARED_INDICES_SIZE]:,
-  {
+  ) {
     let hires_chunk_mins = side.subdivided_face_of_side_minimums(aabb);
     let hires_chunk_samples = [
       volume.sample_chunk(hires_chunk_mins[0], hires_step),

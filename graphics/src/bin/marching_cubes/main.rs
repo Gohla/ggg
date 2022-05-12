@@ -1,6 +1,3 @@
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::{CommandBuffer, Features};
@@ -11,7 +8,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use voxel::chunk::{ChunkMesh, GenericChunkSize};
+use voxel::chunk::{ChunkMesh, ChunkSize1};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 
@@ -39,7 +36,7 @@ pub struct Input {
   camera: CameraInput,
 }
 
-pub type C1 = GenericChunkSize<1>;
+pub type C1 = ChunkSize1;
 
 const EXTENDS: f32 = 0.5;
 

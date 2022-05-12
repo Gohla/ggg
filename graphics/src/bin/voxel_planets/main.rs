@@ -1,6 +1,3 @@
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3};
 use wgpu::{CommandBuffer, Features, PowerPreference};

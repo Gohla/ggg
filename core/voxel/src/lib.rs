@@ -1,6 +1,5 @@
 #![feature(int_log)]
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
+#![feature(generic_associated_types)]
 
 pub mod marching_cubes;
 pub mod transvoxel;

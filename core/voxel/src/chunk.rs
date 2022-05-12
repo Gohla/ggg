@@ -11,27 +11,113 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   const CELLS_IN_CHUNK_ROW: u32;
   const CELLS_IN_CHUNK_ROW_F32: f32 = Self::CELLS_IN_CHUNK_ROW as f32;
   const CELLS_IN_CHUNK_ROW_USIZE: usize = Self::CELLS_IN_CHUNK_ROW as usize;
-  const CELLS_IN_DECK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
-  const CELLS_IN_DECK_USIZE: usize = Self::CELLS_IN_DECK as usize;
-  const CELLS_IN_CHUNK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
-  const CELLS_IN_CHUNK_USIZE: usize = Self::CELLS_IN_CHUNK as usize;
 
   const HALF_CELLS_IN_CHUNK_ROW: u32 = Self::CELLS_IN_CHUNK_ROW / 2;
 
+  const CELLS_IN_DECK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
+  const CELLS_IN_DECK_USIZE: usize = Self::CELLS_IN_DECK as usize;
+
+  const CELLS_IN_CHUNK_USIZE: usize = Self::CELLS_IN_CHUNK_ROW_USIZE * Self::CELLS_IN_CHUNK_ROW_USIZE * Self::CELLS_IN_CHUNK_ROW_USIZE;
+
   const VOXELS_IN_CHUNK_ROW: u32 = Self::CELLS_IN_CHUNK_ROW + 1;
   const VOXELS_IN_CHUNK_ROW_USIZE: usize = Self::VOXELS_IN_CHUNK_ROW as usize;
+
   const VOXELS_IN_CHUNK: u32 = Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW;
   const VOXELS_IN_CHUNK_USIZE: usize = Self::VOXELS_IN_CHUNK as usize;
+
+  type CellsChunkArray<T>: Sliceable<T>;
+  fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T>;
+
+  type VoxelsChunkArray<T>: Sliceable<T>;
+  fn create_voxel_chunk_array<T: Copy>(default: T) -> Self::VoxelsChunkArray<T>;
+
+  type MarchingCubesSharedIndicesArray<T>: Sliceable<T>;
+  fn create_marching_cubes_shared_indices_array<T: Copy>(default: T) -> Self::MarchingCubesSharedIndicesArray<T>;
+
+  type TransvoxelSharedIndicesArray<T>: Sliceable<T>;
+  fn create_transvoxel_shared_indices_array<T: Copy>(default: T) -> Self::TransvoxelSharedIndicesArray<T>;
+}
+
+pub trait Sliceable<T>: Sized {
+  fn slice(&self) -> &[T];
+  fn slice_mut(&mut self) -> &mut [T];
+}
+
+impl<T, const N: usize> Sliceable<T> for [T; N] {
+  #[inline]
+  fn slice(&self) -> &[T] { self }
+  #[inline]
+  fn slice_mut(&mut self) -> &mut [T] { self }
 }
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct GenericChunkSize<const SIZE: u32>;
+pub struct ChunkSize1 {}
 
-impl<const SIZE: u32> ChunkSize for GenericChunkSize<SIZE> {
-  const CELLS_IN_CHUNK_ROW: u32 = SIZE;
+impl ChunkSize for ChunkSize1 {
+  const CELLS_IN_CHUNK_ROW: u32 = 1;
+
+  type CellsChunkArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE] }
+
+  type VoxelsChunkArray<T> = [T; Self::VOXELS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_voxel_chunk_array<T: Copy>(default: T) -> Self::VoxelsChunkArray<T> { [default; Self::VOXELS_IN_CHUNK_USIZE] }
+
+  type MarchingCubesSharedIndicesArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE * 4];
+  #[inline]
+  fn create_marching_cubes_shared_indices_array<T: Copy>(default: T) -> Self::MarchingCubesSharedIndicesArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE * 4] }
+
+  type TransvoxelSharedIndicesArray<T> = [T; Self::CELLS_IN_DECK_USIZE * 10];
+  #[inline]
+  fn create_transvoxel_shared_indices_array<T: Copy>(default: T) -> Self::TransvoxelSharedIndicesArray<T> { [default; Self::CELLS_IN_DECK_USIZE * 10] }
 }
 
-pub type ChunkSize16 = GenericChunkSize<16>;
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ChunkSize2 {}
+
+impl ChunkSize for ChunkSize2 {
+  const CELLS_IN_CHUNK_ROW: u32 = 2;
+
+  type CellsChunkArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE] }
+
+  type VoxelsChunkArray<T> = [T; Self::VOXELS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_voxel_chunk_array<T: Copy>(default: T) -> Self::VoxelsChunkArray<T> { [default; Self::VOXELS_IN_CHUNK_USIZE] }
+
+  type MarchingCubesSharedIndicesArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE * 4];
+  #[inline]
+  fn create_marching_cubes_shared_indices_array<T: Copy>(default: T) -> Self::MarchingCubesSharedIndicesArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE * 4] }
+
+  type TransvoxelSharedIndicesArray<T> = [T; Self::CELLS_IN_DECK_USIZE * 10];
+  #[inline]
+  fn create_transvoxel_shared_indices_array<T: Copy>(default: T) -> Self::TransvoxelSharedIndicesArray<T> { [default; Self::CELLS_IN_DECK_USIZE * 10] }
+}
+
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ChunkSize16 {}
+
+impl ChunkSize for ChunkSize16 {
+  const CELLS_IN_CHUNK_ROW: u32 = 16;
+
+  type CellsChunkArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE] }
+
+  type VoxelsChunkArray<T> = [T; Self::VOXELS_IN_CHUNK_USIZE];
+  #[inline]
+  fn create_voxel_chunk_array<T: Copy>(default: T) -> Self::VoxelsChunkArray<T> { [default; Self::VOXELS_IN_CHUNK_USIZE] }
+
+  type MarchingCubesSharedIndicesArray<T> = [T; Self::CELLS_IN_CHUNK_USIZE * 4];
+  #[inline]
+  fn create_marching_cubes_shared_indices_array<T: Copy>(default: T) -> Self::MarchingCubesSharedIndicesArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE * 4] }
+
+  type TransvoxelSharedIndicesArray<T> = [T; Self::CELLS_IN_DECK_USIZE * 10];
+  #[inline]
+  fn create_transvoxel_shared_indices_array<T: Copy>(default: T) -> Self::TransvoxelSharedIndicesArray<T> { [default; Self::CELLS_IN_DECK_USIZE * 10] }
+}
 
 
 // Chunk cell/voxel indices
@@ -207,9 +293,7 @@ impl Display for VoxelIndex {
 
 // Chunk samples
 
-pub enum ChunkSamples<C: ChunkSize> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:
-{
+pub enum ChunkSamples<C: ChunkSize> {
   /// All sampled values in the chunk are exactly `0.0`.
   Zero,
   /// All sampled values in the chunk are positive (i.e., `f32::is_sign_positive() == true`).
@@ -220,9 +304,7 @@ pub enum ChunkSamples<C: ChunkSize> where
   Mixed(ChunkSampleArray<C>),
 }
 
-impl<C: ChunkSize> ChunkSamples<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:
-{
+impl<C: ChunkSize> ChunkSamples<C> {
   #[inline]
   pub fn sample(&self, index: UVec3) -> f32 {
     use ChunkSamples::*;
@@ -236,27 +318,19 @@ impl<C: ChunkSize> ChunkSamples<C> where
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct ChunkSampleArray<C: ChunkSize> where
-// This constraint is stating that an array of this size exists. This apparently is necessary because
-// VOXELS_IN_CHUNK_USIZE is an unknown constant and the compiler cannot be sure that an array of this size can be made.
-// This constraint specifies that the type must exist.
-// From: https://stackoverflow.com/questions/66361365/unconstrained-generic-constant-when-adding-const-generics
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:
-{
-  pub array: [f32; C::VOXELS_IN_CHUNK_USIZE],
+pub struct ChunkSampleArray<C: ChunkSize> {
+  pub array: C::VoxelsChunkArray<f32>,
 }
 
-impl<C: ChunkSize> ChunkSampleArray<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:
-{
+impl<C: ChunkSize> ChunkSampleArray<C> {
   #[inline]
-  pub fn new(array: [f32; C::VOXELS_IN_CHUNK_USIZE]) -> Self {
+  pub fn new(array: C::VoxelsChunkArray<f32>) -> Self {
     Self { array }
   }
 
   #[inline]
   pub fn new_with(default: f32) -> Self {
-    Self::new([default; C::VOXELS_IN_CHUNK_USIZE])
+    Self::new(C::create_voxel_chunk_array(default))
   }
 
   #[inline]
@@ -271,12 +345,12 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
 
   #[inline]
   pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
-    self.array[voxel_index.into_usize()]
+    self.array.slice()[voxel_index.into_usize()]
   }
 
   #[inline]
   pub fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
-    &mut self.array[voxel_index.into_usize()]
+    &mut self.array.slice_mut()[voxel_index.into_usize()]
   }
 
   #[inline]
@@ -296,22 +370,20 @@ impl<C: ChunkSize> ChunkSampleArray<C> where
 
   #[inline]
   pub fn set_all_to(&mut self, sample: f32) {
-    for s in self.array.iter_mut() {
+    for s in self.array.slice_mut().iter_mut() {
       *s = sample;
     }
   }
 
   #[inline]
   pub fn flip_all(&mut self) {
-    for s in self.array.iter_mut() {
+    for s in self.array.slice_mut().iter_mut() {
       *s *= -1.0;
     }
   }
 }
 
-impl<C: ChunkSize> Default for ChunkSampleArray<C> where
-  [f32; C::VOXELS_IN_CHUNK_USIZE]:
-{
+impl<C: ChunkSize> Default for ChunkSampleArray<C> {
   fn default() -> Self {
     Self::new_positive_zeroed()
   }

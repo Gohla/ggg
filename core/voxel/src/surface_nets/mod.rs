@@ -8,6 +8,7 @@ use std::marker::PhantomData;
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex, voxel_index_from_xyz, VoxelIndex};
+use crate::chunk::Sliceable;
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
@@ -15,8 +16,6 @@ pub struct SurfaceNets<C: ChunkSize> {
 }
 
 impl<C: ChunkSize> SurfaceNets<C> {
-  pub const SHARED_INDICES_SIZE: usize = C::CELLS_IN_CHUNK_USIZE;
-
   #[inline]
   pub fn new() -> Self { Self::default() }
 
@@ -28,12 +27,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
     step: u32,
     chunk_samples: &ChunkSamples<C>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-    [u16; Self::SHARED_INDICES_SIZE]:,
-  {
+  ) {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      let mut cell_index_to_vertex_index = [u16::MAX; Self::SHARED_INDICES_SIZE];
+      let mut cell_index_to_vertex_index = C::create_cell_chunk_array(u16::MAX);
       Self::extract_global_positions(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
       Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
@@ -43,11 +39,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut [u16; Self::SHARED_INDICES_SIZE],
+    cell_index_to_vertex_index: &mut C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:,
-  {
+  ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
@@ -55,10 +49,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell_index = cell.to_index::<C>().into_usize();
           if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
             let vertex_index = chunk_mesh.push_vertex(Vertex { position });
-            debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
-            debug_assert!(cell_index_to_vertex_index[cell_index] == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+            debug_assert!(cell_index < cell_index_to_vertex_index.slice().len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+            debug_assert!(cell_index_to_vertex_index.slice()[cell_index] == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
             debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
-            cell_index_to_vertex_index[cell_index] = vertex_index as u16;
+            cell_index_to_vertex_index.slice_mut()[cell_index] = vertex_index as u16;
           }
         }
       }
@@ -71,9 +65,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-  ) -> Option<Vec3> where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  ) -> Option<Vec3> {
     let local_voxel_positions = Self::local_voxel_positions(cell);
     let values = Self::sample(chunk_sample_array, &local_voxel_positions);
     let case = Self::case(&values);
@@ -109,9 +101,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
     [
       chunk_sample_array.sample(local_coordinates[0]),
       chunk_sample_array.sample(local_coordinates[1]),
@@ -201,18 +191,16 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
   fn extract_quads(
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
+    cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let cell = Cell::new(x, y, z);
           let cell_index = cell.to_index::<C>();
           let min_voxel_index = cell.to_min_voxel_index::<C>();
-          let vertex_index = cell_index_to_vertex_index[cell_index.into_usize()];
+          let vertex_index = cell_index_to_vertex_index.slice()[cell_index.into_usize()];
           if vertex_index == u16::MAX { continue; }
           Self::extract_quad(cell, cell_index, min_voxel_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
         }
@@ -225,11 +213,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
     cell_index: CellIndex,
     min_voxel_index: VoxelIndex,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
+    cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  ) {
     // Do edges parallel with the X axis
     if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW {
       Self::maybe_make_quad(
@@ -280,16 +266,14 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
   fn maybe_make_quad(
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &[u16; Self::SHARED_INDICES_SIZE],
+    cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
     voxel_index_a: VoxelIndex,
     voxel_index_b: VoxelIndex,
     cell_index: CellIndex,
     axis_b_cell_index_offset: CellIndex,
     axis_c_cell_index_offset: CellIndex,
-  ) where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  ) {
     let value_a = chunk_sample_array.sample_index(voxel_index_a);
     let value_b = chunk_sample_array.sample_index(voxel_index_b);
     let negative_face = match (value_a.is_sign_negative(), value_b.is_sign_negative()) {
@@ -301,10 +285,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
     // The triangle points, viewed face-front, look like this:
     // v1 v3
     // v2 v4
-    let v1 = cell_index_to_vertex_index[cell_index.into_usize()];
-    let v2 = cell_index_to_vertex_index[(cell_index - axis_b_cell_index_offset).into_usize()];
-    let v3 = cell_index_to_vertex_index[(cell_index - axis_c_cell_index_offset).into_usize()];
-    let v4 = cell_index_to_vertex_index[(cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset).into_usize()];
+    let v1 = cell_index_to_vertex_index.slice()[cell_index.into_usize()];
+    let v2 = cell_index_to_vertex_index.slice()[(cell_index - axis_b_cell_index_offset).into_usize()];
+    let v3 = cell_index_to_vertex_index.slice()[(cell_index - axis_c_cell_index_offset).into_usize()];
+    let v4 = cell_index_to_vertex_index.slice()[(cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset).into_usize()];
     let (pos1, pos2, pos3, pos4) = (
       chunk_mesh.vertices()[v1 as usize].position,
       chunk_mesh.vertices()[v2 as usize].position,

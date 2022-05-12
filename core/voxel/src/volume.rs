@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{ChunkSampleArray, ChunkSamples, ChunkSize};
+use crate::chunk::{Sliceable, ChunkSampleArray, ChunkSamples, ChunkSize};
 
 // Trait
 
@@ -10,13 +10,11 @@ pub trait Volume: Clone + Send + 'static {
 
   /// Samples an entire chunk, returning a value indicating whether the chunk is all zero, positive, negative, or mixed.
   #[profiling::function]
-  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> ChunkSamples<C> where
-    [f32; C::VOXELS_IN_CHUNK_USIZE]:
-  {
+  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> ChunkSamples<C> {
     let mut all_zero = true;
     let mut all_positive = true;
     let mut all_negative = true;
-    let mut array = [0.0; C::VOXELS_IN_CHUNK_USIZE];
+    let mut array = C::create_voxel_chunk_array(0.0);
     let mut i = 0;
     for z in 0..C::VOXELS_IN_CHUNK_ROW {
       for y in 0..C::VOXELS_IN_CHUNK_ROW {
@@ -25,7 +23,7 @@ pub trait Volume: Clone + Send + 'static {
           let value = self.sample(position);
           if value != 0.0 { all_zero = false; }
           if value.is_sign_positive() { all_negative = false; } else { all_positive = false; }
-          array[i] = value;
+          array.slice_mut()[i] = value;
           i += 1;
         }
       }

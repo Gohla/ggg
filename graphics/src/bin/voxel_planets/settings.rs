@@ -5,7 +5,7 @@ use ultraviolet::Isometry3;
 
 use gfx::camera::{CameraDebugging, CameraSettings};
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::GenericChunkSize;
+use voxel::chunk::ChunkSize16;
 use voxel::lod::builder::LodManagerBuilder;
 use voxel::lod::chunk_mesh::LodChunkMeshManagerParameters;
 use voxel::lod::marching_cubes::{MarchingCubesExtractor, MarchingCubesExtractorSettings};
@@ -103,7 +103,7 @@ impl Default for Settings {
   }
 }
 
-type C16 = GenericChunkSize<16>;
+type C16 = ChunkSize16;
 
 impl Settings {
   pub fn create_lod_render_data_manager(
