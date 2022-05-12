@@ -1,6 +1,7 @@
 #![feature(never_type)]
 
 use egui::{Context, Ui};
+use pollster::FutureExt as _;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use wgpu::{Backends, CommandBuffer, Features, Limits, PowerPreference, PresentMode, TextureFormat};
@@ -147,7 +148,7 @@ pub fn run_with_defaults<A: Application + 'static>(name: &str) -> Result<(), Cre
 pub fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
   #[cfg(feature = "profile-with-tracy")]
   tracy_client::Client::start();
-  
-  futures::executor::block_on(run::run::<A>(options))
+
+  run::run::<A>(options).block_on()
 }
 
