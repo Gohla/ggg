@@ -67,13 +67,23 @@ pub struct Settings {
   pub stars_renderer_settings: StarsRendererSettings,
 }
 
+
+pub fn default_camera_settings() -> CameraSettings {
+  let mut settings = CameraSettings::with_defaults_arcball_perspective();
+  settings.arcball.distance = -crate::EXTENDS * 2.0;
+  settings.arcball.mouse_scroll_distance_speed = 1000.0;
+  settings.far = 10000.0;
+  settings
+}
+
 impl Default for Settings {
   fn default() -> Self {
     Self {
-      camera_settings: CameraSettings::with_defaults_arcball_perspective(),
+      camera_settings: default_camera_settings(),
       camera_debugging: CameraDebugging {
         show_window: true,
         window_anchor: Some(Align2::LEFT_BOTTOM),
+        default_settings: default_camera_settings(),
         ..Default::default()
       },
 

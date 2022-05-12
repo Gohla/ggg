@@ -346,11 +346,6 @@ impl CameraDebugging {
   pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {
     ui.checkbox(&mut self.show_window, "Camera");
   }
-
-  pub fn set_default_settings(&mut self, camera_settings: &mut CameraSettings, set_fn: impl Fn(&mut CameraSettings)) {
-    set_fn(&mut self.default_settings);
-    set_fn(camera_settings);
-  }
 }
 
 #[cfg(feature = "debugging_gui")]

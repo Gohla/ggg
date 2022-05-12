@@ -31,7 +31,7 @@ pub struct VoxelPlanets {
   debug_renderer: DebugRenderer,
   stars_renderer: StarsRenderer,
   voxel_renderer: VoxelRenderer,
-  
+
   lod_octmap_transform: Isometry3,
   lod_render_data_manager: Box<dyn LodRenderDataManager<ChunkSize16>>,
   lod_render_data: LodRenderData,
@@ -42,18 +42,14 @@ pub struct Input {
   camera: CameraInput,
 }
 
+const EXTENDS: f32 = 4096.0 / 2.0;
+
 impl app::Application for VoxelPlanets {
   type Config = Settings;
 
   #[profiling::function]
-  fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
-    let extends = 4096.0 / 2.0;
-    settings.camera_debugging.set_default_settings(&mut settings.camera_settings, |camera_settings| {
-      camera_settings.arcball.distance = -extends * 2.0;
-      camera_settings.arcball.mouse_scroll_distance_speed = 1000.0;
-      camera_settings.far = 10000.0;
-    });
-    let lod_octmap_transform = Isometry3::new(Vec3::new(-extends, -extends, -extends), Rotor3::identity());
+  fn new(os: &Os, gfx: &Gfx, settings: Self::Config) -> Self {
+    let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
     let camera = Camera::new(os.window.get_inner_size().physical);
     let camera_uniform = CameraUniform::from_camera(&camera);
