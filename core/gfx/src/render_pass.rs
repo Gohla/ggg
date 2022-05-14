@@ -41,7 +41,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
     self.with_depth_stencil_attachment(RenderPassDepthStencilAttachment {
       view: depth_texture_view,
       depth_ops: Some(Operations {
-        load: LoadOp::Clear(1.0),
+        load: LoadOp::Clear(0.0), // Using "reversed Z", so clearing depth to 0 instead of 1.
         store: true,
       }),
       stencil_ops: None,

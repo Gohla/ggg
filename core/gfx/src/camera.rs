@@ -136,7 +136,7 @@ pub struct Perspective {
 impl Default for Perspective {
   fn default() -> Self {
     Self {
-      vertical_fov_radians: 70.0f32.to_radians(),
+      vertical_fov_radians: 60.0f32.to_radians(),
     }
   }
 }
@@ -278,10 +278,10 @@ impl Camera {
         let right = width / 2.0;
         let bottom = -height / 2.0;
         let top = height / 2.0;
-        orthographic_lh_yup_wgpu_dx(left, right, bottom, top, settings.near, settings.far)
+        orthographic_reversed_lh_yup_wgpu_dx(left, right, bottom, top, settings.near, settings.far)
       }
       ProjectionType::Perspective => {
-        perspective_lh_yup_wgpu_dx(settings.perspective.vertical_fov_radians, aspect_ratio, settings.near, settings.far)
+        perspective_infinite_reversed_lh_yup_wgpu_dx(settings.perspective.vertical_fov_radians, aspect_ratio, settings.near)
       }
     };
     self.projection_inverse = self.projection.inversed();
@@ -472,6 +472,8 @@ fn look_at_lh(
   ) // @formatter:on
 }
 
+/// Creates a left-handed perspective projection matrix with 0-1 depth range.
+#[allow(dead_code)]
 #[inline]
 fn perspective_lh_yup_wgpu_dx(
   vertical_fov: f32,
@@ -480,18 +482,60 @@ fn perspective_lh_yup_wgpu_dx(
   far: f32,
 ) -> Mat4 {
   // From: https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
-  let t = (vertical_fov / 2.0).tan();
-  let sy = 1.0 / t;
-  let sx = sy / aspect_ratio;
-  let fmn = far - near;
+  // From: https://github.com/bitshifter/glam-rs/blob/main/src/core/traits/projection.rs#L26
+  let (sin_fov, cos_fov) = (0.5 * vertical_fov).sin_cos();
+  let h = cos_fov / sin_fov;
+  let w = h / aspect_ratio;
+  let r = far / (far - near);
   Mat4::new( // @formatter:off
-    Vec4::new(sx , 0.0, 0.0              , 0.0),
-    Vec4::new(0.0, sy , 0.0              , 0.0),
-    Vec4::new(0.0, 0.0, far / fmn        , 1.0),
-    Vec4::new(0.0, 0.0, -near * far / fmn, 0.0),
+    Vec4::new(w  , 0.0, 0.0      , 0.0),
+    Vec4::new(0.0, h  , 0.0      , 0.0),
+    Vec4::new(0.0, 0.0, r        , 1.0),
+    Vec4::new(0.0, 0.0, -r * near, 0.0),
   ) // @formatter:on
 }
 
+/// Creates an infinite left-handed perspective projection matrix with 0-1 depth range.
+#[allow(dead_code)]
+#[inline]
+fn perspective_infinite_lh_yup_wgpu_dx(
+  vertical_fov: f32,
+  aspect_ratio: f32,
+  near: f32,
+) -> Mat4 {
+  // From: https://github.com/bitshifter/glam-rs/blob/main/src/core/traits/projection.rs#L56
+  let (sin_fov, cos_fov) = (0.5 * vertical_fov).sin_cos();
+  let h = cos_fov / sin_fov;
+  let w = h / aspect_ratio;
+  Mat4::new( // @formatter:off
+    Vec4::new(w  , 0.0, 0.0  , 0.0),
+    Vec4::new(0.0, h  , 0.0  , 0.0),
+    Vec4::new(0.0, 0.0, 1.0  , 1.0),
+    Vec4::new(0.0, 0.0, -near, 0.0),
+  ) // @formatter:on
+}
+
+/// Creates an infinite left-handed perspective projection matrix with 1-0 depth range.
+#[inline]
+fn perspective_infinite_reversed_lh_yup_wgpu_dx(
+  vertical_fov: f32,
+  aspect_ratio: f32,
+  near: f32,
+) -> Mat4 {
+  // From: https://github.com/bitshifter/glam-rs/blob/main/src/core/traits/projection.rs#L70
+  let (sin_fov, cos_fov) = (0.5 * vertical_fov).sin_cos();
+  let h = cos_fov / sin_fov;
+  let w = h / aspect_ratio;
+  Mat4::new( // @formatter:off
+    Vec4::new(w  , 0.0, 0.0 , 0.0),
+    Vec4::new(0.0, h  , 0.0 , 0.0),
+    Vec4::new(0.0, 0.0, 0.0 , 1.0),
+    Vec4::new(0.0, 0.0, near, 0.0),
+  ) // @formatter:on
+}
+
+/// Creates a left-handed orthographic projection matrix with 0-1 depth range.
+#[allow(dead_code)]
 #[inline]
 fn orthographic_lh_yup_wgpu_dx(
   left: f32, right: f32,
@@ -506,10 +550,21 @@ fn orthographic_lh_yup_wgpu_dx(
   let bmt = bottom - top;
   let tpb = top + bottom;
   let fmn = far - near;
+  let nmf = near - far;
   Mat4::new( // @formatter:off
     Vec4::new(2.0 / rml, 0.0      , 0.0       , 0.0),
     Vec4::new(0.0      , 2.0 / tmb, 0.0       , 0.0),
     Vec4::new(0.0      , 0.0      , 1.0 / fmn , 0.0),
-    Vec4::new(lpr / lmr, tpb / bmt, near / fmn, 1.0),
+    Vec4::new(lpr / lmr, tpb / bmt, near / nmf, 1.0),
   ) // @formatter:on
+}
+
+/// Creates a left-handed orthographic projection matrix with 1-0 depth range.
+#[inline]
+fn orthographic_reversed_lh_yup_wgpu_dx(
+  left: f32, right: f32,
+  bottom: f32, top: f32,
+  near: f32, far: f32,
+) -> Mat4 {
+  orthographic_lh_yup_wgpu_dx(left, right, bottom, top, far, near) // Note: far and near are swapped.
 }
