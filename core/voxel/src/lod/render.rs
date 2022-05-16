@@ -6,7 +6,8 @@ use wgpu::{BufferAddress, Device};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
 
-use crate::chunk::{ChunkMesh, ChunkSize, Vertex};
+use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::size::ChunkSize;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
 

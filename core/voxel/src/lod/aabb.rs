@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::ChunkSize;
+use crate::chunk::size::ChunkSize;
 
 /// Square axis-aligned bounding box, always in powers of 2, and with size always larger than 1.
 #[derive(Default, Copy, Clone, Eq, PartialEq, Hash, Debug)]

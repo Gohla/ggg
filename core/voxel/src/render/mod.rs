@@ -6,7 +6,7 @@ use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 
-use crate::chunk::{ChunkMesh, Vertex};
+use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::lod::render::LodRenderData;
 use crate::uniform::{CameraUniform, LightUniform, ModelUniform};
 

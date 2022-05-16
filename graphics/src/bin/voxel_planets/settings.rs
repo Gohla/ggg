@@ -5,7 +5,7 @@ use ultraviolet::Isometry3;
 
 use gfx::camera::{CameraDebugging, CameraSettings};
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::ChunkSize16;
+use voxel::chunk::size::ChunkSize16;
 use voxel::lod::builder::LodManagerBuilder;
 use voxel::lod::chunk_mesh::LodChunkMeshManagerParameters;
 use voxel::lod::marching_cubes::{MarchingCubesExtractor, MarchingCubesExtractorSettings};

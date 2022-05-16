@@ -1,4 +1,5 @@
-use crate::chunk::{ChunkMesh, ChunkSize, Vertex};
+use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;

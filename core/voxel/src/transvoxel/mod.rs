@@ -5,7 +5,9 @@ use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
-use crate::chunk::{ChunkMesh, ChunkSamples, ChunkSize, Vertex, Sliceable};
+use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::ChunkSamples;
+use crate::chunk::size::{ChunkSize, Sliceable};
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 

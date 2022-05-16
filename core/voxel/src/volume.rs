@@ -1,6 +1,7 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{Sliceable, ChunkSampleArray, ChunkSamples, ChunkSize};
+use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::size::{ChunkSize, Sliceable};
 
 // Trait
 

@@ -8,7 +8,7 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
-use voxel::chunk::ChunkSize16;
+use voxel::chunk::size::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};

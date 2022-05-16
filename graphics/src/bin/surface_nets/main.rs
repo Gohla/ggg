@@ -8,7 +8,8 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
-use voxel::chunk::{ChunkMesh, ChunkSize, ChunkSize2};
+use voxel::chunk::mesh::ChunkMesh;
+use voxel::chunk::size::{ChunkSize, ChunkSize2};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
 

@@ -7,8 +7,11 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{cell_index_from_xyz, CellIndex, ChunkIndices, ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex, voxel_index_from_xyz, VoxelIndex};
-use crate::chunk::Sliceable;
+use crate::chunk::index::{cell_index_from_xyz, CellIndex, ChunkIndices, voxel_index_from_xyz, VoxelIndex};
+use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::size::ChunkSize;
+use crate::chunk::size::Sliceable;
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {

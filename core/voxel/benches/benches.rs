@@ -1,7 +1,8 @@
 use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main};
 use ultraviolet::{Isometry3, UVec3, Vec3};
 
-use voxel::chunk::{ChunkMesh, ChunkSize, ChunkSize16};
+use voxel::chunk::mesh::ChunkMesh;
+use voxel::chunk::size::{ChunkSize, ChunkSize16};
 use voxel::lod::aabb::AABB;
 use voxel::lod::extract::LodExtractor;
 use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};

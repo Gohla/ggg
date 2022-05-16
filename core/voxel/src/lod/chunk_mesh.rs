@@ -1,6 +1,6 @@
 use ultraviolet::{Isometry3, Vec3};
 
-use crate::chunk::ChunkSize;
+use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::extract::LodExtractor;
 

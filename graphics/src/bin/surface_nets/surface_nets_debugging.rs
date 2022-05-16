@@ -3,9 +3,11 @@ use ultraviolet::{UVec3, Vec4};
 
 use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
-use gfx::display_math::UVec3DisplayExt;
+use gfx::display_math::{UVec3DisplayExt, Vec3DisplayExt};
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::{ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize};
+use voxel::chunk::mesh::ChunkMesh;
+use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use voxel::chunk::size::ChunkSize;
 use voxel::surface_nets::{Cell, SurfaceNets};
 
 use crate::C;

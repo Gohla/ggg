@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::Isometry3;
 
-use crate::chunk::ChunkSize;
+use crate::chunk::size::ChunkSize;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodOctmap, LodOctmapSettings};
 use crate::lod::render::{LodRenderDataManager, SimpleLodRenderDataManager};

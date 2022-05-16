@@ -14,8 +14,10 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::{ChunkMesh, ChunkSampleArray, ChunkSamples, ChunkSize, Vertex};
-use crate::chunk::Sliceable;
+use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::size::ChunkSize;
+use crate::chunk::size::Sliceable;
 use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
