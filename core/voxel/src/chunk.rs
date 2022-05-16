@@ -38,7 +38,7 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
   fn create_transvoxel_shared_indices_array<T: Copy>(default: T) -> Self::TransvoxelSharedIndicesArray<T>;
 }
 
-pub trait Sliceable<T>: Sized {
+pub trait Sliceable<T> {
   fn slice(&self) -> &[T];
   fn slice_mut(&mut self) -> &mut [T];
 }

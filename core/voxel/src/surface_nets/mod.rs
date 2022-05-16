@@ -59,6 +59,11 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
   }
 
+  // Consider the grid-aligned cube where `min` is the minimal corner. Find a point inside this cube that is 
+  // approximately on the isosurface.
+  //
+  // This is done by estimating, for each cube edge, where the isosurface crosses the edge (if it does at all). Then the
+  // estimated surface point is the average of these edge crossings.
   #[inline]
   fn extract_cell_vertex_positions(
     cell: Cell,
@@ -70,7 +75,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     let values = Self::sample(chunk_sample_array, &local_voxel_positions);
     let case = Self::case(&values);
     if case == 0 || case == 255 { return None; } // OPTO: use bit twiddling to break it down to 1 comparison?
-    let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions); // OPTO: delay this computation as not all 8 positions are typically used?
+    let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions);
     let vertex_position = Self::centroid_of_edge_intersections(case, &values, &global_voxel_positions);
     Some(vertex_position)
   }
@@ -127,16 +132,16 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  pub fn global_voxel_positions(min: UVec3, step: u32, local_voxel_positions: &[UVec3; 8]) -> [UVec3; 8] {
+  pub fn global_voxel_positions(min: UVec3, step: u32, local_voxel_positions: &[UVec3; 8]) -> [Vec3; 8] {
     [
-      min + step * local_voxel_positions[0],
-      min + step * local_voxel_positions[1],
-      min + step * local_voxel_positions[2],
-      min + step * local_voxel_positions[3],
-      min + step * local_voxel_positions[4],
-      min + step * local_voxel_positions[5],
-      min + step * local_voxel_positions[6],
-      min + step * local_voxel_positions[7],
+      Vec3::from(min + step * local_voxel_positions[0]),
+      Vec3::from(min + step * local_voxel_positions[1]),
+      Vec3::from(min + step * local_voxel_positions[2]),
+      Vec3::from(min + step * local_voxel_positions[3]),
+      Vec3::from(min + step * local_voxel_positions[4]),
+      Vec3::from(min + step * local_voxel_positions[5]),
+      Vec3::from(min + step * local_voxel_positions[6]),
+      Vec3::from(min + step * local_voxel_positions[7]),
     ]
   }
 
@@ -159,7 +164,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   pub fn centroid_of_edge_intersections(
     case: u8,
     values: &[f32; 8],
-    global_voxel_positions: &[UVec3; 8],
+    global_voxel_positions: &[Vec3; 8],
   ) -> Vec3 {
     let mut count = 0;
     let mut sum = Vec3::zero();
@@ -180,11 +185,11 @@ impl<C: ChunkSize> SurfaceNets<C> {
     sum / count as f32
   }
 
+
+  // Given two cube corners, find the point between them where the SDF is zero. (This might not exist).
   #[inline]
-  fn surface_edge_intersection(position_a: UVec3, value_a: f32, position_b: UVec3, value_b: f32) -> Vec3 {
+  fn surface_edge_intersection(position_a: Vec3, value_a: f32, position_b: Vec3, value_b: f32) -> Vec3 {
     let t = value_a / (value_a - value_b);
-    let position_a = Vec3::from(position_a);
-    let position_b = Vec3::from(position_b);
     t * position_b + (1.0 - t) * position_a
   }
 
@@ -208,6 +213,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
   }
 
+
+  // For every edge that crosses the isosurface, make a quad between the "centers" of the four cubes touching that 
+  // surface. The "centers" are actually the vertex positions found earlier. Also make sure the triangles are facing the
+  // right way. See the comments on `make_quad` to help with understanding the indexing.
   fn extract_quad(
     cell: Cell,
     cell_index: CellIndex,
@@ -271,6 +280,34 @@ impl<C: ChunkSize> SurfaceNets<C> {
   const ADD_Y_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 1, 0);
   const ADD_Z_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 0, 1);
 
+  // Construct a quad in the dual graph of the SDF lattice.
+  //
+  // Surface point s was found somewhere inside of the cube (`cell_index`) with minimal corner p1 (`value_a_negative`).
+  //
+  //       x ---- x
+  //      /      /|
+  //     x ---- x |
+  //     |   s  | x
+  //     |      |/
+  //    p1 --- p2
+  //
+  // And now we want to find the quad between p1 and p2 (`value_b_negative`) where s is a corner of the quad.
+  //
+  //          s
+  //         /|
+  //        / |
+  //       |  |
+  //   p1  |  |  p2
+  //       | /
+  //       |/
+  //
+  // A is (of the three grid axes) the axis between p1 and p2,
+  //
+  //       A
+  //   p1 ---> p2
+  //
+  // therefore we must find the other 3 quad corners by moving along the other two axes (those orthogonal to A) in the 
+  // negative directions; these are axis B and axis C.
   fn make_quad(
     cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
