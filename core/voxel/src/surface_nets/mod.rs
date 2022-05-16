@@ -38,6 +38,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
   }
 
+
+  // Extract positions
+
   fn extract_global_positions(
     min: UVec3,
     step: u32,
@@ -83,86 +86,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
     Some(vertex_position)
   }
 
-  pub const VOXELS: [Voxel; 8] = [
-    Voxel::new(0, 0, 0), // 1
-    Voxel::new(1, 0, 0), // 2
-    Voxel::new(0, 1, 0), // 3
-    Voxel::new(1, 1, 0), // 4
-    Voxel::new(0, 0, 1), // 5
-    Voxel::new(1, 0, 1), // 6
-    Voxel::new(0, 1, 1), // 7
-    Voxel::new(1, 1, 1), // 8
-  ];
-
-  #[inline]
-  pub fn local_voxel_positions(cell: Cell) -> [UVec3; 8] {
-    [
-      cell.to_local_position(Self::VOXELS[0]),
-      cell.to_local_position(Self::VOXELS[1]),
-      cell.to_local_position(Self::VOXELS[2]),
-      cell.to_local_position(Self::VOXELS[3]),
-      cell.to_local_position(Self::VOXELS[4]),
-      cell.to_local_position(Self::VOXELS[5]),
-      cell.to_local_position(Self::VOXELS[6]),
-      cell.to_local_position(Self::VOXELS[7]),
-    ]
-  }
-
-  #[inline]
-  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
-    [
-      chunk_sample_array.sample(local_coordinates[0]),
-      chunk_sample_array.sample(local_coordinates[1]),
-      chunk_sample_array.sample(local_coordinates[2]),
-      chunk_sample_array.sample(local_coordinates[3]),
-      chunk_sample_array.sample(local_coordinates[4]),
-      chunk_sample_array.sample(local_coordinates[5]),
-      chunk_sample_array.sample(local_coordinates[6]),
-      chunk_sample_array.sample(local_coordinates[7]),
-    ]
-  }
-
-  #[inline]
-  pub fn case(values: &[f32; 8]) -> u8 {
-    (values[0].is_sign_negative() as u8) << 0
-      | (values[1].is_sign_negative() as u8) << 1
-      | (values[2].is_sign_negative() as u8) << 2
-      | (values[3].is_sign_negative() as u8) << 3
-      | (values[4].is_sign_negative() as u8) << 4
-      | (values[5].is_sign_negative() as u8) << 5
-      | (values[6].is_sign_negative() as u8) << 6
-      | (values[7].is_sign_negative() as u8) << 7
-  }
-
-  #[inline]
-  pub fn global_voxel_positions(min: UVec3, step: u32, local_voxel_positions: &[UVec3; 8]) -> [Vec3; 8] {
-    [
-      Vec3::from(min + step * local_voxel_positions[0]),
-      Vec3::from(min + step * local_voxel_positions[1]),
-      Vec3::from(min + step * local_voxel_positions[2]),
-      Vec3::from(min + step * local_voxel_positions[3]),
-      Vec3::from(min + step * local_voxel_positions[4]),
-      Vec3::from(min + step * local_voxel_positions[5]),
-      Vec3::from(min + step * local_voxel_positions[6]),
-      Vec3::from(min + step * local_voxel_positions[7]),
-    ]
-  }
-
-  pub const EDGE_TO_VOXEL_INDICES: [[u8; 2]; 12] = [ // OPTO: compact to single u8 value per edge pair.
-    [0b000, 0b001],
-    [0b000, 0b010],
-    [0b000, 0b100],
-    [0b001, 0b011],
-    [0b001, 0b101],
-    [0b010, 0b011],
-    [0b010, 0b110],
-    [0b011, 0b111],
-    [0b100, 0b101],
-    [0b100, 0b110],
-    [0b101, 0b111],
-    [0b110, 0b111],
-  ];
-
   #[inline]
   pub fn centroid_of_edge_intersections(
     case: u8,
@@ -171,7 +94,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
   ) -> Vec3 {
     let mut count = 0;
     let mut sum = Vec3::zero();
-    for &[voxel_a_index, voxel_b_index] in Self::EDGE_TO_VOXEL_INDICES.iter() {
+    for corner in &Self::EDGE_TO_VOXEL_INDICES {
+      let voxel_a_index = corner >> 4 /* High nibble */;
+      let voxel_b_index = corner & 0b0000_1111; /* Low nibble */
       let a_negative = (case & (1 << voxel_a_index)) != 0;
       let b_negative = (case & (1 << voxel_b_index)) != 0;
       if a_negative != b_negative {
@@ -197,6 +122,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
 
+  // Extract quads
+
   fn extract_quads(
     chunk_sample_array: &ChunkSampleArray<C>,
     cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
@@ -215,8 +142,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       }
     }
   }
-
-
+  
   // For every edge that crosses the isosurface, make a quad between the "centers" of the four cubes touching that 
   // surface. The "centers" are actually the vertex positions found earlier. Also make sure the triangles are facing the
   // right way. See the comments on `make_quad` to help with understanding the indexing.
@@ -275,13 +201,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
       }
     }
   }
-
-  const ADD_X_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(1, 0, 0);
-  const ADD_Y_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 1, 0);
-  const ADD_Z_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 0, 1);
-  const ADD_X_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(1, 0, 0);
-  const ADD_Y_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 1, 0);
-  const ADD_Z_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 0, 1);
 
   // Construct a quad in the dual graph of the SDF lattice.
   //
@@ -355,6 +274,96 @@ impl<C: ChunkSize> SurfaceNets<C> {
     };
     chunk_mesh.extend_indices_from_slice(&quad);
   }
+
+
+  // Helpers
+  
+  pub const VOXELS: [Voxel; 8] = [
+    Voxel::new(0, 0, 0), // 1
+    Voxel::new(1, 0, 0), // 2
+    Voxel::new(0, 1, 0), // 3
+    Voxel::new(1, 1, 0), // 4
+    Voxel::new(0, 0, 1), // 5
+    Voxel::new(1, 0, 1), // 6
+    Voxel::new(0, 1, 1), // 7
+    Voxel::new(1, 1, 1), // 8
+  ];
+
+  #[inline]
+  pub fn local_voxel_positions(cell: Cell) -> [UVec3; 8] {
+    [
+      cell.to_local_position(Self::VOXELS[0]),
+      cell.to_local_position(Self::VOXELS[1]),
+      cell.to_local_position(Self::VOXELS[2]),
+      cell.to_local_position(Self::VOXELS[3]),
+      cell.to_local_position(Self::VOXELS[4]),
+      cell.to_local_position(Self::VOXELS[5]),
+      cell.to_local_position(Self::VOXELS[6]),
+      cell.to_local_position(Self::VOXELS[7]),
+    ]
+  }
+
+  #[inline]
+  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
+    [
+      chunk_sample_array.sample(local_coordinates[0]),
+      chunk_sample_array.sample(local_coordinates[1]),
+      chunk_sample_array.sample(local_coordinates[2]),
+      chunk_sample_array.sample(local_coordinates[3]),
+      chunk_sample_array.sample(local_coordinates[4]),
+      chunk_sample_array.sample(local_coordinates[5]),
+      chunk_sample_array.sample(local_coordinates[6]),
+      chunk_sample_array.sample(local_coordinates[7]),
+    ]
+  }
+
+  #[inline]
+  pub fn case(values: &[f32; 8]) -> u8 {
+    (values[0].is_sign_negative() as u8) << 0
+      | (values[1].is_sign_negative() as u8) << 1
+      | (values[2].is_sign_negative() as u8) << 2
+      | (values[3].is_sign_negative() as u8) << 3
+      | (values[4].is_sign_negative() as u8) << 4
+      | (values[5].is_sign_negative() as u8) << 5
+      | (values[6].is_sign_negative() as u8) << 6
+      | (values[7].is_sign_negative() as u8) << 7
+  }
+
+  #[inline]
+  pub fn global_voxel_positions(min: UVec3, step: u32, local_voxel_positions: &[UVec3; 8]) -> [Vec3; 8] {
+    [
+      Vec3::from(min + step * local_voxel_positions[0]),
+      Vec3::from(min + step * local_voxel_positions[1]),
+      Vec3::from(min + step * local_voxel_positions[2]),
+      Vec3::from(min + step * local_voxel_positions[3]),
+      Vec3::from(min + step * local_voxel_positions[4]),
+      Vec3::from(min + step * local_voxel_positions[5]),
+      Vec3::from(min + step * local_voxel_positions[6]),
+      Vec3::from(min + step * local_voxel_positions[7]),
+    ]
+  }
+
+  pub const EDGE_TO_VOXEL_INDICES: [u8; 12] = [
+    0b0000_0001,
+    0b0000_0010,
+    0b0000_0100,
+    0b0001_0011,
+    0b0001_0101,
+    0b0010_0011,
+    0b0010_0110,
+    0b0011_0111,
+    0b0100_0101,
+    0b0100_0110,
+    0b0101_0111,
+    0b0110_0111,
+  ];
+
+  const ADD_X_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(1, 0, 0);
+  const ADD_Y_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 1, 0);
+  const ADD_Z_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 0, 1);
+  const ADD_X_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(1, 0, 0);
+  const ADD_Y_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 1, 0);
+  const ADD_Z_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 0, 1);
 }
 
 /// Position of the minimal corner (left, bottom, back) of a cell, local to the current chunk.
