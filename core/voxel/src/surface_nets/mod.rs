@@ -216,44 +216,51 @@ impl<C: ChunkSize> SurfaceNets<C> {
     cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
   ) {
+    let value_a_negative = chunk_sample_array.sample_index(min_voxel_index).is_sign_negative();
     // Do edges parallel with the X axis
     if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW {
-      Self::maybe_make_quad(
-        chunk_sample_array,
-        cell_index_to_vertex_index,
-        chunk_mesh,
-        min_voxel_index,
-        min_voxel_index + Self::ADD_X_VOXEL_INDEX_OFFSET,
-        cell_index,
-        Self::ADD_Y_CELL_INDEX_OFFSET,
-        Self::ADD_Z_CELL_INDEX_OFFSET,
-      );
+      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_X_VOXEL_INDEX_OFFSET).is_sign_negative();
+      if value_a_negative != value_b_negative {
+        Self::make_quad(
+          cell_index_to_vertex_index,
+          chunk_mesh,
+          value_a_negative,
+          value_b_negative,
+          cell_index,
+          Self::ADD_Y_CELL_INDEX_OFFSET,
+          Self::ADD_Z_CELL_INDEX_OFFSET,
+        );
+      }
     }
     // Do edges parallel with the Y axis
     if cell.x != 0 && cell.z != 0 && cell.y < C::CELLS_IN_CHUNK_ROW {
-      Self::maybe_make_quad(
-        chunk_sample_array,
-        cell_index_to_vertex_index,
-        chunk_mesh,
-        min_voxel_index,
-        min_voxel_index + Self::ADD_Y_VOXEL_INDEX_OFFSET,
-        cell_index,
-        Self::ADD_Z_CELL_INDEX_OFFSET,
-        Self::ADD_X_CELL_INDEX_OFFSET,
-      );
+      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Y_VOXEL_INDEX_OFFSET).is_sign_negative();
+      if value_a_negative != value_b_negative {
+        Self::make_quad(
+          cell_index_to_vertex_index,
+          chunk_mesh,
+          value_a_negative,
+          value_b_negative,
+          cell_index,
+          Self::ADD_Z_CELL_INDEX_OFFSET,
+          Self::ADD_X_CELL_INDEX_OFFSET,
+        );
+      }
     }
     // Do edges parallel with the Z axis
     if cell.x != 0 && cell.y != 0 && cell.z < C::CELLS_IN_CHUNK_ROW {
-      Self::maybe_make_quad(
-        chunk_sample_array,
-        cell_index_to_vertex_index,
-        chunk_mesh,
-        min_voxel_index,
-        min_voxel_index + Self::ADD_Z_VOXEL_INDEX_OFFSET,
-        cell_index,
-        Self::ADD_X_CELL_INDEX_OFFSET,
-        Self::ADD_Y_CELL_INDEX_OFFSET,
-      );
+      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Z_VOXEL_INDEX_OFFSET).is_sign_negative();
+      if value_a_negative != value_b_negative {
+        Self::make_quad(
+          cell_index_to_vertex_index,
+          chunk_mesh,
+          value_a_negative,
+          value_b_negative,
+          cell_index,
+          Self::ADD_X_CELL_INDEX_OFFSET,
+          Self::ADD_Y_CELL_INDEX_OFFSET,
+        );
+      }
     }
   }
 
@@ -264,22 +271,19 @@ impl<C: ChunkSize> SurfaceNets<C> {
   const ADD_Y_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 1, 0);
   const ADD_Z_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 0, 1);
 
-  fn maybe_make_quad(
-    chunk_sample_array: &ChunkSampleArray<C>,
+  fn make_quad(
     cell_index_to_vertex_index: &C::CellsChunkArray<u16>,
     chunk_mesh: &mut ChunkMesh,
-    voxel_index_a: VoxelIndex,
-    voxel_index_b: VoxelIndex,
+    value_a_negative: bool,
+    value_b_negative: bool,
     cell_index: CellIndex,
     axis_b_cell_index_offset: CellIndex,
     axis_c_cell_index_offset: CellIndex,
   ) {
-    let value_a = chunk_sample_array.sample_index(voxel_index_a);
-    let value_b = chunk_sample_array.sample_index(voxel_index_b);
-    let negative_face = match (value_a.is_sign_negative(), value_b.is_sign_negative()) {
+    let negative_face = match (value_a_negative, value_b_negative) {
       (true, false) => false,
       (false, true) => true,
-      _ => return, // No face.
+      _ => unreachable!(),
     };
 
     // The triangle points, viewed face-front, look like this:
@@ -296,8 +300,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
       chunk_mesh.vertices()[v4 as usize].position,
     );
     // Split the quad along the shorter axis, rather than the longer one.
-    let distance_a = (pos4 - pos1).mag_sq(); // pos1.distance_squared(pos4)
-    let distance_b = (pos3 - pos2).mag_sq(); // pos2.distance_squared(pos3)
+    let distance_a = (pos4 - pos1).mag_sq();
+    let distance_b = (pos3 - pos2).mag_sq();
     let quad = if distance_a < distance_b {
       if negative_face {
         [v1, v4, v2, v1, v3, v4]
