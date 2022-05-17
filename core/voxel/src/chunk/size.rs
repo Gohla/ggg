@@ -7,6 +7,9 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
 
   const HALF_CELLS_IN_CHUNK_ROW: u32 = Self::CELLS_IN_CHUNK_ROW / 2;
 
+  const CELLS_IN_CHUNK_BORDER: u32 = Self::CELLS_IN_CHUNK_ROW * 2;
+  const CELLS_IN_CHUNK_BORDER_USIZE: usize = Self::CELLS_IN_CHUNK_BORDER as usize;
+
   const CELLS_IN_DECK: u32 = Self::CELLS_IN_CHUNK_ROW * Self::CELLS_IN_CHUNK_ROW;
   const CELLS_IN_DECK_USIZE: usize = Self::CELLS_IN_DECK as usize;
 
@@ -17,6 +20,9 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
 
   const VOXELS_IN_CHUNK: u32 = Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW * Self::VOXELS_IN_CHUNK_ROW;
   const VOXELS_IN_CHUNK_USIZE: usize = Self::VOXELS_IN_CHUNK as usize;
+
+  type CellsChunkDeckArray<T: Copy>: Sliceable<T>;
+  fn create_cell_chunk_deck_array<T: Copy>(default: T) -> Self::CellsChunkDeckArray<T>;
 
   type CellsChunkArray<T: Copy>: Sliceable<T>;
   fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T>;
@@ -66,6 +72,10 @@ pub struct ChunkSize1 {}
 impl ChunkSize for ChunkSize1 {
   const CELLS_IN_CHUNK_ROW: u32 = 1;
 
+  type CellsChunkDeckArray<T: Copy> = [T; Self::CELLS_IN_DECK_USIZE];
+  #[inline]
+  fn create_cell_chunk_deck_array<T: Copy>(default: T) -> Self::CellsChunkDeckArray<T> { [default; Self::CELLS_IN_DECK_USIZE] }
+  
   type CellsChunkArray<T: Copy> = [T; Self::CELLS_IN_CHUNK_USIZE];
   #[inline]
   fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE] }
@@ -91,6 +101,10 @@ pub struct ChunkSize2 {}
 impl ChunkSize for ChunkSize2 {
   const CELLS_IN_CHUNK_ROW: u32 = 2;
 
+  type CellsChunkDeckArray<T: Copy> = [T; Self::CELLS_IN_DECK_USIZE];
+  #[inline]
+  fn create_cell_chunk_deck_array<T: Copy>(default: T) -> Self::CellsChunkDeckArray<T> { [default; Self::CELLS_IN_DECK_USIZE] }
+  
   type CellsChunkArray<T: Copy> = [T; Self::CELLS_IN_CHUNK_USIZE];
   #[inline]
   fn create_cell_chunk_array<T: Copy>(default: T) -> Self::CellsChunkArray<T> { [default; Self::CELLS_IN_CHUNK_USIZE] }
@@ -115,6 +129,10 @@ pub struct ChunkSize16 {}
 
 impl ChunkSize for ChunkSize16 {
   const CELLS_IN_CHUNK_ROW: u32 = 16;
+
+  type CellsChunkDeckArray<T: Copy> = [T; Self::CELLS_IN_DECK_USIZE];
+  #[inline]
+  fn create_cell_chunk_deck_array<T: Copy>(default: T) -> Self::CellsChunkDeckArray<T> { [default; Self::CELLS_IN_DECK_USIZE] }
 
   type CellsChunkArray<T: Copy> = [T; Self::CELLS_IN_CHUNK_USIZE];
   #[inline]

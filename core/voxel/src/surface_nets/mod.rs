@@ -23,6 +23,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   pub fn new() -> Self { Self::default() }
 
 
+  // Top-level functions
   #[profiling::function]
   pub fn extract_chunk(
     &self,
@@ -36,6 +37,29 @@ impl<C: ChunkSize> SurfaceNets<C> {
       Self::extract_global_positions(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
       Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
+  }
+
+  #[profiling::function]
+  pub fn extract_border_x(
+    &self,
+    step: u32,
+    min_a: UVec3,
+    chunk_samples_a: &ChunkSamples<C>,
+    min_b: UVec3,
+    chunk_samples_b: &ChunkSamples<C>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    let mut cell_index_to_vertex_index_a = C::create_cell_chunk_deck_array(u16::MAX);
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
+      // Positive X of chunk A.
+      Self::extract_global_positions_border_x(C::CELLS_IN_CHUNK_ROW - 1, step, min_a, chunk_sample_array, &mut cell_index_to_vertex_index_a, chunk_mesh);
+    }
+    let mut cell_index_to_vertex_index_b = C::create_cell_chunk_deck_array(u16::MAX);
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
+      // Negative X of chunk B.
+      Self::extract_global_positions_border_x(0, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index_b, chunk_mesh);
+    }
+    //Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
   }
 
 
@@ -52,18 +76,47 @@ impl<C: ChunkSize> SurfaceNets<C> {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let cell = Cell::new(x, y, z);
-          let cell_index = cell.to_index::<C>().into_usize(); // PERF: moving down decreases performance.
-          if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
-            let vertex_index = chunk_mesh.push_vertex(Vertex { position });
-            debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
-            debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
-            debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
-            *cell_index_to_vertex_index.index_mut(cell_index) = vertex_index as u16;
-          }
+          Self::extract_global_position(cell, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
         }
       }
     }
   }
+
+  fn extract_global_positions_border_x(
+    x: u32,
+    step: u32,
+    min: UVec3,
+    chunk_sample_array: &ChunkSampleArray<C>,
+    cell_index_to_vertex_index: &mut C::CellsChunkDeckArray<u16>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    for z in 0..C::CELLS_IN_CHUNK_ROW {
+      for y in 0..C::CELLS_IN_CHUNK_ROW {
+        let cell = Cell::new(x, y, z);
+        Self::extract_global_position(cell, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
+      }
+    }
+  }
+
+  #[inline]
+  fn extract_global_position(
+    cell: Cell,
+    min: UVec3,
+    step: u32,
+    chunk_sample_array: &ChunkSampleArray<C>,
+    cell_index_to_vertex_index: &mut impl Sliceable<u16>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    let cell_index = cell.to_index::<C>().into_usize(); // PERF: moving down decreases performance.
+    if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
+      let vertex_index = chunk_mesh.push_vertex(Vertex { position });
+      debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+      debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+      debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
+      *cell_index_to_vertex_index.index_mut(cell_index) = vertex_index as u16;
+    }
+  }
+
 
   // Consider the grid-aligned cube where `min` is the minimal corner. Find a point inside this cube that is 
   // approximately on the isosurface.
@@ -112,8 +165,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
     sum / count as f32
   }
-
-
+  
   // Given two cube corners, find the point between them where the SDF is zero. (This might not exist).
   #[inline]
   fn surface_edge_intersection(position_a: Vec3, value_a: f32, position_b: Vec3, value_b: f32) -> Vec3 {
