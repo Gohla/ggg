@@ -156,7 +156,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   ) {
     let value_a_negative = chunk_sample_array.sample_index(min_voxel_index).is_sign_negative();
     // Do edges parallel with the X axis
-    if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW {
+    if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_X_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
@@ -171,7 +171,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       }
     }
     // Do edges parallel with the Y axis
-    if cell.x != 0 && cell.z != 0 && cell.y < C::CELLS_IN_CHUNK_ROW {
+    if cell.x != 0 && cell.z != 0 && cell.y < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Y_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
@@ -186,7 +186,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       }
     }
     // Do edges parallel with the Z axis
-    if cell.x != 0 && cell.y != 0 && cell.z < C::CELLS_IN_CHUNK_ROW {
+    if cell.x != 0 && cell.y != 0 && cell.z < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Z_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
@@ -248,7 +248,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     // The triangle points, viewed face-front, look like this:
     // v1 v3
     // v2 v4
-    let (v1, pos1) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index); // PERF: sharing this calculation has a negative impact on performance.
+    let (v1, pos1) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index); // PERF: sharing this calculation decreases performance.
     let (v2, pos2) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_b_cell_index_offset);
     let (v3, pos3) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_c_cell_index_offset);
     let (v4, pos4) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset);
