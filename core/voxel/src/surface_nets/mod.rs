@@ -55,10 +55,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell_index = cell.to_index::<C>().into_usize(); // PERF: moving down decreases performance.
           if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
             let vertex_index = chunk_mesh.push_vertex(Vertex { position });
-            debug_assert!(cell_index < cell_index_to_vertex_index.slice().len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
-            debug_assert!(cell_index_to_vertex_index.slice()[cell_index] == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+            debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+            debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
             debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
-            cell_index_to_vertex_index.slice_mut()[cell_index] = vertex_index as u16;
+            *cell_index_to_vertex_index.index_mut(cell_index) = vertex_index as u16;
           }
         }
       }
@@ -135,7 +135,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell = Cell::new(x, y, z);
           let cell_index = cell.to_index::<C>();
           let min_voxel_index = cell.to_min_voxel_index::<C>();
-          let vertex_index = cell_index_to_vertex_index.slice()[cell_index.into_usize()];
+          let vertex_index = cell_index_to_vertex_index.index(cell_index.into_usize());
           if vertex_index == u16::MAX { continue; }
           Self::extract_quad(cell, cell_index, min_voxel_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
         }
@@ -248,16 +248,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
     // The triangle points, viewed face-front, look like this:
     // v1 v3
     // v2 v4
-    let v1 = cell_index_to_vertex_index.slice()[cell_index.into_usize()];
-    let v2 = cell_index_to_vertex_index.slice()[(cell_index - axis_b_cell_index_offset).into_usize()];
-    let v3 = cell_index_to_vertex_index.slice()[(cell_index - axis_c_cell_index_offset).into_usize()];
-    let v4 = cell_index_to_vertex_index.slice()[(cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset).into_usize()];
-    let (pos1, pos2, pos3, pos4) = (
-      chunk_mesh.vertices()[v1 as usize].position,
-      chunk_mesh.vertices()[v2 as usize].position,
-      chunk_mesh.vertices()[v3 as usize].position,
-      chunk_mesh.vertices()[v4 as usize].position,
-    );
+    let (v1, pos1) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index); // PERF: sharing this calculation has a negative impact on performance.
+    let (v2, pos2) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_b_cell_index_offset);
+    let (v3, pos3) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_c_cell_index_offset);
+    let (v4, pos4) = Self::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index - axis_b_cell_index_offset - axis_c_cell_index_offset);
     // Split the quad along the shorter axis, rather than the longer one.
     let distance_a = (pos4 - pos1).mag_sq();
     let distance_b = (pos3 - pos2).mag_sq();
@@ -273,6 +267,14 @@ impl<C: ChunkSize> SurfaceNets<C> {
       [v2, v4, v3, v2, v3, v1]
     };
     chunk_mesh.extend_indices_from_slice(&quad);
+  }
+
+  #[inline]
+  fn read_vertex_position(cell_index_to_vertex_index: &C::CellsChunkArray<u16>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
+    let vertex_index = cell_index_to_vertex_index.index(cell_index.into_usize());
+    debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
+    let position = chunk_mesh.vertices()[vertex_index as usize].position;
+    (vertex_index, position)
   }
 
 

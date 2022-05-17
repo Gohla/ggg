@@ -62,12 +62,12 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
 
   #[inline]
   pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
-    self.array.slice()[voxel_index.into_usize()]
+    self.array.index(voxel_index.into_usize())
   }
 
   #[inline]
   pub fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
-    &mut self.array.slice_mut()[voxel_index.into_usize()]
+    self.array.index_mut(voxel_index.into_usize())
   }
 
   #[inline]
