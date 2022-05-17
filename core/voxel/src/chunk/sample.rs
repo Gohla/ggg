@@ -19,9 +19,19 @@ pub enum ChunkSamples<C: ChunkSize> {
 
 impl<C: ChunkSize> ChunkSamples<C> {
   #[inline]
+  pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
+    use ChunkSamples::*;
+    match self {
+      Zero => 0.0,
+      Positive => 1.0,
+      Negative => -1.0,
+      Mixed(array) => array.sample_index(voxel_index)
+    }
+  }
+
+  #[inline]
   pub fn sample(&self, index: UVec3) -> f32 {
     use ChunkSamples::*;
-    use self::ChunkSamples::{Negative, Positive, Zero};
     match self {
       Zero => 0.0,
       Positive => 1.0,

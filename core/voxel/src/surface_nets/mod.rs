@@ -7,11 +7,13 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::index::{cell_index_from_xyz, CellIndex, ChunkIndices, voxel_index_from_xyz, VoxelIndex};
+use crate::chunk::index::{CellIndex, ChunkIndices, VoxelIndex};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
 use crate::chunk::size::ChunkSize;
 use crate::chunk::size::Sliceable;
+
+pub mod lod;
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
@@ -39,29 +41,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
   }
 
-  #[profiling::function]
-  pub fn extract_border_x(
-    &self,
-    step: u32,
-    min_a: UVec3,
-    chunk_samples_a: &ChunkSamples<C>,
-    min_b: UVec3,
-    chunk_samples_b: &ChunkSamples<C>,
-    chunk_mesh: &mut ChunkMesh,
-  ) {
-    let mut cell_index_to_vertex_index_a = C::create_cell_chunk_deck_array(u16::MAX);
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      // Positive X of chunk A.
-      Self::extract_global_positions_border_x(C::CELLS_IN_CHUNK_ROW - 1, step, min_a, chunk_sample_array, &mut cell_index_to_vertex_index_a, chunk_mesh);
-    }
-    let mut cell_index_to_vertex_index_b = C::create_cell_chunk_deck_array(u16::MAX);
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
-      // Negative X of chunk B.
-      Self::extract_global_positions_border_x(0, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index_b, chunk_mesh);
-    }
-    //Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
-  }
-
 
   // Extract positions
 
@@ -78,22 +57,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell = Cell::new(x, y, z);
           Self::extract_global_position(cell, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
         }
-      }
-    }
-  }
-
-  fn extract_global_positions_border_x(
-    x: u32,
-    step: u32,
-    min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut C::CellsChunkDeckArray<u16>,
-    chunk_mesh: &mut ChunkMesh,
-  ) {
-    for z in 0..C::CELLS_IN_CHUNK_ROW {
-      for y in 0..C::CELLS_IN_CHUNK_ROW {
-        let cell = Cell::new(x, y, z);
-        Self::extract_global_position(cell, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
       }
     }
   }
@@ -116,7 +79,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
       *cell_index_to_vertex_index.index_mut(cell_index) = vertex_index as u16;
     }
   }
-
 
   // Consider the grid-aligned cube where `min` is the minimal corner. Find a point inside this cube that is 
   // approximately on the isosurface.
@@ -165,7 +127,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
     sum / count as f32
   }
-  
+
   // Given two cube corners, find the point between them where the SDF is zero. (This might not exist).
   #[inline]
   fn surface_edge_intersection(position_a: Vec3, value_a: f32, position_b: Vec3, value_b: f32) -> Vec3 {
@@ -322,7 +284,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  fn read_vertex_position(cell_index_to_vertex_index: &C::CellsChunkArray<u16>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
+  fn read_vertex_position(cell_index_to_vertex_index: &impl Sliceable<u16>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
     let vertex_index = cell_index_to_vertex_index.index(cell_index.into_usize());
     debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
     let position = chunk_mesh.vertices()[vertex_index as usize].position;
@@ -412,12 +374,12 @@ impl<C: ChunkSize> SurfaceNets<C> {
     0b0110_0111,
   ];
 
-  const ADD_X_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(1, 0, 0);
-  const ADD_Y_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 1, 0);
-  const ADD_Z_VOXEL_INDEX_OFFSET: VoxelIndex = voxel_index_from_xyz::<C>(0, 0, 1);
-  const ADD_X_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(1, 0, 0);
-  const ADD_Y_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 1, 0);
-  const ADD_Z_CELL_INDEX_OFFSET: CellIndex = cell_index_from_xyz::<C>(0, 0, 1);
+  const ADD_X_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_x::<C>();
+  const ADD_Y_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_y::<C>();
+  const ADD_Z_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_z::<C>();
+  const ADD_X_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_x::<C>();
+  const ADD_Y_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_y::<C>();
+  const ADD_Z_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_z::<C>();
 }
 
 /// Position of the minimal corner (left, bottom, back) of a cell, local to the current chunk.

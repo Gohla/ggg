@@ -67,7 +67,7 @@ pub trait ChunkIndices {
 impl<C: ChunkSize> ChunkIndices for C {
   #[inline]
   fn cell_index_from_xyz(x: u32, y: u32, z: u32) -> CellIndex {
-    cell_index_from_xyz::<C>(x, y, z)
+    CellIndex::from_xyz::<C>(x, y, z)
   }
 
   #[inline]
@@ -83,7 +83,7 @@ impl<C: ChunkSize> ChunkIndices for C {
 
   #[inline]
   fn voxel_index_from_xyz(x: u32, y: u32, z: u32) -> VoxelIndex {
-    voxel_index_from_xyz::<C>(x, y, z)
+    VoxelIndex::from_xyz::<C>(x, y, z)
   }
 
   #[inline]
@@ -97,21 +97,21 @@ impl<C: ChunkSize> ChunkIndices for C {
   }
 }
 
-// Const functions (cannot be in trait)
-
-#[inline]
-pub const fn cell_index_from_xyz<C: ChunkSize>(x: u32, y: u32, z: u32) -> CellIndex {
-  CellIndex(x + (C::CELLS_IN_CHUNK_ROW * y) + (C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * z))
-}
-
-#[inline]
-pub const fn voxel_index_from_xyz<C: ChunkSize>(x: u32, y: u32, z: u32) -> VoxelIndex {
-  VoxelIndex(x + (C::VOXELS_IN_CHUNK_ROW * y) + (C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * z))
-}
-
-// Index conversion
+// Index constants and conversion
 
 impl CellIndex {
+  #[inline]
+  pub const fn from_xyz<C: ChunkSize>(x: u32, y: u32, z: u32) -> CellIndex {
+    CellIndex(x + (C::CELLS_IN_CHUNK_ROW * y) + (C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * z))
+  }
+
+  #[inline]
+  pub const fn unit_x<C: ChunkSize>() -> CellIndex { Self::from_xyz::<C>(1, 0, 0) }
+  #[inline]
+  pub const fn unit_y<C: ChunkSize>() -> CellIndex { Self::from_xyz::<C>(0, 1, 0) }
+  #[inline]
+  pub const fn unit_z<C: ChunkSize>() -> CellIndex { Self::from_xyz::<C>(0, 0, 1) }
+
   #[inline]
   pub fn into_u32(self) -> u32 { self.0 }
   #[inline]
@@ -129,6 +129,18 @@ impl Into<usize> for CellIndex {
 }
 
 impl VoxelIndex {
+  #[inline]
+  pub const fn from_xyz<C: ChunkSize>(x: u32, y: u32, z: u32) -> VoxelIndex {
+    VoxelIndex(x + (C::VOXELS_IN_CHUNK_ROW * y) + (C::VOXELS_IN_CHUNK_ROW * C::VOXELS_IN_CHUNK_ROW * z))
+  }
+
+  #[inline]
+  pub const fn unit_x<C: ChunkSize>() -> VoxelIndex { Self::from_xyz::<C>(1, 0, 0) }
+  #[inline]
+  pub const fn unit_y<C: ChunkSize>() -> VoxelIndex { Self::from_xyz::<C>(0, 1, 0) }
+  #[inline]
+  pub const fn unit_z<C: ChunkSize>() -> VoxelIndex { Self::from_xyz::<C>(0, 0, 1) }
+
   #[inline]
   pub fn into_u32(self) -> u32 { self.0 }
   #[inline]
