@@ -52,7 +52,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let cell = Cell::new(x, y, z);
-          let cell_index = cell.to_index::<C>().into_usize();
+          let cell_index = cell.to_index::<C>().into_usize(); // PERF: moving down decreases performance.
           if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
             let vertex_index = chunk_mesh.push_vertex(Vertex { position });
             debug_assert!(cell_index < cell_index_to_vertex_index.slice().len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
@@ -142,7 +142,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
       }
     }
   }
-  
+
   // For every edge that crosses the isosurface, make a quad between the "centers" of the four cubes touching that 
   // surface. The "centers" are actually the vertex positions found earlier. Also make sure the triangles are facing the
   // right way. See the comments on `make_quad` to help with understanding the indexing.
@@ -277,7 +277,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
 
   // Helpers
-  
+
   pub const VOXELS: [Voxel; 8] = [
     Voxel::new(0, 0, 0), // 1
     Voxel::new(1, 0, 0), // 2
