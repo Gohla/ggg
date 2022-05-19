@@ -73,7 +73,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     let cell_index = cell.to_index::<C>().into_usize(); // PERF: moving down decreases performance.
     if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
       let vertex_index = chunk_mesh.push_vertex(Vertex { position });
-      debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+      debug_assert!(cell_index < cell_index_to_vertex_index.len(), "Tried to write out of bounds cell index {} (>= {}) in cell index to vertex index array, with vertex index: {}", cell_index, cell_index_to_vertex_index.len(), vertex_index);
       debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
       debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
       *cell_index_to_vertex_index.index_mut(cell_index) = vertex_index as u16;

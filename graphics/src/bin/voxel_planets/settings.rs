@@ -14,6 +14,7 @@ use voxel::lod::render::{LodRenderData, LodRenderDataManager, LodRenderDataSetti
 use voxel::lod::surface_nets::{SurfaceNetsExtractor, SurfaceNetsExtractorSettings};
 use voxel::lod::transvoxel::{TransvoxelExtractor, TransvoxelExtractorSettings};
 use voxel::marching_cubes::MarchingCubes;
+use voxel::surface_nets::lod::SurfaceNetsLod;
 use voxel::surface_nets::SurfaceNets;
 use voxel::transvoxel::Transvoxel;
 use voxel::uniform::LightSettings;
@@ -131,7 +132,7 @@ impl Settings {
         .with_extractor(TransvoxelExtractor::new(MarchingCubes::<C16>::default(), Transvoxel::<C16>::default(), self.transvoxel_settings))
         .build_boxed(self.lod_octmap_settings, transform),
       ExtractorType::SurfaceNets => builder
-        .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), self.surface_nets_settings))
+        .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), SurfaceNetsLod::<C16>::default(), self.surface_nets_settings))
         .build_boxed(self.lod_octmap_settings, transform),
     }
   }
@@ -216,11 +217,11 @@ impl Settings {
       match self.extractor_type {
         ExtractorType::MarchingCubes => {}
         ExtractorType::Transvoxel => {
-          ui.label("Render regular chunks?");
+          ui.label("Extract regular chunks?");
           ui.checkbox(&mut self.transvoxel_settings.extract_regular_chunks, "");
           ui.end_row();
-          ui.label("extract transition chunks?");
-          ui.grid("Transition cell extracting", |ui| {
+          ui.label("Extract transition chunks?");
+          ui.grid("Transition chunk extracting", |ui| {
             ui.checkbox(&mut self.transvoxel_settings.extract_transition_lo_x_chunks, "Lo X");
             ui.checkbox(&mut self.transvoxel_settings.extract_transition_hi_x_chunks, "Hi X");
             ui.end_row();
@@ -233,7 +234,17 @@ impl Settings {
           });
           ui.end_row();
         }
-        ExtractorType::SurfaceNets => {}
+        ExtractorType::SurfaceNets => {
+          ui.label("Extract regular chunks?");
+          ui.checkbox(&mut self.surface_nets_settings.extract_regular_chunks, "");
+          ui.end_row();
+          ui.label("Extract border chunks?");
+          ui.grid("Border chunk extracting", |ui| {
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_x_chunks, "X");
+            ui.end_row();
+          });
+          ui.end_row();
+        }
       }
       return ui.button("Update").clicked();
     }).body_returned.map(|i| i.inner).unwrap_or(false)

@@ -94,8 +94,8 @@ impl TransitionSide {
 
   #[inline]
   pub fn get_hires_local_voxels<C: ChunkSize>(&self, u: u32, v: u32) -> [UVec3; 9] {
-    let u = (u % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
-    let v = (v % C::HALF_CELLS_IN_CHUNK_ROW) * 2;
+    let u = (u % C::CELLS_IN_CHUNK_ROW_DIV_TWO) * 2;
+    let v = (v % C::CELLS_IN_CHUNK_ROW_DIV_TWO) * 2;
     match self {
       TransitionSide::LoX => {
         Self::add_hires_voxels(UVec3::new(C::CELLS_IN_CHUNK_ROW, v, u), &Self::X_HIRES_VOXELS)
