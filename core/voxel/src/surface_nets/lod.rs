@@ -2,13 +2,16 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::array::Array;
+use crate::chunk::array::Array as ArrayTrait;
 use crate::chunk::index::CellIndex;
 use crate::chunk::mesh::ChunkMesh;
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
-use crate::chunk::shape::Shape;
+use crate::chunk::shape::Shape as ShapeTrait;
 use crate::chunk::size::ChunkSize;
 use crate::surface_nets::{Cell, SurfaceNets};
+
+type Shape<C> = <C as ChunkSize>::CellDeckDoubleShape;
+type Array<C> = <C as ChunkSize>::CellDeckDoubleArray<u16>;
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNetsLod<C: ChunkSize> {
@@ -31,18 +34,18 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     chunk_samples_b: &ChunkSamples<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    let mut cell_index_to_vertex_index = C::CellDeckDoubleArray::new(u16::MAX);
+    let mut cell_index_to_vertex_index = Array::<C>::new(u16::MAX);
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      Self::extract_global_positions_border_x(BorderCell::border_part_a::<C>(), step, min_a, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
+      Self::extract_global_positions_border_x(0, step, min_a, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
-      Self::extract_global_positions_border_x(BorderCell::border_part_b::<C>(), step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
+      Self::extract_global_positions_border_x(1, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      Self::extract_quads_border_x(BorderCell::border_part_a::<C>(), chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
+      Self::extract_quads_border_x(0, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
-      Self::extract_quads_border_x(BorderCell::border_part_b::<C>(), chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
+      Self::extract_quads_border_x(1, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
   }
 
@@ -54,14 +57,15 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     step: u32,
     min: UVec3,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut C::CellDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &mut Array<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         // TODO: CellsChunkDeckDoubleArray cannot be indexed by CellIndex, because it is only 2 x positions wide!
-        let cell = Cell::new(x, y, z);
-        SurfaceNets::extract_global_position(cell, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
+        let border_cell = BorderCell::new(x, y, z);
+        let cell = border_cell.to_cell_border_x::<C>();
+        SurfaceNets::extract_global_position(cell, border_cell.to_index::<C>(), min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
       }
     }
   }
@@ -72,14 +76,13 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   fn extract_quads_border_x(
     x: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &C::CellDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &Array<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         let border_cell = BorderCell::new(x, y, z);
         let border_cell_index = border_cell.to_index::<C>();
-        // TODO: CellsChunkDeckDoubleArray cannot be indexed by CellIndex, because it is only 2 x positions wide!
         let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
         if vertex_index == u16::MAX { continue; }
         Self::extract_quad_border_x(border_cell, border_cell_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
@@ -91,7 +94,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     border_cell: BorderCell,
     border_cell_index: CellIndex,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &C::CellDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &Array<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let cell = border_cell.to_cell_border_x::<C>();
@@ -103,9 +106,9 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if border_cell.y != 0 && border_cell.z != 0 && border_cell.x < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_X_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
-        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Y_CELL_INDEX_OFFSET);
-        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Z_CELL_INDEX_OFFSET);
-        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Y_CELL_INDEX_OFFSET - SurfaceNets::<C>::ADD_Z_CELL_INDEX_OFFSET);
+        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET);
+        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET);
+        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET - Self::ADD_Z_CELL_INDEX_OFFSET);
         Self::make_quad(
           chunk_mesh,
           value_a_negative,
@@ -121,9 +124,9 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if border_cell.x != 0 && border_cell.z != 0 && border_cell.y < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_Y_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
-        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Z_CELL_INDEX_OFFSET);
-        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_X_CELL_INDEX_OFFSET);
-        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Z_CELL_INDEX_OFFSET - SurfaceNets::<C>::ADD_X_CELL_INDEX_OFFSET);
+        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET);
+        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_X_CELL_INDEX_OFFSET);
+        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET - Self::ADD_X_CELL_INDEX_OFFSET);
         Self::make_quad(
           chunk_mesh,
           value_a_negative,
@@ -139,9 +142,9 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if border_cell.x != 0 && border_cell.y != 0 && border_cell.z < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
       let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_Z_VOXEL_INDEX_OFFSET).is_sign_negative();
       if value_a_negative != value_b_negative {
-        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_X_CELL_INDEX_OFFSET);
-        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_Y_CELL_INDEX_OFFSET);
-        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - SurfaceNets::<C>::ADD_X_CELL_INDEX_OFFSET - SurfaceNets::<C>::ADD_Y_CELL_INDEX_OFFSET);
+        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_X_CELL_INDEX_OFFSET);
+        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET);
+        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_X_CELL_INDEX_OFFSET - Self::ADD_Y_CELL_INDEX_OFFSET);
         Self::make_quad(
           chunk_mesh,
           value_a_negative,
@@ -187,6 +190,10 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     };
     chunk_mesh.extend_indices_from_slice(&quad);
   }
+
+  const ADD_X_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_x::<Shape<C>>();
+  const ADD_Y_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_y::<Shape<C>>();
+  const ADD_Z_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_z::<Shape<C>>();
 }
 
 /// Position of the minimal corner (left, bottom, back) of a border cell.
@@ -206,7 +213,7 @@ impl BorderCell {
 
   #[inline]
   pub fn to_index<C: ChunkSize>(&self) -> CellIndex {
-    C::CellDeckDoubleShape::index_from_xyz(self.x, self.y, self.z)
+    Shape::<C>::index_from_xyz(self.x, self.y, self.z)
   }
 
 
