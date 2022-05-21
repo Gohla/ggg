@@ -2,11 +2,12 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::index::{CellIndex, ChunkIndices};
+use crate::chunk::array::Array;
+use crate::chunk::index::CellIndex;
 use crate::chunk::mesh::ChunkMesh;
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
-use crate::chunk::size::Sliceable;
 use crate::surface_nets::{Cell, SurfaceNets};
 
 #[derive(Default, Copy, Clone)]
@@ -30,7 +31,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     chunk_samples_b: &ChunkSamples<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    let mut cell_index_to_vertex_index = C::create_cell_chunk_deck_double_array(u16::MAX);
+    let mut cell_index_to_vertex_index = C::CellDeckDoubleArray::new(u16::MAX);
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
       Self::extract_global_positions_border_x(BorderCell::border_part_a::<C>(), step, min_a, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
@@ -53,7 +54,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     step: u32,
     min: UVec3,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut C::CellsChunkDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &mut C::CellDeckDoubleArray<u16>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
@@ -71,7 +72,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   fn extract_quads_border_x(
     x: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &C::CellsChunkDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &C::CellDeckDoubleArray<u16>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
@@ -79,7 +80,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
         let border_cell = BorderCell::new(x, y, z);
         let border_cell_index = border_cell.to_index::<C>();
         // TODO: CellsChunkDeckDoubleArray cannot be indexed by CellIndex, because it is only 2 x positions wide!
-        let vertex_index = cell_index_to_vertex_index.index(border_cell_index.into_usize());
+        let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
         if vertex_index == u16::MAX { continue; }
         Self::extract_quad_border_x(border_cell, border_cell_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
       }
@@ -90,7 +91,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     border_cell: BorderCell,
     border_cell_index: CellIndex,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &C::CellsChunkDeckDoubleArray<u16>,
+    cell_index_to_vertex_index: &C::CellDeckDoubleArray<u16>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let cell = border_cell.to_cell_border_x::<C>();
@@ -205,7 +206,7 @@ impl BorderCell {
 
   #[inline]
   pub fn to_index<C: ChunkSize>(&self) -> CellIndex {
-    C::cell_index_from_xyz(self.x, self.y, self.z)
+    C::CellDeckDoubleShape::index_from_xyz(self.x, self.y, self.z)
   }
 
 

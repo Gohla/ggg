@@ -14,17 +14,20 @@ use voxel::transvoxel::Transvoxel;
 use voxel::volume::{Sphere, SphereSettings, Volume};
 
 pub fn sphere_benchmark(c: &mut Criterion) {
-  let sphere = Sphere::new(SphereSettings { radius: 64.0 });
+  let sphere = Sphere::new(SphereSettings { radius: 16.0 });
   let start = UVec3::new(0, 0, 0);
-  let end = UVec3::new(64, 64, 64);
-  c.bench_function("Volume-Sphere-64", |b| b.iter(|| {
-    for x in start.x..=end.x {
-      for y in start.y..=end.y {
-        for z in start.z..=end.z {
+  let step = 1;
+  c.bench_function("Volume-Sphere-Sample-16", |b| b.iter(|| {
+    for z in start.z..ChunkSize16::VOXELS_IN_CHUNK_ROW {
+      for y in start.y..ChunkSize16::VOXELS_IN_CHUNK_ROW {
+        for x in start.x..ChunkSize16::VOXELS_IN_CHUNK_ROW {
           black_box(sphere.sample(UVec3::new(x, y, z)));
         }
       }
     }
+  }));
+  c.bench_function("Volume-Sphere-Sample-Chunk-16", |b| b.iter(|| {
+    black_box(sphere.sample_chunk::<ChunkSize16>(start, step));
   }));
 }
 

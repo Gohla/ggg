@@ -17,7 +17,7 @@ use ultraviolet::{UVec3, Vec3};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
 use crate::chunk::size::ChunkSize;
-use crate::chunk::size::Sliceable;
+use crate::chunk::array::Array;
 use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
@@ -40,7 +40,7 @@ impl<C: ChunkSize> MarchingCubes<C> {
     chunk_mesh: &mut ChunkMesh,
   ) {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      let mut shared_indices = C::create_marching_cubes_shared_indices_array(u16::MAX); // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
+      let mut shared_indices = C::MarchingCubesSharedIndicesArray::new(u16::MAX); // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
       for w in 0..C::CELLS_IN_CHUNK_ROW {
         for v in 0..C::CELLS_IN_CHUNK_ROW {
           for u in 0..C::CELLS_IN_CHUNK_ROW {

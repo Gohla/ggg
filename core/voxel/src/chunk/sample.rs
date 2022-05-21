@@ -1,8 +1,9 @@
 use ultraviolet::UVec3;
 
-use crate::chunk::index::{ChunkIndices, VoxelIndex};
+use crate::chunk::array::Array;
+use crate::chunk::index::VoxelIndex;
+use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
-use crate::chunk::size::Sliceable;
 
 // Samples
 
@@ -46,18 +47,18 @@ impl<C: ChunkSize> ChunkSamples<C> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkSampleArray<C: ChunkSize> {
-  pub array: C::VoxelsChunkArray<f32>,
+  pub array: C::VoxelChunkArray<f32>,
 }
 
 impl<C: ChunkSize> ChunkSampleArray<C> {
   #[inline]
-  pub fn new(array: C::VoxelsChunkArray<f32>) -> Self {
+  pub fn new(array: C::VoxelChunkArray<f32>) -> Self {
     Self { array }
   }
 
   #[inline]
   pub fn new_with(default: f32) -> Self {
-    Self::new(C::create_voxel_chunk_array(default))
+    Self::new(C::VoxelChunkArray::new(default))
   }
 
   #[inline]
@@ -72,27 +73,30 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
 
   #[inline]
   pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
-    self.array.index(voxel_index.into_usize())
+    self.array.index(voxel_index)
   }
 
   #[inline]
   pub fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
-    self.array.index_mut(voxel_index.into_usize())
+    self.array.index_mut(voxel_index)
   }
 
   #[inline]
   pub fn sample(&self, position: UVec3) -> f32 {
-    self.sample_index(C::voxel_index_from_uvec3(position).into())
+    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
+    self.sample_index(voxel_index)
   }
 
   #[inline]
   pub fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
-    self.sample_index_mut(C::voxel_index_from_uvec3(position).into())
+    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
+    self.sample_index_mut(voxel_index)
   }
 
   #[inline]
   pub fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
-    *self.sample_index_mut(C::voxel_index_from_xyz(x, y, z).into()) = sample;
+    let voxel_index = C::VoxelChunkShape::index_from_xyz(x, y, z);
+    self.array.set(voxel_index, sample);
   }
 
   #[inline]

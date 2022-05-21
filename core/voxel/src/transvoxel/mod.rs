@@ -5,9 +5,10 @@ use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
+use crate::chunk::array::Array;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
-use crate::chunk::size::{ChunkSize, Sliceable};
+use crate::chunk::size::ChunkSize;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
 
@@ -48,7 +49,7 @@ impl<C: ChunkSize> Transvoxel<C> {
         lores_step
       );
     }
-    let mut shared_indices = C::create_transvoxel_shared_indices_array(u16::MAX); // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
+    let mut shared_indices = C::TransvoxelSharedIndicesArray::new(u16::MAX); // OPTO: reduce size and management of this array to the number of shared indices that we need to keep in memory?
     for cell_v in 0..C::CELLS_IN_CHUNK_ROW {
       for cell_u in 0..C::CELLS_IN_CHUNK_ROW {
         Self::extract_cell(

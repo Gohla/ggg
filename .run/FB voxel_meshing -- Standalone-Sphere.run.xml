@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="0.DB voxel -- Volume-Sphere" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
-    <option name="command" value="bench --package voxel --profile=devbench -- Sphere" />
+    <option name="command" value="bench --package voxel --profile=devbench -- Volume-Sphere" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

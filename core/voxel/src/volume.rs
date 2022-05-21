@@ -1,7 +1,9 @@
 use ultraviolet::{UVec3, Vec3};
 
+use crate::chunk::array::Array;
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
-use crate::chunk::size::{ChunkSize, Sliceable};
+use crate::chunk::shape::Shape;
+use crate::chunk::size::ChunkSize;
 
 // Trait
 
@@ -15,20 +17,14 @@ pub trait Volume: Clone + Send + 'static {
     let mut all_zero = true;
     let mut all_positive = true;
     let mut all_negative = true;
-    let mut array = C::create_voxel_chunk_array(0.0);
-    let mut i = 0;
-    for z in 0..C::VOXELS_IN_CHUNK_ROW {
-      for y in 0..C::VOXELS_IN_CHUNK_ROW {
-        for x in 0..C::VOXELS_IN_CHUNK_ROW {
-          let position = start + step * UVec3::new(x, y, z);
-          let value = self.sample(position);
-          if value != 0.0 { all_zero = false; }
-          if value.is_sign_positive() { all_negative = false; } else { all_positive = false; }
-          array.slice_mut()[i] = value;
-          i += 1;
-        }
-      }
-    }
+    let mut array = C::VoxelChunkArray::new(0.0);
+    C::VoxelChunkShape::for_all(|x, y, z, i| {
+      let position = start + step * UVec3::new(x, y, z);
+      let value = self.sample(position);
+      if value != 0.0 { all_zero = false; }
+      if value.is_sign_positive() { all_negative = false; } else { all_positive = false; }
+      array.set(i, value);
+    });
     if all_zero {
       ChunkSamples::Zero
     } else if all_positive {
