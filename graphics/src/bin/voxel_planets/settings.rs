@@ -244,6 +244,10 @@ impl Settings {
             ui.checkbox(&mut self.surface_nets_settings.extract_border_y_chunks, "Y");
             ui.checkbox(&mut self.surface_nets_settings.extract_border_z_chunks, "Z");
             ui.end_row();
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_xy_chunks, "XY");
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_yz_chunks, "YZ");
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_xz_chunks, "XZ");
+            ui.end_row();
           });
           ui.end_row();
         }

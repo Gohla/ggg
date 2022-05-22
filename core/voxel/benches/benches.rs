@@ -99,6 +99,12 @@ pub fn surface_nets_borders_benchmark(c: &mut Criterion) {
   let chunk_samples_y = sphere.sample_chunk(min_y, step);
   let min_z = UVec3::new(0, 0, 16);
   let chunk_samples_z = sphere.sample_chunk(min_z, step);
+  let min_xy = UVec3::new(16, 16, 0);
+  let chunk_samples_xy = sphere.sample_chunk(min_xy, step);
+  let min_yz = UVec3::new(0, 16, 16);
+  let chunk_samples_yz = sphere.sample_chunk(min_yz, step);
+  let min_xz = UVec3::new(16, 0, 16);
+  let chunk_samples_xz = sphere.sample_chunk(min_xz, step);
   c.bench_function("SurfaceNets-Border-X-Sphere-16", |b| b.iter_batched(
     || preallocate_chunk_vertices::<C16>(),
     |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, &chunk_samples_x, &mut chunk_mesh),
@@ -106,12 +112,27 @@ pub fn surface_nets_borders_benchmark(c: &mut Criterion) {
   ));
   c.bench_function("SurfaceNets-Border-Y-Sphere-16", |b| b.iter_batched(
     || preallocate_chunk_vertices::<C16>(),
-    |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_y, &chunk_samples_y, &mut chunk_mesh),
+    |mut chunk_mesh| surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y, &chunk_samples_y, &mut chunk_mesh),
     BatchSize::SmallInput,
   ));
   c.bench_function("SurfaceNets-Border-Z-Sphere-16", |b| b.iter_batched(
     || preallocate_chunk_vertices::<C16>(),
-    |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_z, &chunk_samples_z, &mut chunk_mesh),
+    |mut chunk_mesh| surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z, &chunk_samples_z, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+  c.bench_function("SurfaceNets-Border-XY-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x, &chunk_samples_x, min_y, &chunk_samples_y, min_xy, &chunk_samples_xy, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+  c.bench_function("SurfaceNets-Border-YZ-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y, &chunk_samples_y, min_z, &chunk_samples_z, min_yz, &chunk_samples_yz, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+  c.bench_function("SurfaceNets-Border-XZ-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x, &chunk_samples_x, min_z, &chunk_samples_z, min_xz, &chunk_samples_xz, &mut chunk_mesh),
     BatchSize::SmallInput,
   ));
 }

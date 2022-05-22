@@ -17,6 +17,9 @@ pub struct SurfaceNetsExtractorSettings {
   pub extract_border_x_chunks: bool,
   pub extract_border_y_chunks: bool,
   pub extract_border_z_chunks: bool,
+  pub extract_border_xy_chunks: bool,
+  pub extract_border_yz_chunks: bool,
+  pub extract_border_xz_chunks: bool,
 }
 
 impl Default for SurfaceNetsExtractorSettings {
@@ -26,6 +29,9 @@ impl Default for SurfaceNetsExtractorSettings {
       extract_border_x_chunks: true,
       extract_border_y_chunks: true,
       extract_border_z_chunks: true,
+      extract_border_xy_chunks: false,
+      extract_border_yz_chunks: false,
+      extract_border_xz_chunks: false,
     }
   }
 }
@@ -51,23 +57,87 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     if self.settings.extract_regular_chunks {
       self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
     }
-    if self.settings.extract_border_x_chunks && max.x < total_size {
-      let mut min_b = min;
-      min_b.x = max.x;
-      let chunk_samples_b = volume.sample_chunk(min_b, step);
-      self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_x_chunk);
+
+    let min_x = {
+      let mut min = min;
+      min.x = max.x;
+      min
+    };
+    let min_y = {
+      let mut min = min;
+      min.y = max.y;
+      min
+    };
+    let min_z = {
+      let mut min = min;
+      min.z = max.z;
+      min
+    };
+
+    let sample_x = self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks;
+    let chunk_samples_x = (sample_x && max.x < total_size).then(|| {
+      volume.sample_chunk(min_x, step)
+    });
+    let sample_y = self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks;
+    let chunk_samples_y = (sample_y && max.y < total_size).then(|| {
+      volume.sample_chunk(min_y, step)
+    });
+    let sample_z = self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks;
+    let chunk_samples_z = (sample_z && max.z < total_size).then(|| {
+      volume.sample_chunk(min_z, step)
+    });
+
+    if self.settings.extract_border_x_chunks {
+      if let Some(chunk_samples_x) = &chunk_samples_x {
+        self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, chunk_samples_x, &mut chunk.border_x_chunk);
+      }
     }
-    if self.settings.extract_border_y_chunks && max.y < total_size {
-      let mut min_b = min;
-      min_b.y = max.y;
-      let chunk_samples_b = volume.sample_chunk(min_b, step);
-      self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_y_chunk);
+    if self.settings.extract_border_y_chunks {
+      if let Some(chunk_samples_y) = &chunk_samples_y {
+        self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y, chunk_samples_y, &mut chunk.border_y_chunk);
+      }
     }
-    if self.settings.extract_border_z_chunks && max.z < total_size {
-      let mut min_b = min;
-      min_b.z = max.z;
-      let chunk_samples_b = volume.sample_chunk(min_b, step);
-      self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_z_chunk);
+    if self.settings.extract_border_z_chunks {
+      if let Some(chunk_samples_z) = &chunk_samples_z {
+        self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z, chunk_samples_z, &mut chunk.border_z_chunk);
+      }
+    }
+
+    if self.settings.extract_border_xy_chunks {
+      if let (Some(chunk_samples_x), Some(chunk_samples_y)) = (&chunk_samples_x, &chunk_samples_y) {
+        let min_xy = {
+          let mut min = min;
+          min.x = max.x;
+          min.y = max.y;
+          min
+        };
+        let chunk_samples_xy = volume.sample_chunk(min_xy, step);
+        self.surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x, chunk_samples_x, min_y, chunk_samples_y, min_xy, &chunk_samples_xy, &mut chunk.border_xy_chunk);
+      }
+    }
+    if self.settings.extract_border_yz_chunks {
+      if let (Some(chunk_samples_y), Some(chunk_samples_z)) = &(&chunk_samples_y, &chunk_samples_z) {
+        let min_yz = {
+          let mut min = min;
+          min.y = max.y;
+          min.z = max.z;
+          min
+        };
+        let chunk_samples_yz = volume.sample_chunk(min_yz, step);
+        self.surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y, chunk_samples_y, min_z, chunk_samples_z, min_yz, &chunk_samples_yz, &mut chunk.border_yz_chunk);
+      }
+    }
+    if self.settings.extract_border_xz_chunks {
+      if let (Some(chunk_samples_x), Some(chunk_samples_z)) = &(&chunk_samples_x, &chunk_samples_z) {
+        let min_xz = {
+          let mut min = min;
+          min.x = max.x;
+          min.z = max.z;
+          min
+        };
+        let chunk_samples_xz = volume.sample_chunk(min_xz, step);
+        self.surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x, chunk_samples_x, min_z, chunk_samples_z, min_xz, &chunk_samples_xz, &mut chunk.border_xz_chunk);
+      }
     }
   }
 
@@ -84,6 +154,15 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     }
     if self.settings.extract_border_z_chunks {
       copy_chunk_vertices(&chunk.border_z_chunk, vertices, indices, draws);
+    }
+    if self.settings.extract_border_xy_chunks {
+      copy_chunk_vertices(&chunk.border_xy_chunk, vertices, indices, draws);
+    }
+    if self.settings.extract_border_yz_chunks {
+      copy_chunk_vertices(&chunk.border_yz_chunk, vertices, indices, draws);
+    }
+    if self.settings.extract_border_xz_chunks {
+      copy_chunk_vertices(&chunk.border_xz_chunk, vertices, indices, draws);
     }
   }
 }
@@ -103,6 +182,9 @@ pub struct SurfaceNetsLodChunkMesh {
   pub border_x_chunk: ChunkMesh,
   pub border_y_chunk: ChunkMesh,
   pub border_z_chunk: ChunkMesh,
+  pub border_xy_chunk: ChunkMesh,
+  pub border_yz_chunk: ChunkMesh,
+  pub border_xz_chunk: ChunkMesh,
 }
 
 impl SurfaceNetsLodChunkMesh {
@@ -117,12 +199,18 @@ impl SurfaceNetsLodChunkMesh {
     border_x_chunk: ChunkMesh,
     border_y_chunk: ChunkMesh,
     border_z_chunk: ChunkMesh,
+    border_xy_chunk: ChunkMesh,
+    border_yz_chunk: ChunkMesh,
+    border_xz_chunk: ChunkMesh,
   ) -> Self {
     Self {
       regular,
       border_x_chunk,
       border_y_chunk,
       border_z_chunk,
+      border_xy_chunk,
+      border_yz_chunk,
+      border_xz_chunk,
     }
   }
 }
@@ -134,6 +222,9 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
       && self.border_x_chunk.is_empty()
       && self.border_y_chunk.is_empty()
       && self.border_z_chunk.is_empty()
+      && self.border_xy_chunk.is_empty()
+      && self.border_yz_chunk.is_empty()
+      && self.border_xz_chunk.is_empty()
   }
 
   #[inline]
@@ -142,5 +233,8 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
     self.border_x_chunk.clear();
     self.border_y_chunk.clear();
     self.border_z_chunk.clear();
+    self.border_xy_chunk.clear();
+    self.border_yz_chunk.clear();
+    self.border_xz_chunk.clear();
   }
 }
