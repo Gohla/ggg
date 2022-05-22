@@ -43,9 +43,6 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_global_positions_border_x(1, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      Self::extract_quads_border_x(0, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
-    }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_quads_border_x(1, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
@@ -68,9 +65,6 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_global_positions_border_y(1, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      Self::extract_quads_border_y(0, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
-    }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_quads_border_y(1, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
@@ -92,9 +86,6 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_global_positions_border_z(1, step, min_b, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
-    }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_a {
-      Self::extract_quads_border_z(0, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_b {
       Self::extract_quads_border_z(1, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
@@ -262,6 +253,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   }
 
 
+  // Attempt to extract a quad parallel to the X-axis. That is, a quad on the YZ plane.
   #[inline]
   fn extract_quad_parallel_x<S: Shape<CellIndex>>(
     border_cell: BorderCell,
@@ -288,6 +280,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     }
   }
 
+  // Attempt to extract a quad parallel to the Y-axis. That is, a quad on the ZX plane.
   #[inline]
   fn extract_quad_parallel_y<S: Shape<CellIndex>>(
     border_cell: BorderCell,
@@ -314,6 +307,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     }
   }
 
+  // Attempt to extract a quad parallel to the Z-axis. That is, a quad on the XY plane.
   #[inline]
   fn extract_quad_parallel_z<S: Shape<CellIndex>>(
     border_cell: BorderCell,
