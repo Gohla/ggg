@@ -8,6 +8,7 @@ use voxel::lod::extract::LodExtractor;
 use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};
 use voxel::lod::transvoxel::TransvoxelExtractor;
 use voxel::marching_cubes::MarchingCubes;
+use voxel::surface_nets::lod::SurfaceNetsLod;
 use voxel::surface_nets::SurfaceNets;
 use voxel::transvoxel::side::TransitionSide;
 use voxel::transvoxel::Transvoxel;
@@ -86,6 +87,35 @@ pub fn surface_nets_benchmark(c: &mut Criterion) {
   ));
 }
 
+pub fn surface_nets_borders_benchmark(c: &mut Criterion) {
+  let sphere = Sphere::new(SphereSettings { radius: 32.0 });
+  let surface_nets_lod = SurfaceNetsLod::<C16>::new();
+  let step = 1;
+  let min = UVec3::new(0, 0, 0);
+  let chunk_samples = sphere.sample_chunk(min, step);
+  let min_x = UVec3::new(16, 0, 0);
+  let chunk_samples_x = sphere.sample_chunk(min_x, step);
+  let min_y = UVec3::new(0, 16, 0);
+  let chunk_samples_y = sphere.sample_chunk(min_y, step);
+  let min_z = UVec3::new(0, 0, 16);
+  let chunk_samples_z = sphere.sample_chunk(min_z, step);
+  c.bench_function("SurfaceNets-Border-X-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, &chunk_samples_x, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+  c.bench_function("SurfaceNets-Border-Y-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_y, &chunk_samples_y, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+  c.bench_function("SurfaceNets-Border-Z-Sphere-16", |b| b.iter_batched(
+    || preallocate_chunk_vertices::<C16>(),
+    |mut chunk_mesh| surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_z, &chunk_samples_z, &mut chunk_mesh),
+    BatchSize::SmallInput,
+  ));
+}
+
 fn preallocate_chunk_vertices<C: ChunkSize>() -> ChunkMesh {
   // On average, one triangle per 3 cells. Probably an overestimation, but that is ok.
   ChunkMesh::with_vertices_indices(Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE), Vec::with_capacity(C::CELLS_IN_CHUNK_USIZE))
@@ -128,5 +158,5 @@ fn preallocate_octmap<V: Volume, C: ChunkSize, E: LodExtractor<C>>(mut octree: L
   octree
 }
 
-criterion_group!(benches, sphere_benchmark, marching_cubes_benchmark, transvoxel_benchmark, surface_nets_benchmark, octree_benchmark);
+criterion_group!(benches, sphere_benchmark, marching_cubes_benchmark, transvoxel_benchmark, surface_nets_benchmark, surface_nets_borders_benchmark, octree_benchmark);
 criterion_main!(benches);
