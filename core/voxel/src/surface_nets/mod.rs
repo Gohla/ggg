@@ -229,7 +229,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   // therefore we must find the other 3 quad corners by moving along the other two axes (those orthogonal to A) in the 
   // negative directions; these are axis B and axis C.
   fn make_quad(
-    cell_index_to_vertex_index: &Array<C>,
+    cell_index_to_vertex_index: &impl ArrayTrait<u16, CellIndex>,
     chunk_mesh: &mut ChunkMesh,
     value_a_negative: bool,
     value_b_negative: bool,
@@ -279,7 +279,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
   #[inline]
   fn read_vertex_position(cell_index_to_vertex_index: &impl ArrayTrait<u16, CellIndex>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
     let vertex_index = cell_index_to_vertex_index.index(cell_index);
-    //println!("Read cell index {} -> vertex index {}", cell_index, vertex_index);
     debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
     let position = chunk_mesh.vertices()[vertex_index as usize].position;
     (vertex_index, position)

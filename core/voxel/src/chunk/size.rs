@@ -34,7 +34,9 @@ pub trait ChunkSize: Default + Copy + Clone + Send + 'static {
 
   // Array types
 
-  type CellDeckDoubleShape: Shape<CellIndex>;
+  type CellDeckDoubleXShape: Shape<CellIndex>;
+  type CellDeckDoubleYShape: Shape<CellIndex>;
+  type CellDeckDoubleZShape: Shape<CellIndex>;
   type CellDeckDoubleArray<T: Copy>: Array<T, CellIndex>;
   type CellChunkShape: Shape<CellIndex>;
   type CellChunkArray<T: Copy>: Array<T, CellIndex>;
@@ -59,7 +61,9 @@ macro_rules! impl_chunk_size {
       const CELLS_IN_CHUNK_ROW: u32 = $n;
     
       // TODO: this is specific to surface nets X border
-      type CellDeckDoubleShape = ConstShape<CellIndex, 2, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
+      type CellDeckDoubleXShape = ConstShape<CellIndex, 2, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
+      type CellDeckDoubleYShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, 2, {Self::CELLS_IN_CHUNK_ROW}>;
+      type CellDeckDoubleZShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}, 2>;
       type CellDeckDoubleArray<T: Copy> = ConstArray<T, CellIndex, {Self::CELLS_IN_DECK_DOUBLE_USIZE}>;
       type CellChunkShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
       type CellChunkArray<T: Copy> = ConstArray<T, CellIndex, {Self::CELLS_IN_CHUNK_USIZE}>;

@@ -241,6 +241,8 @@ impl Settings {
           ui.label("Extract border chunks?");
           ui.grid("Border chunk extracting", |ui| {
             ui.checkbox(&mut self.surface_nets_settings.extract_border_x_chunks, "X");
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_y_chunks, "Y");
+            ui.checkbox(&mut self.surface_nets_settings.extract_border_z_chunks, "Z");
             ui.end_row();
           });
           ui.end_row();

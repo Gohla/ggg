@@ -15,13 +15,17 @@ use crate::volume::Volume;
 pub struct SurfaceNetsExtractorSettings {
   pub extract_regular_chunks: bool,
   pub extract_border_x_chunks: bool,
+  pub extract_border_y_chunks: bool,
+  pub extract_border_z_chunks: bool,
 }
 
 impl Default for SurfaceNetsExtractorSettings {
   fn default() -> Self {
     Self {
       extract_regular_chunks: true,
-      extract_border_x_chunks: false,
+      extract_border_x_chunks: true,
+      extract_border_y_chunks: true,
+      extract_border_z_chunks: true,
     }
   }
 }
@@ -53,6 +57,18 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       let chunk_samples_b = volume.sample_chunk(min_b, step);
       self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_x_chunk);
     }
+    if self.settings.extract_border_y_chunks && max.y < total_size {
+      let mut min_b = min;
+      min_b.y = max.y;
+      let chunk_samples_b = volume.sample_chunk(min_b, step);
+      self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_y_chunk);
+    }
+    if self.settings.extract_border_z_chunks && max.z < total_size {
+      let mut min_b = min;
+      min_b.z = max.z;
+      let chunk_samples_b = volume.sample_chunk(min_b, step);
+      self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_z_chunk);
+    }
   }
 
   #[inline]
@@ -62,6 +78,12 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     }
     if self.settings.extract_border_x_chunks {
       copy_chunk_vertices(&chunk.border_x_chunk, vertices, indices, draws);
+    }
+    if self.settings.extract_border_y_chunks {
+      copy_chunk_vertices(&chunk.border_y_chunk, vertices, indices, draws);
+    }
+    if self.settings.extract_border_z_chunks {
+      copy_chunk_vertices(&chunk.border_z_chunk, vertices, indices, draws);
     }
   }
 }
@@ -79,6 +101,8 @@ impl<C: ChunkSize> SurfaceNetsExtractor<C> {
 pub struct SurfaceNetsLodChunkMesh {
   pub regular: ChunkMesh,
   pub border_x_chunk: ChunkMesh,
+  pub border_y_chunk: ChunkMesh,
+  pub border_z_chunk: ChunkMesh,
 }
 
 impl SurfaceNetsLodChunkMesh {
@@ -88,20 +112,35 @@ impl SurfaceNetsLodChunkMesh {
   }
 
   #[inline]
-  pub fn with_chunk_vertices(regular: ChunkMesh, border_x_chunk: ChunkMesh) -> Self {
-    Self { regular, border_x_chunk }
+  pub fn with_chunk_vertices(
+    regular: ChunkMesh,
+    border_x_chunk: ChunkMesh,
+    border_y_chunk: ChunkMesh,
+    border_z_chunk: ChunkMesh,
+  ) -> Self {
+    Self {
+      regular,
+      border_x_chunk,
+      border_y_chunk,
+      border_z_chunk,
+    }
   }
 }
 
 impl LodChunkMesh for SurfaceNetsLodChunkMesh {
   #[inline]
   fn is_empty(&self) -> bool {
-    self.regular.is_empty() && self.border_x_chunk.is_empty()
+    self.regular.is_empty()
+      && self.border_x_chunk.is_empty()
+      && self.border_y_chunk.is_empty()
+      && self.border_z_chunk.is_empty()
   }
 
   #[inline]
   fn clear(&mut self) {
     self.regular.clear();
     self.border_x_chunk.clear();
+    self.border_y_chunk.clear();
+    self.border_z_chunk.clear();
   }
 }
