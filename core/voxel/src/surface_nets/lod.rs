@@ -62,10 +62,13 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   ) {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
-        // TODO: CellsChunkDeckDoubleArray cannot be indexed by CellIndex, because it is only 2 x positions wide!
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_x::<C>();
-        SurfaceNets::extract_global_position(cell, border_cell.to_index::<C>(), min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
+        if let Some(position) = SurfaceNets::<C>::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
+          let border_cell_index = border_cell.to_index::<C>();
+          //println!("Write border cell {:?}, border cell index {}, cell {:?}, cell index {}", border_cell, border_cell_index, cell, cell.to_index::<C>());
+          SurfaceNets::<C>::write_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index, position);
+        }
       }
     }
   }
@@ -99,30 +102,35 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   ) {
     let cell = border_cell.to_cell_border_x::<C>();
     let min_voxel_index = cell.to_min_voxel_index::<C>();
+    //println!("extract_quad_border_x: border cell {:?}, border cell index {}, cell {:?}, min voxel pos {:?}, min voxel index {}", border_cell, border_cell_index, cell, min_voxel_index.to_pos::<C::VoxelChunkShape>(), min_voxel_index);
     let value_a_negative = chunk_sample_array.sample_index(min_voxel_index).is_sign_negative();
     let (v1, pos1) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index); // OPTO: not sharing this computation may increase performance.
 
     // Do edges parallel with the X axis
-    if border_cell.y != 0 && border_cell.z != 0 && border_cell.x < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_X_VOXEL_INDEX_OFFSET).is_sign_negative();
-      if value_a_negative != value_b_negative {
-        let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET);
-        let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET);
-        let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET - Self::ADD_Z_CELL_INDEX_OFFSET);
-        Self::make_quad(
-          chunk_mesh,
-          value_a_negative,
-          value_b_negative,
-          pos1, v1,
-          pos2, v2,
-          pos3, v3,
-          pos4, v4,
-        );
-      }
-    }
+    // if border_cell.y != 0 && border_cell.z != 0 && border_cell.x < 2 { // PERF: removing the less-than check decreases performance.
+    //   let voxel_index = min_voxel_index + SurfaceNets::<C>::ADD_X_VOXEL_INDEX_OFFSET;
+    //   //println!("check x: voxel pos {:?}, voxel index: {}", voxel_index.to_pos::<C::VoxelChunkShape>(), voxel_index);
+    //   let value_b_negative = chunk_sample_array.sample_index(voxel_index).is_sign_negative();
+    //   if value_a_negative != value_b_negative {
+    //     let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET);
+    //     let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET);
+    //     let (v4, pos4) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET - Self::ADD_Z_CELL_INDEX_OFFSET);
+    //     Self::make_quad(
+    //       chunk_mesh,
+    //       value_a_negative,
+    //       value_b_negative,
+    //       pos1, v1,
+    //       pos2, v2,
+    //       pos3, v3,
+    //       pos4, v4,
+    //     );
+    //   }
+    // }
     // Do edges parallel with the Y axis
     if border_cell.x != 0 && border_cell.z != 0 && border_cell.y < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_Y_VOXEL_INDEX_OFFSET).is_sign_negative();
+      let voxel_index = min_voxel_index + SurfaceNets::<C>::ADD_Y_VOXEL_INDEX_OFFSET;
+      //println!("check y: voxel pos {:?}, voxel index: {}", voxel_index.to_pos::<C::VoxelChunkShape>(), voxel_index);
+      let value_b_negative = chunk_sample_array.sample_index(voxel_index).is_sign_negative();
       if value_a_negative != value_b_negative {
         let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Z_CELL_INDEX_OFFSET);
         let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_X_CELL_INDEX_OFFSET);
@@ -140,7 +148,9 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     }
     // Do edges parallel with the Z axis
     if border_cell.x != 0 && border_cell.y != 0 && border_cell.z < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + SurfaceNets::<C>::ADD_Z_VOXEL_INDEX_OFFSET).is_sign_negative();
+      let voxel_index = min_voxel_index + SurfaceNets::<C>::ADD_Z_VOXEL_INDEX_OFFSET;
+      //println!("check z: voxel pos {:?}, voxel index: {}", voxel_index.to_pos::<C::VoxelChunkShape>(), voxel_index);
+      let value_b_negative = chunk_sample_array.sample_index(voxel_index).is_sign_negative();
       if value_a_negative != value_b_negative {
         let (v2, pos2) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_X_CELL_INDEX_OFFSET);
         let (v3, pos3) = SurfaceNets::<C>::read_vertex_position(cell_index_to_vertex_index, chunk_mesh, border_cell_index - Self::ADD_Y_CELL_INDEX_OFFSET);

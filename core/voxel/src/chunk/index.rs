@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use ultraviolet::UVec3;
+
 use crate::chunk::shape::{index_from_xyz, Shape};
 
 // Index trait
@@ -50,8 +52,12 @@ impl CellIndex {
   pub(crate) const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
 
   #[inline]
+  pub fn to_xyz<S: Shape<Self>>(self) -> (u32, u32, u32) { S::index_into_xyz(self) }
+  #[inline]
+  pub fn to_pos<S: Shape<Self>>(self) -> UVec3 { S::index_into_pos(self) }
+  #[inline]
   pub fn to_min_voxel_index<SC: Shape<Self>, SV: Shape<VoxelIndex>>(self) -> VoxelIndex {
-    let (x, y, z) = SC::index_into_xyz(self);
+    let (x, y, z) = self.to_xyz::<SC>();
     SV::index_from_xyz(x, y, z)
   }
 }
@@ -118,8 +124,12 @@ impl VoxelIndex {
   pub(crate) const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
 
   #[inline]
+  pub fn to_xyz<S: Shape<Self>>(self) -> (u32, u32, u32) { S::index_into_xyz(self) }
+  #[inline]
+  pub fn to_pos<S: Shape<Self>>(self) -> UVec3 { S::index_into_pos(self) }
+  #[inline]
   pub fn to_max_cell_index<SV: Shape<Self>, SC: Shape<CellIndex>>(self) -> CellIndex {
-    let (x, y, z) = SV::index_into_xyz(self);
+    let (x, y, z) = self.to_xyz::<SV>();
     SC::index_from_xyz(x, y, z)
   }
 }

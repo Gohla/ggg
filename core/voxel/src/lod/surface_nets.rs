@@ -1,5 +1,3 @@
-use ultraviolet::UVec3;
-
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
@@ -50,7 +48,8 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
     }
     if self.settings.extract_border_x_chunks && max.x < total_size {
-      let min_b = min + UVec3::unit_x() * step;
+      let mut min_b = min;
+      min_b.x = max.x;
       let chunk_samples_b = volume.sample_chunk(min_b, step);
       self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_b, &chunk_samples_b, &mut chunk.border_x_chunk);
     }

@@ -58,27 +58,10 @@ impl<C: ChunkSize> SurfaceNets<C> {
   ) {
     S::for_all(|x, y, z, cell_index| {
       let cell = Cell::new(x, y, z);
-      Self::extract_global_position(cell, cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
+      if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
+        Self::write_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index, position);
+      }
     });
-  }
-
-  #[inline]
-  fn extract_global_position(
-    cell: Cell,
-    cell_index: CellIndex,
-    min: UVec3,
-    step: u32,
-    chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut impl ArrayTrait<u16, CellIndex>,
-    chunk_mesh: &mut ChunkMesh,
-  ) {
-    if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
-      let vertex_index = chunk_mesh.push_vertex(Vertex { position });
-      debug_assert!(cell_index_to_vertex_index.contains(cell_index), "Tried to write out of bounds cell index {} (>= {}) in cell index to vertex index array, with vertex index: {}", cell_index, cell_index_to_vertex_index.len(), vertex_index);
-      debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
-      debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
-      cell_index_to_vertex_index.set(cell_index, vertex_index as u16);
-    }
   }
 
   // Consider the grid-aligned cube where `min` is the minimal corner. Find a point inside this cube that is 
@@ -285,8 +268,18 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
+  fn write_vertex_position(cell_index_to_vertex_index: &mut impl ArrayTrait<u16, CellIndex>, chunk_mesh: &mut ChunkMesh, cell_index: CellIndex, position: Vec3) {
+    let vertex_index = chunk_mesh.push_vertex(Vertex { position });
+    debug_assert!(cell_index_to_vertex_index.contains(cell_index), "Tried to write out of bounds cell index {} (>= {}) in cell index to vertex index array, with vertex index: {}", cell_index, cell_index_to_vertex_index.len(), vertex_index);
+    debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+    debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
+    cell_index_to_vertex_index.set(cell_index, vertex_index);
+  }
+
+  #[inline]
   fn read_vertex_position(cell_index_to_vertex_index: &impl ArrayTrait<u16, CellIndex>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
     let vertex_index = cell_index_to_vertex_index.index(cell_index);
+    //println!("Read cell index {} -> vertex index {}", cell_index, vertex_index);
     debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
     let position = chunk_mesh.vertices()[vertex_index as usize].position;
     (vertex_index, position)
