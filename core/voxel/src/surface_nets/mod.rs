@@ -7,18 +7,19 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::array::Array as ArrayTrait;
+use crate::chunk::array::Array;
 use crate::chunk::index::{CellIndex, VoxelIndex};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
-use crate::chunk::shape::Shape as ShapeTrait;
+use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
 
 pub mod lod;
 
 type CellShape<C> = <C as ChunkSize>::CellChunkShape;
 type VoxelShape<C> = <C as ChunkSize>::VoxelChunkShape;
-type Array<C> = <C as ChunkSize>::CellChunkArray<u16>;
+type VertexIndexArray<C> = <C as ChunkSize>::CellChunkArray<u16>;
+type CaseArray<C> = <C as ChunkSize>::CellChunkArray<Case>;
 
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
@@ -40,27 +41,27 @@ impl<C: ChunkSize> SurfaceNets<C> {
     chunk_mesh: &mut ChunkMesh,
   ) {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      let mut cell_index_to_vertex_index = Array::<C>::new(u16::MAX);
-      Self::extract_global_positions::<CellShape<C>>(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
-      Self::extract_quads(chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
+      let mut cell_index_to_vertex_index = VertexIndexArray::<C>::new(u16::MAX);
+      let mut cell_index_to_case = CaseArray::<C>::new(Case::default());
+      Self::extract_global_positions::<CellShape<C>>(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_quads(&cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
 
   // Extract positions
 
-  fn extract_global_positions<S: ShapeTrait<CellIndex>>(
+  fn extract_global_positions<S: Shape<CellIndex>>(
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &mut Array<C>,
+    cell_index_to_vertex_index: &mut VertexIndexArray<C>,
+    cell_index_to_case: &mut CaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     S::for_all(|x, y, z, cell_index| {
       let cell = Cell::new(x, y, z);
-      if let Some(position) = Self::extract_cell_vertex_positions(cell, min, step, chunk_sample_array) {
-        Self::write_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index, position);
-      }
+      Self::extract_cell_vertex_positions(cell, cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
     });
   }
 
@@ -72,22 +73,27 @@ impl<C: ChunkSize> SurfaceNets<C> {
   #[inline]
   fn extract_cell_vertex_positions(
     cell: Cell,
+    cell_index: CellIndex,
     min: UVec3,
     step: u32,
     chunk_sample_array: &ChunkSampleArray<C>,
-  ) -> Option<Vec3> {
+    cell_index_to_vertex_index: &mut impl Array<u16, CellIndex>,
+    cell_index_to_case: &mut impl Array<Case, CellIndex>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
     let local_voxel_positions = Self::local_voxel_positions(cell);
     let values = Self::sample(chunk_sample_array, &local_voxel_positions);
     let case = Self::case(&values);
-    if case == 0 || case == 255 { return None; } // OPTO: use bit twiddling to break it down to 1 comparison?
+    if case.is_uniform() { return; }
     let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions);
     let vertex_position = Self::centroid_of_edge_intersections(case, &values, &global_voxel_positions);
-    Some(vertex_position)
+    Self::write_vertex_position(cell_index_to_vertex_index, chunk_mesh, cell_index, vertex_position);
+    Self::write_case(cell_index_to_case, cell_index, case);
   }
 
   #[inline]
   pub fn centroid_of_edge_intersections(
-    case: u8,
+    case: Case,
     values: &[f32; 8],
     global_voxel_positions: &[Vec3; 8],
   ) -> Vec3 {
@@ -96,8 +102,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
     for corner in &Self::EDGE_TO_VOXEL_INDICES {
       let voxel_a_index = corner >> 4 /* High nibble */;
       let voxel_b_index = corner & 0b0000_1111; /* Low nibble */
-      let a_negative = (case & (1 << voxel_a_index)) != 0;
-      let b_negative = (case & (1 << voxel_b_index)) != 0;
+      let a_negative = case.is_negative(voxel_a_index);
+      let b_negative = case.is_negative(voxel_b_index);
       if a_negative != b_negative {
         let voxel_a_index = voxel_a_index as usize;
         let voxel_b_index = voxel_b_index as usize;
@@ -123,8 +129,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
   // Extract quads
 
   fn extract_quads(
-    chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &Array<C>,
+    cell_index_to_vertex_index: &VertexIndexArray<C>,
+    cell_index_to_case: &CaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) { // PERF: using Shape::for_all here decreases performance
     for z in 0..C::CELLS_IN_CHUNK_ROW {
@@ -132,10 +138,9 @@ impl<C: ChunkSize> SurfaceNets<C> {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let cell = Cell::new(x, y, z);
           let cell_index = cell.to_index::<C>();
-          let min_voxel_index = cell.to_min_voxel_index::<C>();
           let vertex_index = cell_index_to_vertex_index.index(cell_index);
           if vertex_index == u16::MAX { continue; }
-          Self::extract_quad(cell, cell_index, min_voxel_index, chunk_sample_array, cell_index_to_vertex_index, chunk_mesh);
+          Self::extract_quad(cell, cell_index, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
         }
       }
     }
@@ -147,15 +152,15 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn extract_quad(
     cell: Cell,
     cell_index: CellIndex,
-    min_voxel_index: VoxelIndex,
-    chunk_sample_array: &ChunkSampleArray<C>,
-    cell_index_to_vertex_index: &Array<C>,
+    cell_index_to_vertex_index: &VertexIndexArray<C>,
+    cell_index_to_case: &CaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    let value_a_negative = chunk_sample_array.sample_index(min_voxel_index).is_sign_negative();
+    let case = Self::read_case(cell_index_to_case, cell_index);
+    let value_a_negative = case.is_min_negative();
     // Do edges parallel with the X axis
     if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_X_VOXEL_INDEX_OFFSET).is_sign_negative();
+      let value_b_negative = case.is_x_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
           cell_index_to_vertex_index,
@@ -170,7 +175,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
     // Do edges parallel with the Y axis
     if cell.x != 0 && cell.z != 0 && cell.y < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Y_VOXEL_INDEX_OFFSET).is_sign_negative();
+      let value_b_negative = case.is_y_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
           cell_index_to_vertex_index,
@@ -185,7 +190,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
     }
     // Do edges parallel with the Z axis
     if cell.x != 0 && cell.y != 0 && cell.z < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
-      let value_b_negative = chunk_sample_array.sample_index(min_voxel_index + Self::ADD_Z_VOXEL_INDEX_OFFSET).is_sign_negative();
+      let value_b_negative = case.is_z_negative();
       if value_a_negative != value_b_negative {
         Self::make_quad(
           cell_index_to_vertex_index,
@@ -229,7 +234,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   // therefore we must find the other 3 quad corners by moving along the other two axes (those orthogonal to A) in the 
   // negative directions; these are axis B and axis C.
   fn make_quad(
-    cell_index_to_vertex_index: &impl ArrayTrait<u16, CellIndex>,
+    cell_index_to_vertex_index: &impl Array<u16, CellIndex>,
     chunk_mesh: &mut ChunkMesh,
     value_a_negative: bool,
     value_b_negative: bool,
@@ -268,7 +273,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  fn write_vertex_position(cell_index_to_vertex_index: &mut impl ArrayTrait<u16, CellIndex>, chunk_mesh: &mut ChunkMesh, cell_index: CellIndex, position: Vec3) {
+  fn write_vertex_position(cell_index_to_vertex_index: &mut impl Array<u16, CellIndex>, chunk_mesh: &mut ChunkMesh, cell_index: CellIndex, position: Vec3) {
     let vertex_index = chunk_mesh.push_vertex(Vertex { position });
     debug_assert!(cell_index_to_vertex_index.contains(cell_index), "Tried to write out of bounds cell index {} (>= {}) in cell index to vertex index array, with vertex index: {}", cell_index, cell_index_to_vertex_index.len(), vertex_index);
     debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
@@ -277,11 +282,23 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  fn read_vertex_position(cell_index_to_vertex_index: &impl ArrayTrait<u16, CellIndex>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
+  fn read_vertex_position(cell_index_to_vertex_index: &impl Array<u16, CellIndex>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
     let vertex_index = cell_index_to_vertex_index.index(cell_index);
     debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
     let position = chunk_mesh.vertices()[vertex_index as usize].position;
     (vertex_index, position)
+  }
+
+  #[inline]
+  fn write_case(cell_index_to_case: &mut impl Array<Case, CellIndex>, cell_index: CellIndex, case: Case) {
+    debug_assert!(cell_index_to_case.contains(cell_index), "Tried to write out of bounds {} (>= {}) in cell index to case array, with case: {:?}", cell_index, cell_index_to_case.len(), case);
+    cell_index_to_case.set(cell_index, case);
+  }
+
+  #[inline]
+  fn read_case(cell_index_to_case: &impl Array<Case, CellIndex>, cell_index: CellIndex) -> Case {
+    debug_assert!(cell_index_to_case.contains(cell_index), "Tried to read out of bounds {} (>= {}) in cell index to case array", cell_index, cell_index_to_case.len());
+    cell_index_to_case.index(cell_index)
   }
 
 
@@ -327,15 +344,15 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  pub fn case(values: &[f32; 8]) -> u8 {
-    (values[0].is_sign_negative() as u8) << 0
+  pub fn case(values: &[f32; 8]) -> Case {
+    Case((values[0].is_sign_negative() as u8) << 0
       | (values[1].is_sign_negative() as u8) << 1
       | (values[2].is_sign_negative() as u8) << 2
       | (values[3].is_sign_negative() as u8) << 3
       | (values[4].is_sign_negative() as u8) << 4
       | (values[5].is_sign_negative() as u8) << 5
       | (values[6].is_sign_negative() as u8) << 6
-      | (values[7].is_sign_negative() as u8) << 7
+      | (values[7].is_sign_negative() as u8) << 7)
   }
 
   #[inline]
@@ -367,9 +384,6 @@ impl<C: ChunkSize> SurfaceNets<C> {
     0b0110_0111,
   ];
 
-  const ADD_X_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_x::<C::VoxelChunkShape>();
-  const ADD_Y_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_y::<C::VoxelChunkShape>();
-  const ADD_Z_VOXEL_INDEX_OFFSET: VoxelIndex = VoxelIndex::unit_z::<C::VoxelChunkShape>();
   const ADD_X_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_x::<C::CellChunkShape>();
   const ADD_Y_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_y::<C::CellChunkShape>();
   const ADD_Z_CELL_INDEX_OFFSET: CellIndex = CellIndex::unit_z::<C::CellChunkShape>();
@@ -423,5 +437,26 @@ impl Voxel {
   pub fn to_index<C: ChunkSize>(&self) -> VoxelIndex {
     VoxelShape::<C>::index_from_xyz(self.x, self.y, self.z)
   }
+}
+
+#[repr(transparent)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct Case(pub u8);
+
+impl Case {
+  #[inline]
+  pub fn is_negative(&self, index: u8) -> bool { (self.0 & (1 << index)) != 0 }
+
+  #[inline]
+  pub fn is_min_negative(&self) -> bool { self.is_negative(0) }
+  #[inline]
+  pub fn is_x_negative(&self) -> bool { self.is_negative(1) }
+  #[inline]
+  pub fn is_y_negative(&self) -> bool { self.is_negative(2) }
+  #[inline]
+  pub fn is_z_negative(&self) -> bool { self.is_negative(4) }
+
+  #[inline]
+  pub fn is_uniform(&self) -> bool { self.0 == 0 || self.0 == 255 } // OPTO: use bit twiddling to break it down to 1 comparison?
 }
 

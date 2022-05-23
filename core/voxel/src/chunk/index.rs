@@ -42,14 +42,14 @@ impl Index for CellIndex {
 
 impl CellIndex {
   #[inline]
-  pub(crate) const fn from_xyz<S: Shape<Self>>(x: u32, y: u32, z: u32) -> Self { Self(index_from_xyz::<Self, S>(x, y, z)) }
+  pub const fn from_xyz<S: Shape<Self>>(x: u32, y: u32, z: u32) -> Self { Self(index_from_xyz::<Self, S>(x, y, z)) }
 
   #[inline]
-  pub(crate) const fn unit_x<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(1, 0, 0) }
+  pub const fn unit_x<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(1, 0, 0) }
   #[inline]
-  pub(crate) const fn unit_y<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 1, 0) }
+  pub const fn unit_y<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 1, 0) }
   #[inline]
-  pub(crate) const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
+  pub const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
 
   #[inline]
   pub fn to_xyz<S: Shape<Self>>(self) -> (u32, u32, u32) { S::index_into_xyz(self) }
@@ -114,14 +114,14 @@ impl Index for VoxelIndex {
 
 impl VoxelIndex {
   #[inline]
-  pub(crate) const fn from_xyz<S: Shape<Self>>(x: u32, y: u32, z: u32) -> Self { Self(index_from_xyz::<Self, S>(x, y, z)) }
+  pub const fn from_xyz<S: Shape<Self>>(x: u32, y: u32, z: u32) -> Self { Self(index_from_xyz::<Self, S>(x, y, z)) }
 
   #[inline]
-  pub(crate) const fn unit_x<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(1, 0, 0) }
+  pub const fn unit_x<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(1, 0, 0) }
   #[inline]
-  pub(crate) const fn unit_y<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 1, 0) }
+  pub const fn unit_y<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 1, 0) }
   #[inline]
-  pub(crate) const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
+  pub const fn unit_z<S: Shape<Self>>() -> Self { Self::from_xyz::<S>(0, 0, 1) }
 
   #[inline]
   pub fn to_xyz<S: Shape<Self>>(self) -> (u32, u32, u32) { S::index_into_xyz(self) }

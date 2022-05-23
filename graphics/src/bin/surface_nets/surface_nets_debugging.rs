@@ -100,7 +100,7 @@ impl SurfaceNetsDebugging {
 
       ui.grid("Cell Data Grid", |ui| {
         ui.label("Case");
-        ui.monospace(format!("{}", case));
+        ui.monospace(format!("{}", case.0));
         ui.end_row();
         ui.label("Cell index");
         ui.monospace(format!("{}", self.cell.to_index::<C>()));
