@@ -114,7 +114,7 @@ impl app::Application for MarchingCubesDemo {
     egui::Window::new("Demo")
       .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
       .show(&gui_frame, |ui| {
-        self.light_settings.render_gui(ui);
+        self.light_settings.render_gui(ui, &self.camera);
       });
 
 

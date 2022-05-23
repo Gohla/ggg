@@ -3,7 +3,7 @@ use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
 use ultraviolet::Isometry3;
 
-use gfx::camera::{CameraDebugging, CameraSettings};
+use gfx::camera::{Camera, CameraDebugging, CameraSettings};
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
 use voxel::lod::builder::LodManagerBuilder;
@@ -150,8 +150,8 @@ impl Settings {
     return false;
   }
 
-  pub fn draw_light_gui(&mut self, ui: &mut Ui) {
-    self.light.render_gui(ui);
+  pub fn draw_light_gui(&mut self, ui: &mut Ui, camera: &Camera) {
+    self.light.render_gui(ui, camera);
   }
 
   /// Returns true if update button was pressed.

@@ -59,6 +59,7 @@ pub struct LightSettings {
   pub rotation_x_degree: f32,
   pub rotation_y_degree: f32,
   pub rotation_z_degree: f32,
+  pub follow_camera: bool,
   pub uniform: LightUniform,
 }
 
@@ -68,13 +69,14 @@ impl Default for LightSettings {
       rotation_x_degree: 0.0,
       rotation_y_degree: 270.0,
       rotation_z_degree: 0.0,
-      uniform: Default::default()
+      follow_camera: false,
+      uniform: Default::default(),
     }
   }
 }
 
 impl LightSettings {
-  pub fn render_gui(&mut self, ui: &mut Ui) -> CollapsingResponse<InnerResponse<()>> {
+  pub fn render_gui(&mut self, ui: &mut Ui, camera: &Camera) -> CollapsingResponse<InnerResponse<()>> {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.uniform.color.x, self.uniform.color.y, self.uniform.color.z, 0.0).into();
@@ -85,11 +87,17 @@ impl LightSettings {
       ui.label("Ambient");
       ui.add(DragValue::new(&mut self.uniform.ambient).speed(0.001).clamp_range(0.0..=1.0));
       ui.end_row();
-      ui.label("Direction");
-      ui.drag("x: ", &mut self.rotation_x_degree, 0.5);
-      ui.drag("y: ", &mut self.rotation_y_degree, 0.5);
-      ui.drag("z: ", &mut self.rotation_z_degree, 0.5);
-      self.uniform.direction = Rotor3::from_euler_angles((self.rotation_z_degree % 360.0).to_radians(), (self.rotation_x_degree % 360.0).to_radians(), (self.rotation_y_degree % 360.0).to_radians()) * Vec3::one();
+      ui.label("Follow camera?");
+      ui.checkbox(&mut self.follow_camera, "");
+      if self.follow_camera {
+        self.uniform.direction = camera.get_direction_inverse();
+      } else {
+        ui.label("Direction");
+        ui.drag("x: ", &mut self.rotation_x_degree, 0.5);
+        ui.drag("y: ", &mut self.rotation_y_degree, 0.5);
+        ui.drag("z: ", &mut self.rotation_z_degree, 0.5);
+        self.uniform.direction = Rotor3::from_euler_angles((self.rotation_z_degree % 360.0).to_radians(), (self.rotation_x_degree % 360.0).to_radians(), (self.rotation_y_degree % 360.0).to_radians()) * Vec3::one();
+      }
       ui.end_row();
     })
   }

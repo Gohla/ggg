@@ -165,6 +165,8 @@ pub enum ProjectionType {
 pub struct Camera {
   viewport: PhysicalSize,
   position: Vec3,
+  direction: Vec3,
+  direction_inverse: Vec3,
   view: Mat4,
   view_inverse: Mat4,
   projection: Mat4,
@@ -179,6 +181,8 @@ impl Camera {
     Self {
       viewport,
       position: Vec3::zero(),
+      direction: Vec3::one(),
+      direction_inverse: Vec3::one() * -1.0,
       view: Mat4::identity(),
       view_inverse: Mat4::identity().inversed(),
       projection: Mat4::identity(),
@@ -194,6 +198,14 @@ impl Camera {
   /// Gets the position of the camera (i.e., the eye of the camera).
   #[inline]
   pub fn get_position(&self) -> Vec3 { self.position }
+
+  /// Gets the normalized direction of the camera (i.e., vector from position to target).
+  #[inline]
+  pub fn get_direction(&self) -> Vec3 { self.direction }
+
+  /// Gets the normalized inverse direction of the camera (i.e., vector from target to position).
+  #[inline]
+  pub fn get_direction_inverse(&self) -> Vec3 { self.direction_inverse }
 
   /// Gets the view matrix.
   #[inline]
@@ -262,6 +274,8 @@ impl Camera {
       }
       MovementType::Fly => Vec3::zero(),
     };
+    self.direction = (settings.target - self.position).normalized();
+    self.direction_inverse = self.direction * -1.0;
 
     // View matrix.
     self.view = look_at_lh(self.position, settings.target, Vec3::unit_y());

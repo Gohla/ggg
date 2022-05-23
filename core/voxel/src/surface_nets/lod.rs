@@ -126,7 +126,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xy {
       Self::extract_global_positions_border_xy(1, 1, step, min_xy, chunk_sample_array, &mut cell_index_to_vertex_index, chunk_mesh);
     }
-
+    
     if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xy {
       Self::extract_quads_border_xy(1, 1, chunk_sample_array, &cell_index_to_vertex_index, chunk_mesh);
     }

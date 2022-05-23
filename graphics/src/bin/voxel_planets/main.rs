@@ -116,7 +116,7 @@ impl app::Application for VoxelPlanets {
       .show(&gui_frame, |ui| {
         let mut recreate_lod_render_data_manager = false;
         recreate_lod_render_data_manager |= self.settings.draw_reset_to_defaults_button(ui);
-        self.settings.draw_light_gui(ui);
+        self.settings.draw_light_gui(ui, &self.camera);
         recreate_lod_render_data_manager |= self.settings.draw_volume_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_extractor_gui(ui);
         recreate_lod_render_data_manager |= self.settings.draw_lod_octmap_gui(ui);
