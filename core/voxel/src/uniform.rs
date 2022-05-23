@@ -99,7 +99,9 @@ impl LightSettings {
       }
       ui.end_row();
     });
-    self.uniform.direction = camera.get_direction_inverse();
+    if self.follow_camera {
+      self.uniform.direction = camera.get_direction_inverse();
+    }
   }
 }
 

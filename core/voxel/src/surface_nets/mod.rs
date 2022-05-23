@@ -140,7 +140,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
           let cell_index = cell.to_index::<C>();
           let vertex_index = cell_index_to_vertex_index.index(cell_index);
           if vertex_index == u16::MAX { continue; }
-          Self::extract_quad(cell, cell_index, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+          let case = Self::read_case(cell_index_to_case, cell_index);
+          Self::extract_quad(case, cell, cell_index, cell_index_to_vertex_index, chunk_mesh);
         }
       }
     }
@@ -149,14 +150,14 @@ impl<C: ChunkSize> SurfaceNets<C> {
   // For every edge that crosses the isosurface, make a quad between the "centers" of the four cubes touching that 
   // surface. The "centers" are actually the vertex positions found earlier. Also make sure the triangles are facing the
   // right way. See the comments on `make_quad` to help with understanding the indexing.
+  #[inline]
   fn extract_quad(
+    case: Case,
     cell: Cell,
     cell_index: CellIndex,
     cell_index_to_vertex_index: &VertexIndexArray<C>,
-    cell_index_to_case: &CaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    let case = Self::read_case(cell_index_to_case, cell_index);
     let value_a_negative = case.is_min_negative();
     // Do edges parallel with the X axis
     if cell.y != 0 && cell.z != 0 && cell.x < C::CELLS_IN_CHUNK_ROW { // PERF: removing the less-than check decreases performance.
@@ -233,6 +234,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   //
   // therefore we must find the other 3 quad corners by moving along the other two axes (those orthogonal to A) in the 
   // negative directions; these are axis B and axis C.
+  #[inline]
   fn make_quad(
     cell_index_to_vertex_index: &impl Array<u16, CellIndex>,
     chunk_mesh: &mut ChunkMesh,
