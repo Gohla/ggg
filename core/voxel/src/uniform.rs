@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use egui::{CollapsingResponse, color_picker, DragValue, InnerResponse, Rgba, Ui};
+use egui::{color_picker, DragValue, Rgba, Ui};
 use egui::color_picker::Alpha;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec3, Vec4};
 
@@ -76,7 +76,7 @@ impl Default for LightSettings {
 }
 
 impl LightSettings {
-  pub fn render_gui(&mut self, ui: &mut Ui, camera: &Camera) -> CollapsingResponse<InnerResponse<()>> {
+  pub fn render_gui(&mut self, ui: &mut Ui, camera: &Camera) {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.uniform.color.x, self.uniform.color.y, self.uniform.color.z, 0.0).into();
@@ -90,9 +90,7 @@ impl LightSettings {
       ui.label("Follow camera?");
       ui.checkbox(&mut self.follow_camera, "");
       ui.end_row();
-      if self.follow_camera {
-        self.uniform.direction = camera.get_direction_inverse();
-      } else {
+      if !self.follow_camera {
         ui.label("Direction");
         ui.drag("x: ", &mut self.rotation_x_degree, 0.5);
         ui.drag("y: ", &mut self.rotation_y_degree, 0.5);
@@ -100,7 +98,8 @@ impl LightSettings {
         self.uniform.direction = Rotor3::from_euler_angles((self.rotation_z_degree % 360.0).to_radians(), (self.rotation_x_degree % 360.0).to_radians(), (self.rotation_y_degree % 360.0).to_radians()) * Vec3::one();
       }
       ui.end_row();
-    })
+    });
+    self.uniform.direction = camera.get_direction_inverse();
   }
 }
 
