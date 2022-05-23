@@ -271,18 +271,32 @@ impl Settings {
     }).body_returned.map(|i| i.inner).unwrap_or(false)
   }
 
-  pub fn draw_lod_chunk_vertices_manager_gui(
+  pub fn draw_lod_chunk_mesh_manager_gui(
     &mut self,
     ui: &mut Ui,
     lod_chunk_mesh_manager: &mut dyn LodChunkMeshManagerParameters,
   ) {
     ui.collapsing_open_with_grid("LOD chunk mesh manager", "Grid", |ui| {
+      let max_lod_level = lod_chunk_mesh_manager.get_max_lod_level();
       ui.label("LOD factor");
       ui.drag_unlabelled_range(lod_chunk_mesh_manager.get_lod_factor_mut(), 0.1, 0.0..=4.0);
+      self.lod_octmap_settings.lod_factor = lod_chunk_mesh_manager.get_lod_factor(); // Also update settings.
       ui.end_row();
-      self.lod_octmap_settings.lod_factor = lod_chunk_mesh_manager.get_lod_factor();
+      ui.label("Fixed LOD level?");
+      ui.horizontal(|ui| {
+        let mut use_fixed_lod_level = lod_chunk_mesh_manager.get_fixed_lod_level().is_some();
+        ui.checkbox(&mut use_fixed_lod_level, "");
+        if use_fixed_lod_level {
+          if lod_chunk_mesh_manager.get_fixed_lod_level().is_none() {
+            *lod_chunk_mesh_manager.get_fixed_lod_level_mut() = Some(1);
+          }
+          ui.drag_unlabelled_range(lod_chunk_mesh_manager.get_fixed_lod_level_mut().as_mut().unwrap(), 1, 0..=3);
+        }
+      });
+      self.lod_octmap_settings.fixed_lod_level = lod_chunk_mesh_manager.get_fixed_lod_level(); // Also update settings.
+      ui.end_row();
       ui.label("Max LOD level");
-      ui.monospace(format!("{}", lod_chunk_mesh_manager.get_max_lod_level()));
+      ui.monospace(format!("{}", max_lod_level));
       ui.end_row();
     });
   }

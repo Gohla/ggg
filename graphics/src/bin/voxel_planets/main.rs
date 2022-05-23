@@ -123,7 +123,7 @@ impl app::Application for VoxelPlanets {
         if recreate_lod_render_data_manager {
           self.lod_render_data_manager = self.settings.create_lod_render_data_manager(self.lod_octmap_transform);
         }
-        self.settings.draw_lod_chunk_vertices_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
+        self.settings.draw_lod_chunk_mesh_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
         if self.settings.draw_lod_render_data_manager_gui(ui) { // Update is pressed or auto update is true
           self.debug_renderer.clear();
           self.lod_render_data = self.lod_render_data_manager.update(self.camera.get_position(), &self.settings.lod_render_data_settings, &mut self.debug_renderer, &gfx.device);

@@ -89,6 +89,7 @@ impl LightSettings {
       ui.end_row();
       ui.label("Follow camera?");
       ui.checkbox(&mut self.follow_camera, "");
+      ui.end_row();
       if self.follow_camera {
         self.uniform.direction = camera.get_direction_inverse();
       } else {

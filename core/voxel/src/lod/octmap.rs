@@ -18,6 +18,7 @@ use crate::volume::Volume;
 pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,
+  pub fixed_lod_level: Option<u32>,
   pub thread_pool_threads: usize,
   pub chunk_mesh_cache_size: usize,
 }
@@ -35,6 +36,7 @@ impl Default for LodOctmapSettings {
     Self {
       total_size: 4096,
       lod_factor: 1.0,
+      fixed_lod_level: None,
       thread_pool_threads: 10,
       chunk_mesh_cache_size: 8192,
     }
@@ -46,6 +48,7 @@ impl Default for LodOctmapSettings {
 pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   total_size: u32,
   lod_factor: f32,
+  fixed_lod_level: Option<u32>,
 
   transform: Isometry3,
   transform_inversed: Isometry3,
@@ -75,6 +78,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     Self {
       total_size: settings.total_size,
       lod_factor: settings.lod_factor,
+      fixed_lod_level: settings.fixed_lod_level,
 
       transform,
       transform_inversed: transform.inversed(),
@@ -178,7 +182,11 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
   #[inline]
   fn is_terminal(&self, aabb: AABB, lod_level: u32, position: Vec3) -> bool {
-    lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size() as f32
+    if let Some(fixed_lod_level) = self.fixed_lod_level {
+      lod_level >= self.max_lod_level.min(fixed_lod_level)
+    } else {
+      lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size() as f32
+    }
   }
 
   #[profiling::function]
@@ -214,24 +222,29 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for LodOctmap<V, C, E> {
   type Extractor = E;
+  #[inline]
+  fn get_extractor(&self) -> &E {
+    &self.extractor
+  }
 
   #[inline]
   fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk, bool))> + '_>) {
     let (transform, chunks) = self.update(position);
     (transform, Box::new(chunks))
   }
-
-  #[inline]
-  fn get_extractor(&self) -> &E {
-    &self.extractor
-  }
 }
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<V, C, E> {
   #[inline]
   fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
+
   #[inline]
   fn get_lod_factor(&self) -> f32 { self.lod_factor }
   #[inline]
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
+
+  #[inline]
+  fn get_fixed_lod_level(&self) -> Option<u32> { self.fixed_lod_level }
+  #[inline]
+  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u32> { &mut self.fixed_lod_level }
 }
