@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="2.R marching_cubes" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package graphics --bin marching_cubes" />
+  <configuration default="false" name="4.R job_queue" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package job_queue" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

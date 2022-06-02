@@ -3,6 +3,7 @@ cargo-features = ["named-profiles", "profile-overrides"]
 [workspace]
 members = [
   "core/*",
+  "gadget/*",
   "graphics",
 ]
 default-members = [

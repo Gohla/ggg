@@ -1,0 +1,16 @@
+[package]
+name = "job_queue"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+crossbeam-deque = "0.8"
+crossbeam-utils = "0.8"
+tracing = "0.1"
+profiling = "1"
+tracy-client = { version = "0.13", optional = true }
+
+[features]
+profile-with-tracy = ["profiling/profile-with-tracy", "dep:tracy-client"]

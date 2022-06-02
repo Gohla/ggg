@@ -1,6 +1,6 @@
 # ggg
 
-Gohla's game/graphics garage/garden/gadgetry/graveyard
+Gohla's game/graphics/gadget garage/garden/gadgetry/graveyard
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="2.R marching_cubes" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package graphics --bin marching_cubes" />
+  <configuration default="false" name="1.RDP voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
+    <option name="command" value="run --package graphics --bin voxel_planets  --profile=devprofile" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
