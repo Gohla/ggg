@@ -9,7 +9,7 @@ fn main() {
   for i in (0..4096).rev() {
     let job = Job::new(move || i * i);
     let curr = job_graph.add_node(Some(job));
-    job_graph.add_edge(curr, prev, ());
+    job_graph.add_edge(prev, curr, ());
     prev = curr;
   }
   job_queue.set_job_graph(job_graph);

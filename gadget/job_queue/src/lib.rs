@@ -131,7 +131,7 @@ impl<F: FnMut() -> O + Send + 'static, O: Send + 'static> ManagerThread<F, O> {
 
   fn schedule_jobs(&mut self) {
     self.nodes_to_schedule_cache.clear();
-    self.job_graph.externals(Incoming).collect_into(&mut self.nodes_to_schedule_cache);
+    self.job_graph.externals(Outgoing).collect_into(&mut self.nodes_to_schedule_cache);
     for node_index in &self.nodes_to_schedule_cache {
       if let Some(job) = self.job_graph.node_weight_mut(*node_index).unwrap().take() { // Unwrap OK: node must exist.
         self.to_worker.send((job, *node_index)).unwrap(); // Unwrap OK: panics iff all manager->worker receivers are dropped.
