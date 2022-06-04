@@ -5,14 +5,14 @@ use std::thread::{self, JoinHandle};
 use crossbeam_channel::{Receiver, select, Sender, unbounded};
 use petgraph::prelude::*;
 
-pub struct JobQueue<I, F: FnMut(I) -> O, O> {
+pub struct JobQueue<F: FnMut() -> O, O> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  external_to_manager_sender: Sender<Graph<Option<Job<I, F, O>>, ()>>,
+  external_to_manager_sender: Sender<Graph<Option<Job<F, O>>, ()>>,
   manager_to_external_receiver: Receiver<O>,
 }
 
-impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> JobQueue<I, F, O> {
+impl<F: FnMut() -> O + Send + 'static, O: Send + 'static> JobQueue<F, O> {
   pub fn new(worker_thread_count: usize) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
@@ -47,7 +47,7 @@ impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> Jo
     })
   }
 
-  pub fn set_job_graph(&self, job_graph: Graph<Option<Job<I, F, O>>, ()>) {
+  pub fn set_job_graph(&self, job_graph: Graph<Option<Job<F, O>>, ()>) {
     self.external_to_manager_sender.send(job_graph).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
   }
 
@@ -64,33 +64,32 @@ impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> Jo
 
 // Job
 
-pub struct Job<I, F: FnMut(I) -> O, O> {
-  input: I,
+pub struct Job<F: FnMut() -> O, O> {
   function: F,
 }
 
-impl<I, F: FnMut(I) -> O, O> Job<I, F, O> {
+impl<F: FnMut() -> O, O> Job<F, O> {
   #[inline]
-  pub fn new(input: I, function: F) -> Self { Self { input, function } }
+  pub fn new(function: F) -> Self { Self { function } }
   #[inline]
-  fn run(mut self) -> O { (self.function)(self.input) }
+  fn run(mut self) -> O { (self.function)() }
 }
 
 // Manager thread
 
-struct ManagerThread<I, F: FnMut(I) -> O, O> {
-  from_external: Receiver<Graph<Option<Job<I, F, O>>, ()>>,
-  to_worker: Sender<(Job<I, F, O>, NodeIndex)>,
+struct ManagerThread<F: FnMut() -> O, O> {
+  from_external: Receiver<Graph<Option<Job<F, O>>, ()>>,
+  to_worker: Sender<(Job<F, O>, NodeIndex)>,
   from_worker: Receiver<(O, NodeIndex)>,
   to_external: Sender<O>,
-  job_graph: Graph<Option<Job<I, F, O>>, ()>,
+  job_graph: Graph<Option<Job<F, O>>, ()>,
   nodes_to_schedule_cache: Vec<NodeIndex>,
 }
 
-impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> ManagerThread<I, F, O> {
+impl<F: FnMut() -> O + Send + 'static, O: Send + 'static> ManagerThread<F, O> {
   fn new(
-    from_external: Receiver<Graph<Option<Job<I, F, O>>, ()>>,
-    to_worker: Sender<(Job<I, F, O>, NodeIndex)>,
+    from_external: Receiver<Graph<Option<Job<F, O>>, ()>>,
+    to_worker: Sender<(Job<F, O>, NodeIndex)>,
     from_worker: Receiver<(O, NodeIndex)>,
     to_external: Sender<O>,
   ) -> Self {
@@ -143,12 +142,12 @@ impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> Ma
 
 // Worker thread
 
-struct WorkerThread<I, F: FnMut(I) -> O, O> {
-  from_manager: Receiver<(Job<I, F, O>, NodeIndex)>,
+struct WorkerThread<F: FnMut() -> O, O> {
+  from_manager: Receiver<(Job<F, O>, NodeIndex)>,
   to_manager: Sender<(O, NodeIndex)>,
 }
 
-impl<I: Send + 'static, F: FnMut(I) -> O + Send + 'static, O: Send + 'static> WorkerThread<I, F, O> {
+impl<F: FnMut() -> O + Send + 'static, O: Send + 'static> WorkerThread<F, O> {
   fn create_thread_and_run(self, thread_index: usize) -> std::io::Result<JoinHandle<()>> {
     thread::Builder::new()
       .name(format!("Job Queue Worker {}", thread_index))
