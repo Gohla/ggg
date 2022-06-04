@@ -1,14 +1,21 @@
-use job_queue::JobQueue;
+use petgraph::prelude::*;
+
+use job_queue::{Job, JobQueue};
 
 fn main() {
-  let job_queue = JobQueue::new(8);
-  for i in 0..4096 {
-    job_queue.add(i, i as f32, |_k, d| {
-      d * d
-    });
+  let job_queue = JobQueue::new(8).unwrap();
+  let function = |i| i * i;
+  let mut job_graph = Graph::new();
+  let mut prev = NodeIndex::default();
+  for i in (0..4096).rev() {
+    let job = Job::new(i, function);
+    let curr = job_graph.add_node(Some(job));
+    job_graph.add_edge(curr, prev, ());
+    prev = curr;
   }
-  for (k, v) in job_queue.get_value_receiver().iter() {
-    println!("Completed job {} => {}", k, v);
+  job_queue.set_job_graph(job_graph);
+  for v in job_queue.get_value_receiver().iter() {
+    println!("Completed job {}", v);
   }
   job_queue.join().unwrap();
 }

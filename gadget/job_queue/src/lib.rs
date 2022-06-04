@@ -1,75 +1,165 @@
+#![feature(iter_collect_into)]
+
 use std::thread::{self, JoinHandle};
 
 use crossbeam_channel::{Receiver, select, Sender, unbounded};
+use petgraph::prelude::*;
 
-pub struct JobQueue<K, D, F, V> {
-  manager_thread: JoinHandle<()>,
-  worker_threads: Vec<JoinHandle<()>>,
-  external_to_manager_sender: Sender<(K, D, F)>,
-  manager_to_external_receiver: Receiver<(K, V)>,
+pub struct JobQueue<I, F: FnOnce(I) -> O, O> {
+  manager_thread_handle: JoinHandle<()>,
+  worker_thread_handles: Vec<JoinHandle<()>>,
+  external_to_manager_sender: Sender<Graph<Option<Job<I, F, O>>, ()>>,
+  manager_to_external_receiver: Receiver<O>,
 }
 
-impl<K: Copy + Send + 'static, D: Send + 'static, F: FnOnce(K, D) -> V + Send + 'static, V: Send + 'static> JobQueue<K, D, F, V> {
-  pub fn new(worker_thread_count: usize) -> Self {
-    let (external_to_manager_sender, external_to_manager_receiver): (Sender<(K, D, F)>, Receiver<(K, D, F)>) = unbounded();
-    let (manager_to_worker_sender, manager_to_worker_receiver): (Sender<(K, D, F)>, Receiver<(K, D, F)>) = unbounded();
+impl<I: Send + 'static, F: FnOnce(I) -> O + Send + 'static, O: Send + 'static> JobQueue<I, F, O> {
+  pub fn new(worker_thread_count: usize) -> std::io::Result<Self> {
+    let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
+    let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
     let (worker_to_manager_sender, worker_to_manager_receiver) = unbounded();
     let (manager_to_external_sender, manager_to_external_receiver) = unbounded();
 
-    let manager_thread = {
-      thread::Builder::new()
-        .name("Job Queue Manager".into())
-        .spawn(move || {
-          loop {
-            select! {
-              recv(external_to_manager_receiver) -> job => {
-                let job = job.unwrap(); // Unwrap OK: panics iff external->manager sender is dropped.
-                manager_to_worker_sender.send(job).unwrap(); // Unwrap OK: panics iff all manager->worker receivers are dropped.
-              },
-              recv(worker_to_manager_receiver) -> result => {
-                let result = result.unwrap(); // Unwrap OK: panics iff all worker->manager senders are dropped.
-                manager_to_external_sender.send(result).unwrap(); // Unwrap OK: panics iff all manager->external receivers are dropped.
-              },
-            }
-          }
-        }).unwrap() // Unwrap OK?: panic iff creating thread fails.
-    };
+    let manager_thread = ManagerThread::new(
+      external_to_manager_receiver,
+      manager_to_worker_sender,
+      worker_to_manager_receiver,
+      manager_to_external_sender,
+    );
+    let manager_thread_handle = manager_thread.create_thread_and_run()?;
 
-    let mut worker_threads = Vec::new();
+    let mut worker_thread_handles = Vec::new();
     for i in 0..worker_thread_count {
       let manager_to_worker_receiver = manager_to_worker_receiver.clone();
       let worker_to_manager_sender = worker_to_manager_sender.clone();
-      let worker_thread = thread::Builder::new()
-        .name(format!("Job Queue Worker {}", i))
-        .spawn(move || {
-          loop {
-            let (key, data, function) = manager_to_worker_receiver.recv().unwrap(); // Unwrap OK: panics iff manager->worker sender is dropped.
-            let value = function(key, data);
-            worker_to_manager_sender.send((key, value)).unwrap(); // Unwrap OK: panics iff worker->manager receiver is dropped.
-          }
-        }).unwrap(); // Unwrap OK?: panic iff creating thread fails.
-      worker_threads.push(worker_thread);
+      let worker_thread = WorkerThread {
+        from_manager: manager_to_worker_receiver,
+        to_manager: worker_to_manager_sender,
+      };
+      let worker_thread_handle = worker_thread.create_thread_and_run(i)?;
+      worker_thread_handles.push(worker_thread_handle);
     }
 
-    Self {
-      manager_thread,
-      worker_threads,
+    Ok(Self {
+      manager_thread_handle,
+      worker_thread_handles,
       external_to_manager_sender,
       manager_to_external_receiver,
-    }
+    })
   }
 
-  pub fn add(&self, key: K, data: D, function: F) {
-    self.external_to_manager_sender.send((key, data, function)).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
+  pub fn set_job_graph(&self, job_graph: Graph<Option<Job<I, F, O>>, ()>) {
+    self.external_to_manager_sender.send(job_graph).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
   }
 
   pub fn join(self) -> thread::Result<()> {
-    self.manager_thread.join()?;
-    for worker_thread in self.worker_threads {
+    self.manager_thread_handle.join()?;
+    for worker_thread in self.worker_thread_handles {
       worker_thread.join()?;
     }
     Ok(())
   }
 
-  pub fn get_value_receiver(&self) -> &Receiver<(K, V)> { &self.manager_to_external_receiver }
+  pub fn get_value_receiver(&self) -> &Receiver<O> { &self.manager_to_external_receiver }
+}
+
+// Job
+
+pub struct Job<I, F: FnOnce(I) -> O, O> {
+  input: I,
+  function: F,
+}
+
+impl<I, F: FnOnce(I) -> O, O> Job<I, F, O> {
+  #[inline]
+  pub fn new(input: I, function: F) -> Self { Self { input, function } }
+  #[inline]
+  fn run(self) -> O { (self.function)(self.input) }
+}
+
+// Manager thread
+
+struct ManagerThread<I, F: FnOnce(I) -> O, O> {
+  from_external: Receiver<Graph<Option<Job<I, F, O>>, ()>>,
+  to_worker: Sender<(Job<I, F, O>, NodeIndex)>,
+  from_worker: Receiver<(O, NodeIndex)>,
+  to_external: Sender<O>,
+  job_graph: Graph<Option<Job<I, F, O>>, ()>,
+  nodes_to_schedule_cache: Vec<NodeIndex>,
+}
+
+impl<I: Send + 'static, F: FnOnce(I) -> O + Send + 'static, O: Send + 'static> ManagerThread<I, F, O> {
+  fn new(
+    from_external: Receiver<Graph<Option<Job<I, F, O>>, ()>>,
+    to_worker: Sender<(Job<I, F, O>, NodeIndex)>,
+    from_worker: Receiver<(O, NodeIndex)>,
+    to_external: Sender<O>,
+  ) -> Self {
+    let job_graph = Graph::new();
+    let nodes_to_schedule_cache = Vec::new();
+    Self {
+      from_external,
+      to_worker,
+      from_worker,
+      to_external,
+      job_graph,
+      nodes_to_schedule_cache,
+    }
+  }
+
+  fn create_thread_and_run(self) -> std::io::Result<JoinHandle<()>> {
+    thread::Builder::new()
+      .name("Job Queue Manager".into())
+      .spawn(|| { self.run() })
+  }
+
+  fn run(mut self) {
+    loop {
+      select! {
+        recv(self.from_external) -> job_graph => {
+          let job_graph = job_graph.unwrap(); // Unwrap OK: panics iff external->manager sender is dropped.
+          self.job_graph = job_graph;
+          self.schedule_jobs();
+        },
+        recv(self.from_worker) -> result => {
+          let (output, node_index) = result.unwrap(); // Unwrap OK: panics iff all worker->manager senders are dropped.
+          self.to_external.send(output).unwrap(); // Unwrap OK: panics iff all manager->external receivers are dropped.
+          self.job_graph.remove_node(node_index);
+          self.schedule_jobs();
+        },
+      }
+    }
+  }
+
+  fn schedule_jobs(&mut self) {
+    self.nodes_to_schedule_cache.clear();
+    self.job_graph.externals(Incoming).collect_into(&mut self.nodes_to_schedule_cache);
+    for node_index in &self.nodes_to_schedule_cache {
+      if let Some(job) = self.job_graph.node_weight_mut(*node_index).unwrap().take() { // Unwrap OK: node must exist.
+        self.to_worker.send((job, *node_index)).unwrap(); // Unwrap OK: panics iff all manager->worker receivers are dropped.
+      }
+    }
+  }
+}
+
+// Worker thread
+
+struct WorkerThread<I, F: FnOnce(I) -> O, O> {
+  from_manager: Receiver<(Job<I, F, O>, NodeIndex)>,
+  to_manager: Sender<(O, NodeIndex)>,
+}
+
+impl<I: Send + 'static, F: FnOnce(I) -> O + Send + 'static, O: Send + 'static> WorkerThread<I, F, O> {
+  fn create_thread_and_run(self, thread_index: usize) -> std::io::Result<JoinHandle<()>> {
+    thread::Builder::new()
+      .name(format!("Job Queue Worker {}", thread_index))
+      .spawn(|| { self.run() })
+  }
+
+  fn run(self) {
+    loop {
+      let (job, index) = self.from_manager.recv().unwrap(); // Unwrap OK: panics iff manager->worker sender is dropped.
+      let output = job.run();
+      self.to_manager.send((output, index)).unwrap(); // Unwrap OK: panics iff worker->manager receiver is dropped.
+    }
+  }
 }
