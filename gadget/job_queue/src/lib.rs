@@ -9,14 +9,16 @@ use crossbeam_channel::{Receiver, select, Sender, unbounded};
 use petgraph::prelude::*;
 use tracing::trace;
 
-pub struct JobQueue<F, O, E = ()> {
+// Job queue
+
+pub struct JobQueue<F, O, E> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
   external_to_manager_sender: Sender<StableGraph<JobStatus<F, O, E>, E>>,
   manager_to_external_receiver: Receiver<O>,
 }
 
-impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'static, E: Copy + Send + 'static> JobQueue<F, O, E> {
+impl<F: JobFunction<O, E>, O: Movable, E: Copyable> JobQueue<F, O, E> {
   pub fn new(worker_thread_count: usize) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
@@ -66,16 +68,32 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
   pub fn get_value_receiver(&self) -> &Receiver<O> { &self.manager_to_external_receiver }
 }
 
+
+// Trait aliases
+
+pub trait Movable: Send + Sync + 'static {}
+
+impl<T> Movable for T where T: Send + Sync + 'static {}
+
+pub trait Copyable: Copy + Send + 'static {}
+
+impl<T> Copyable for T where T: Copy + Send + 'static {}
+
+pub trait JobFunction<O, E>: FnMut(Box<[(Arc<O>, E)]>) -> O + Movable {}
+
+impl<T, O, E> JobFunction<O, E> for T where T: FnMut(Box<[(Arc<O>, E)]>) -> O + Movable {}
+
+
 // Job
 
 #[repr(transparent)]
-pub struct Job<F, O, E = ()> {
+pub struct Job<F, O, E> {
   function: F,
   _output_phantom: PhantomData<O>,
   _edge_phantom: PhantomData<E>,
 }
 
-impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O, O, E> Job<F, O, E> {
+impl<F: JobFunction<O, E>, O, E> Job<F, O, E> {
   #[inline]
   pub fn new(function: F) -> Self {
     Self {
@@ -91,7 +109,9 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O, O, E> Job<F, O, E> {
   }
 }
 
-pub enum JobStatus<F, O, E = ()> {
+// Job status
+
+pub enum JobStatus<F, O, E> {
   Pending(Job<F, O, E>),
   Running,
   Wrapped(Arc<O>),
@@ -105,7 +125,6 @@ impl<F, O, E> JobStatus<F, O, E> {
       _ => false
     }
   }
-
   #[inline]
   fn is_wrapped(&self) -> bool {
     match self {
@@ -113,7 +132,6 @@ impl<F, O, E> JobStatus<F, O, E> {
       _ => false
     }
   }
-
   #[inline]
   fn clone_wrapped(&self) -> Arc<O> {
     match self {
@@ -121,7 +139,6 @@ impl<F, O, E> JobStatus<F, O, E> {
       _ => panic!("Attempt to clone_wrapped on non-Wrapped job status")
     }
   }
-
   #[inline]
   fn unwrap(self) -> O {
     match self {
@@ -131,9 +148,10 @@ impl<F, O, E> JobStatus<F, O, E> {
   }
 }
 
+
 // Manager thread
 
-struct ManagerThread<F, O, E = ()> {
+struct ManagerThread<F, O, E> {
   from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
   to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
   from_worker: Receiver<(O, NodeIndex)>,
@@ -141,7 +159,7 @@ struct ManagerThread<F, O, E = ()> {
   job_graph: StableGraph<JobStatus<F, O, E>, E>,
 }
 
-impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'static, E: Copy + Send + 'static> ManagerThread<F, O, E> {
+impl<F: JobFunction<O, E>, O: Movable, E: Copyable> ManagerThread<F, O, E> {
   fn new(
     from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
     to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
@@ -179,7 +197,6 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
           self.job_graph = job_graph;
           
           // Schedule initial jobs.
-          node_index_cache_1.clear();
           self.job_graph.externals(Outgoing).collect_into(&mut node_index_cache_1);
           for node_index in node_index_cache_1.drain(..) {
             if !self.schedule_job(node_index, Box::new([])) { 
@@ -198,20 +215,19 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
           
           // Try to schedule dependent jobs.
           let mut can_complete_this_job = true;
-          node_index_cache_1.clear();
           self.job_graph.neighbors_directed(node_index, Incoming).collect_into(&mut node_index_cache_1);
           for dependent_node_index in node_index_cache_1.drain(..) {
             trace!("Try to schedule dependent job {:?}", dependent_node_index);
             if let Some(JobStatus::Pending(_)) = self.job_graph.node_weight(dependent_node_index) {
               can_complete_this_job = false;
-              node_index_cache_2.clear();
+              node_index_cache_2.clear(); // Clear required as node_index_cache_2 is not always drained.
               self.job_graph.neighbors_directed(dependent_node_index, Outgoing).collect_into(&mut node_index_cache_2);
-              if node_index_cache_2.iter().all(|n|self.job_graph.node_weight(*n).unwrap().is_wrapped()) { // Unwrap OK: node exists.
+              if node_index_cache_2.iter().all(|n|self.job_graph[*n].is_wrapped()) {
                 let mut dependency_outputs = Vec::new(); // OPTO: smallvec?
                 for dependency_node_index in node_index_cache_2.drain(..) {
-                  let dependency_output = self.job_graph.node_weight(dependency_node_index).unwrap().clone_wrapped(); // Unwrap OK: node exists.
-                  let dependency_edge_index = self.job_graph.find_edge(dependent_node_index, dependency_node_index).unwrap();
-                  let dependency_edge = *self.job_graph.edge_weight(dependency_edge_index).unwrap(); // Unwrap OK: edge exists.
+                  let dependency_output = self.job_graph[dependency_node_index].clone_wrapped();
+                  let dependency_edge_index = self.job_graph.find_edge(dependent_node_index, dependency_node_index).unwrap(); // Unwrap OK: edge exists.
+                  let dependency_edge = self.job_graph[dependency_edge_index];
                   dependency_outputs.push((dependency_output, dependency_edge));
                 }
                 if !self.schedule_job(dependent_node_index, dependency_outputs.into_boxed_slice()) {
@@ -222,7 +238,6 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
           }
           
           // Cache dependencies before trying to complete this job, as completing it removes it from the graph.
-          node_index_cache_1.clear();
           self.job_graph.neighbors_directed(node_index, Outgoing).collect_into(&mut node_index_cache_1);
           
           // Try to complete this job.
@@ -253,8 +268,8 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
   fn schedule_job(&mut self, node_index: NodeIndex, dependencies: Box<[(Arc<O>, E)]>) -> bool {
     let job_status = &mut self.job_graph[node_index];
     if !job_status.is_pending() { return true; }
+    trace!("Scheduling job {:?}", node_index);
     if let JobStatus::Pending(job) = std::mem::replace(job_status, JobStatus::Running) {
-      trace!("Scheduling job {:?}", node_index);
       if self.to_worker.send((job, dependencies, node_index)).is_err() {
         return false; // All workers have disconnected; return false indicating that the manager should stop.
       }
@@ -264,22 +279,22 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
 
   #[inline]
   fn complete_job(&mut self, node_index: NodeIndex) -> bool {
-    let job_status_wrapped = self.job_graph.remove_node(node_index).unwrap(); // Unwrap OK: node exists.
-    // Unwrap OK: it is wrapped and the only owner of the Arc.
-    let output = job_status_wrapped.unwrap();
     trace!("Completing job {:?}", node_index);
+    let job_status_wrapped = self.job_graph.remove_node(node_index).unwrap(); // Unwrap OK: node exists.
+    let output = job_status_wrapped.unwrap(); // Unwrap OK: it is wrapped and the only owner of the Arc.
     self.to_external.send(output).is_ok()
   }
 }
 
+
 // Worker thread
 
-struct WorkerThread<F, O, E = ()> {
+struct WorkerThread<F, O, E> {
   from_manager: Receiver<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
   to_manager: Sender<(O, NodeIndex)>,
 }
 
-impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'static, E: Send + 'static> WorkerThread<F, O, E> {
+impl<F: JobFunction<O, E>, O: Movable, E: Copyable> WorkerThread<F, O, E> {
   fn create_thread_and_run(self, thread_index: usize) -> std::io::Result<JoinHandle<()>> {
     thread::Builder::new()
       .name(format!("Job Queue Worker {}", thread_index))
