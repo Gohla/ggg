@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use petgraph::prelude::*;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -20,11 +22,17 @@ fn main() {
   let job_queue = JobQueue::new(8).unwrap();
   let mut job_graph = StableGraph::new();
   let mut prev = None;
-  for i in (0..4096).rev() {
-    let job = Job::<_, _, ()>::new(move |_| (i, i * i));
+  for i in 0i32..1024 {
+    let job = Job::new(move |deps: Box<[(Arc<(i32, i32)>, i32)]>| {
+      info!("Executing job {} with deps {:?}", i, deps);
+      let j = if deps.len() > 0 { deps[0].1 } else { 1 };
+      (i, i.wrapping_mul(j))
+    });
     let curr = job_graph.add_node(JobStatus::Pending(job));
+    debug!("Creating job for {}, with index {:?}", i, curr);
     if let Some(prev) = prev {
-      job_graph.add_edge(prev, curr, ());
+      debug!("Adding dependency edge from {:?} to {:?} with value {}", prev, curr, i);
+      job_graph.add_edge(prev, curr, i);
     }
     prev = Some(curr);
   }
