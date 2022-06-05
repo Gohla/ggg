@@ -12,7 +12,7 @@ use tracing::trace;
 pub struct JobQueue<F, O, E = ()> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  external_to_manager_sender: Sender<Graph<JobStatus<F, O, E>, E>>,
+  external_to_manager_sender: Sender<StableGraph<JobStatus<F, O, E>, E>>,
   manager_to_external_receiver: Receiver<O>,
 }
 
@@ -51,7 +51,7 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
     })
   }
 
-  pub fn set_job_graph(&self, job_graph: Graph<JobStatus<F, O, E>, E>) {
+  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<F, O, E>, E>) {
     self.external_to_manager_sender.send(job_graph).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
   }
 
@@ -134,21 +134,21 @@ impl<F, O, E> JobStatus<F, O, E> {
 // Manager thread
 
 struct ManagerThread<F, O, E = ()> {
-  from_external: Receiver<Graph<JobStatus<F, O, E>, E>>,
+  from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
   to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
   from_worker: Receiver<(O, NodeIndex)>,
   to_external: Sender<O>,
-  job_graph: Graph<JobStatus<F, O, E>, E>,
+  job_graph: StableGraph<JobStatus<F, O, E>, E>,
 }
 
 impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'static, E: Copy + Send + 'static> ManagerThread<F, O, E> {
   fn new(
-    from_external: Receiver<Graph<JobStatus<F, O, E>, E>>,
+    from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
     to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
     from_worker: Receiver<(O, NodeIndex)>,
     to_external: Sender<O>,
   ) -> Self {
-    let job_graph = Graph::new();
+    let job_graph = StableGraph::new();
     Self {
       from_external,
       to_worker,
@@ -191,11 +191,10 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
           let Ok((output, node_index)) = result else {
             break; // All workers have disconnected; stop this thread.
           };
-          trace!("Received job {:?} completion from worker", node_index);
+          trace!("Received job {:?} output from worker", node_index);
           
           // Update node weight to wrapped output.
-          *self.job_graph.node_weight_mut(node_index)
-            .unwrap_or_else(|| panic!("Cannot update job with index {:?}, it does not exist in the graph", node_index)) = JobStatus::Wrapped(Arc::new(output)); // Unwrap OK: node exists.
+          self.job_graph[node_index] = JobStatus::Wrapped(Arc::new(output));
           
           // Try to schedule dependent jobs.
           let mut can_complete_this_job = true;
@@ -211,10 +210,13 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
                 let mut dependency_outputs = Vec::new(); // OPTO: smallvec?
                 for dependency_node_index in node_index_cache_2.drain(..) {
                   let dependency_output = self.job_graph.node_weight(dependency_node_index).unwrap().clone_wrapped(); // Unwrap OK: node exists.
-                  let dependency_edge = *self.job_graph.edges_connecting(dependent_node_index, dependency_node_index).next().unwrap().weight(); // Unwrap OK: edge exists.
+                  let dependency_edge_index = self.job_graph.find_edge(dependent_node_index, dependency_node_index).unwrap();
+                  let dependency_edge = *self.job_graph.edge_weight(dependency_edge_index).unwrap(); // Unwrap OK: edge exists.
                   dependency_outputs.push((dependency_output, dependency_edge));
                 }
-                self.schedule_job(dependent_node_index, dependency_outputs.into_boxed_slice());
+                if !self.schedule_job(dependent_node_index, dependency_outputs.into_boxed_slice()) {
+                  break; // All workers have disconnected; stop this thread.
+                }
               }
             }
           }
@@ -233,8 +235,8 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
           // Try to complete dependency jobs.
           for dependency_node_index in node_index_cache_1.drain(..) {
             trace!("Try to complete dependency job {:?}", dependency_node_index);
-            let is_wrapped = self.job_graph.node_weight(dependency_node_index).unwrap().is_wrapped(); // Unwrap OK: node exists.
-            let all_dependents_wrapped = self.job_graph.neighbors_directed(dependency_node_index, Incoming).all(|n|self.job_graph.node_weight(n).unwrap().is_wrapped()); // Unwrap OK: node exists.
+            let is_wrapped = self.job_graph[dependency_node_index].is_wrapped();
+            let all_dependents_wrapped = self.job_graph.neighbors_directed(dependency_node_index, Incoming).all(|n|self.job_graph[n].is_wrapped());
             if is_wrapped && all_dependents_wrapped {
               if !self.complete_job(dependency_node_index) {
                 break; // All workers have disconnected; stop this thread.
@@ -249,11 +251,10 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
 
   #[inline]
   fn schedule_job(&mut self, node_index: NodeIndex, dependencies: Box<[(Arc<O>, E)]>) -> bool {
-    let job_status = self.job_graph.node_weight_mut(node_index)
-      .unwrap_or_else(|| panic!("Cannot schedule job with node index {:?}, it does not exist in the graph", node_index));
+    let job_status = &mut self.job_graph[node_index];
     if !job_status.is_pending() { return true; }
     if let JobStatus::Pending(job) = std::mem::replace(job_status, JobStatus::Running) {
-      trace!("Scheduling job with index {:?}", node_index);
+      trace!("Scheduling job {:?}", node_index);
       if self.to_worker.send((job, dependencies, node_index)).is_err() {
         return false; // All workers have disconnected; return false indicating that the manager should stop.
       }
@@ -266,7 +267,7 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
     let job_status_wrapped = self.job_graph.remove_node(node_index).unwrap(); // Unwrap OK: node exists.
     // Unwrap OK: it is wrapped and the only owner of the Arc.
     let output = job_status_wrapped.unwrap();
-    trace!("Completing job with index {:?}", node_index);
+    trace!("Completing job {:?}", node_index);
     self.to_external.send(output).is_ok()
   }
 }
@@ -289,7 +290,7 @@ impl<F: FnMut(Box<[(Arc<O>, E)]>) -> O + Send + 'static, O: Send + Sync + 'stati
     trace!("Started job queue worker thread {}", thread_index);
     loop {
       if let Ok((job, dependencies, node_index)) = self.from_manager.recv() {
-        trace!("Running job with index {:?}", node_index);
+        trace!("Running job {:?}", node_index);
         let output = job.run(dependencies);
         if self.to_manager.send((output, node_index)).is_err() {
           break; // Manager has disconnected; stop this thread.
