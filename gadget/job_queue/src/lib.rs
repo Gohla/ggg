@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
-use crossbeam_channel::{Receiver, select, Sender, unbounded};
+use crossbeam_channel::{bounded, never, Receiver, select, Sender, SendError, unbounded};
 use petgraph::prelude::*;
 use tracing::trace;
 
@@ -13,8 +13,8 @@ use tracing::trace;
 pub struct JobQueue<J, O, E> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  external_to_manager_sender: Sender<StableGraph<JobStatus<J, O>, E>>,
-  manager_to_external_receiver: Receiver<O>,
+  to_manager: Sender<StableGraph<JobStatus<J, O>, E>>,
+  from_manager: Receiver<O>,
 }
 
 impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
@@ -47,24 +47,32 @@ impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
     Ok(Self {
       manager_thread_handle,
       worker_thread_handles,
-      external_to_manager_sender,
-      manager_to_external_receiver,
+      to_manager: external_to_manager_sender,
+      from_manager: manager_to_external_receiver,
     })
   }
 
-  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<J, O>, E>) {
-    self.external_to_manager_sender.send(job_graph).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
+  #[inline]
+  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<J, O>, E>) -> Result<(), SendError<()>> {
+    self.to_manager.send(job_graph).map_err(|_| SendError(()))
   }
 
-  pub fn join(self) -> thread::Result<()> {
+  #[inline]
+  pub fn get_output_receiver(&self) -> &Receiver<O> { &self.from_manager }
+
+  pub fn stop_and_join(mut self) -> thread::Result<()> {
+    // Replace sender and receiver with new ones that do nothing, dropping the replaced ones.
+    let (empty_sender, _) = bounded(0);
+    drop(std::mem::replace(&mut self.to_manager, empty_sender));
+    let empty_receiver = never();
+    drop(std::mem::replace(&mut self.from_manager, empty_receiver));
+    // Wait for threads to stop.
     self.manager_thread_handle.join()?;
     for worker_thread in self.worker_thread_handles {
       worker_thread.join()?;
     }
     Ok(())
   }
-
-  pub fn get_value_receiver(&self) -> &Receiver<O> { &self.manager_to_external_receiver }
 }
 
 // Job
