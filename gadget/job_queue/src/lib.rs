@@ -17,7 +17,7 @@ pub struct JobQueue<J, O, E> {
   from_manager: Receiver<O>,
 }
 
-impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
+impl<J: Job<O, E>, O: Shareable, E: Copyable> JobQueue<J, O, E> {
   pub fn new(worker_thread_count: usize) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
@@ -53,7 +53,13 @@ impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
   }
 
   #[inline]
-  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<J, O>, E>) -> Result<(), SendError<()>> {
+  pub fn create_job_graph_builder(&self) -> JobGraphBuilder<J, O, E> {
+    JobGraphBuilder::new()
+  }
+
+  #[inline]
+  pub fn set_job_graph(&self, job_graph_builder: JobGraphBuilder<J, O, E>) -> Result<(), SendError<()>> {
+    let job_graph = job_graph_builder.job_graph;
     self.to_manager.send(job_graph).map_err(|_| SendError(()))
   }
 
@@ -77,17 +83,54 @@ impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
 
 // Job
 
-pub trait Job<O, E>: FnOnce(Box<[(Arc<O>, E)]>) -> O + Movable {}
+pub trait Job<O, E>: FnOnce(Box<[(Arc<O>, E)]>) -> O + Shareable {}
 
-impl<T, O, E> Job<O, E> for T where T: FnOnce(Box<[(Arc<O>, E)]>) -> O + Movable {}
+impl<T, O, E> Job<O, E> for T where T: FnOnce(Box<[(Arc<O>, E)]>) -> O + Shareable {}
+
+
+// Job graph builder
+
+pub struct JobGraphBuilder<J, O, E> {
+  job_graph: StableGraph<JobStatus<J, O>, E>,
+}
+
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct JobHandle(NodeIndex);
+
+impl<J, O, E> JobGraphBuilder<J, O, E> {
+  #[inline]
+  pub fn new() -> Self { Self { job_graph: StableGraph::new() } }
+
+  #[inline]
+  pub fn add_job(&mut self, job: J) -> JobHandle {
+    let index = self.job_graph.add_node(JobStatus::Pending(job));
+    JobHandle(index)
+  }
+
+  #[inline]
+  pub fn add_job_with_dependencies(&mut self, job: J, dependencies: impl IntoIterator<Item=(JobHandle, E)>) -> JobHandle {
+    let index = self.job_graph.add_node(JobStatus::Pending(job));
+    for (dependent, edge) in dependencies.into_iter() {
+      self.job_graph.add_edge(index, dependent.0, edge);
+    }
+    JobHandle(index)
+  }
+
+  #[inline]
+  pub fn add_dependency(&mut self, depender: JobHandle, dependent: JobHandle, dependency_edge: E) {
+    self.job_graph.add_edge(depender.0, dependent.0, dependency_edge);
+  }
+}
 
 
 // Trait aliases
 
-pub trait Movable: Send + Sync + 'static {}
+/// Shareable across threads.
+pub trait Shareable: Send + Sync + 'static {}
 
-impl<T> Movable for T where T: Send + Sync + 'static {}
+impl<T> Shareable for T where T: Send + Sync + 'static {}
 
+/// Sendable and copyable across threads.
 pub trait Copyable: Copy + Send + 'static {}
 
 impl<T> Copyable for T where T: Copy + Send + 'static {}
@@ -95,7 +138,7 @@ impl<T> Copyable for T where T: Copy + Send + 'static {}
 
 // Job status
 
-pub enum JobStatus<J, O> {
+enum JobStatus<J, O> {
   Pending(J),
   Running,
   Wrapped(Arc<O>),
@@ -143,7 +186,7 @@ struct ManagerThread<J, O, E> {
   job_graph: StableGraph<JobStatus<J, O>, E>,
 }
 
-impl<J: Job<O, E>, O: Movable, E: Copyable> ManagerThread<J, O, E> {
+impl<J: Job<O, E>, O: Shareable, E: Copyable> ManagerThread<J, O, E> {
   fn new(
     from_external: Receiver<StableGraph<JobStatus<J, O>, E>>,
     to_worker: Sender<(J, Box<[(Arc<O>, E)]>, NodeIndex)>,
@@ -278,7 +321,7 @@ struct WorkerThread<J, O, E> {
   to_manager: Sender<(O, NodeIndex)>,
 }
 
-impl<J: Job<O, E>, O: Movable, E: Copyable> WorkerThread<J, O, E> {
+impl<J: Job<O, E>, O: Shareable, E: Copyable> WorkerThread<J, O, E> {
   fn create_thread_and_run(self, thread_index: usize) -> std::io::Result<JoinHandle<()>> {
     thread::Builder::new()
       .name(format!("Job Queue Worker {}", thread_index))
