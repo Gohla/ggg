@@ -8,4 +8,6 @@ publish = false
 [dependencies]
 crossbeam-channel = "0.5"
 petgraph = { version = "0.6", default-features = false, features = ["stable_graph"] }
+smallvec = "1"
+rustc-hash = "1"
 tracing = "0.1"
