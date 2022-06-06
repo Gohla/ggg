@@ -1,7 +1,6 @@
 #![feature(iter_collect_into)]
 #![feature(let_else)]
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
@@ -11,14 +10,14 @@ use tracing::trace;
 
 // Job queue
 
-pub struct JobQueue<F, O, E> {
+pub struct JobQueue<J, O, E> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  external_to_manager_sender: Sender<StableGraph<JobStatus<F, O, E>, E>>,
+  external_to_manager_sender: Sender<StableGraph<JobStatus<J, O>, E>>,
   manager_to_external_receiver: Receiver<O>,
 }
 
-impl<F: JobFunction<O, E>, O: Movable, E: Copyable> JobQueue<F, O, E> {
+impl<J: Job<O, E>, O: Movable, E: Copyable> JobQueue<J, O, E> {
   pub fn new(worker_thread_count: usize) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
@@ -53,7 +52,7 @@ impl<F: JobFunction<O, E>, O: Movable, E: Copyable> JobQueue<F, O, E> {
     })
   }
 
-  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<F, O, E>, E>) {
+  pub fn set_job_graph(&self, job_graph: StableGraph<JobStatus<J, O>, E>) {
     self.external_to_manager_sender.send(job_graph).unwrap(); // Unwrap OK: panics iff external->manager receiver is dropped.
   }
 
@@ -68,6 +67,12 @@ impl<F: JobFunction<O, E>, O: Movable, E: Copyable> JobQueue<F, O, E> {
   pub fn get_value_receiver(&self) -> &Receiver<O> { &self.manager_to_external_receiver }
 }
 
+// Job
+
+pub trait Job<O, E>: FnOnce(Box<[(Arc<O>, E)]>) -> O + Movable {}
+
+impl<T, O, E> Job<O, E> for T where T: FnOnce(Box<[(Arc<O>, E)]>) -> O + Movable {}
+
 
 // Trait aliases
 
@@ -79,45 +84,16 @@ pub trait Copyable: Copy + Send + 'static {}
 
 impl<T> Copyable for T where T: Copy + Send + 'static {}
 
-pub trait JobFunction<O, E>: FnMut(Box<[(Arc<O>, E)]>) -> O + Movable {}
-
-impl<T, O, E> JobFunction<O, E> for T where T: FnMut(Box<[(Arc<O>, E)]>) -> O + Movable {}
-
-
-// Job
-
-#[repr(transparent)]
-pub struct Job<F, O, E> {
-  function: F,
-  _output_phantom: PhantomData<O>,
-  _edge_phantom: PhantomData<E>,
-}
-
-impl<F: JobFunction<O, E>, O, E> Job<F, O, E> {
-  #[inline]
-  pub fn new(function: F) -> Self {
-    Self {
-      function,
-      _output_phantom: Default::default(),
-      _edge_phantom: Default::default(),
-    }
-  }
-
-  #[inline]
-  fn run(mut self, dependencies: Box<[(Arc<O>, E)]>) -> O {
-    (self.function)(dependencies)
-  }
-}
 
 // Job status
 
-pub enum JobStatus<F, O, E> {
-  Pending(Job<F, O, E>),
+pub enum JobStatus<J, O> {
+  Pending(J),
   Running,
   Wrapped(Arc<O>),
 }
 
-impl<F, O, E> JobStatus<F, O, E> {
+impl<J, O> JobStatus<J, O> {
   #[inline]
   fn is_pending(&self) -> bool {
     match self {
@@ -151,18 +127,18 @@ impl<F, O, E> JobStatus<F, O, E> {
 
 // Manager thread
 
-struct ManagerThread<F, O, E> {
-  from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
-  to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
+struct ManagerThread<J, O, E> {
+  from_external: Receiver<StableGraph<JobStatus<J, O>, E>>,
+  to_worker: Sender<(J, Box<[(Arc<O>, E)]>, NodeIndex)>,
   from_worker: Receiver<(O, NodeIndex)>,
   to_external: Sender<O>,
-  job_graph: StableGraph<JobStatus<F, O, E>, E>,
+  job_graph: StableGraph<JobStatus<J, O>, E>,
 }
 
-impl<F: JobFunction<O, E>, O: Movable, E: Copyable> ManagerThread<F, O, E> {
+impl<J: Job<O, E>, O: Movable, E: Copyable> ManagerThread<J, O, E> {
   fn new(
-    from_external: Receiver<StableGraph<JobStatus<F, O, E>, E>>,
-    to_worker: Sender<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
+    from_external: Receiver<StableGraph<JobStatus<J, O>, E>>,
+    to_worker: Sender<(J, Box<[(Arc<O>, E)]>, NodeIndex)>,
     from_worker: Receiver<(O, NodeIndex)>,
     to_external: Sender<O>,
   ) -> Self {
@@ -289,12 +265,12 @@ impl<F: JobFunction<O, E>, O: Movable, E: Copyable> ManagerThread<F, O, E> {
 
 // Worker thread
 
-struct WorkerThread<F, O, E> {
-  from_manager: Receiver<(Job<F, O, E>, Box<[(Arc<O>, E)]>, NodeIndex)>,
+struct WorkerThread<J, O, E> {
+  from_manager: Receiver<(J, Box<[(Arc<O>, E)]>, NodeIndex)>,
   to_manager: Sender<(O, NodeIndex)>,
 }
 
-impl<F: JobFunction<O, E>, O: Movable, E: Copyable> WorkerThread<F, O, E> {
+impl<J: Job<O, E>, O: Movable, E: Copyable> WorkerThread<J, O, E> {
   fn create_thread_and_run(self, thread_index: usize) -> std::io::Result<JoinHandle<()>> {
     thread::Builder::new()
       .name(format!("Job Queue Worker {}", thread_index))
@@ -306,7 +282,7 @@ impl<F: JobFunction<O, E>, O: Movable, E: Copyable> WorkerThread<F, O, E> {
     loop {
       if let Ok((job, dependencies, node_index)) = self.from_manager.recv() {
         trace!("Running job {:?}", node_index);
-        let output = job.run(dependencies);
+        let output = job(dependencies);
         if self.to_manager.send((output, node_index)).is_err() {
           break; // Manager has disconnected; stop this thread.
         }
