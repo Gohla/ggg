@@ -1,14 +1,12 @@
 [package]
-name = "job_queue"
+name = "gadgets"
 version = "0.1.0"
 authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
 edition = "2021"
 publish = false
 
 [dependencies]
-crossbeam-channel = "0.5"
-crossbeam-utils = "0.8"
-petgraph = { version = "0.6", default-features = false, features = ["stable_graph"] }
+job_queue = { path = "../core/job_queue"}
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }

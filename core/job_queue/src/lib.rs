@@ -6,6 +6,7 @@ use std::thread::{self, JoinHandle};
 
 use crossbeam_channel::{bounded, never, Receiver, select, Sender, SendError, unbounded};
 use petgraph::prelude::*;
+
 use tracing::trace;
 
 // Job queue

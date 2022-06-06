@@ -712,6 +712,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gadgets"
+version = "0.1.0"
+dependencies = [
+ "dotenv",
+ "job_queue",
+ "profiling",
+ "tracing",
+ "tracing-subscriber",
+ "tracy-client",
+]
+
+[[package]]
 name = "generator"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -970,13 +982,8 @@ name = "job_queue"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
- "crossbeam-utils",
- "dotenv",
  "petgraph",
- "profiling",
  "tracing",
- "tracing-subscriber",
- "tracy-client",
 ]
 
 [[package]]

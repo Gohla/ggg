@@ -3,11 +3,12 @@ cargo-features = ["named-profiles", "profile-overrides"]
 [workspace]
 members = [
   "core/*",
-  "gadget/*",
+  "gadgets",
   "graphics",
 ]
 default-members = [
   "graphics",
+  "gadgets",
 ]
 resolver = "2"
 
