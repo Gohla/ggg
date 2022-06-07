@@ -17,7 +17,14 @@ use crate::manager::FromQueueMessage;
 mod worker;
 mod manager;
 
-type FromManager<J, O> = (J, Arc<O>);
+
+// Message from manager
+
+pub enum FromManagerMessage<J, O> {
+  JobCompleted(J, Arc<O>),
+  QueueEmpty,
+}
+
 
 // Job queue
 
@@ -25,7 +32,7 @@ pub struct JobQueue<J, D, O> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
   to_manager: Sender<manager::FromQueue<J, D>>,
-  from_manager: Receiver<FromManager<J, O>>,
+  from_manager: Receiver<FromManagerMessage<J, O>>,
 }
 
 impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
@@ -76,12 +83,12 @@ impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
   }
 
   #[inline]
-  pub fn remove_job(&self, job_key: J) -> Result<(), SendError<()>> {
-    self.to_manager.send(FromQueueMessage::RemoveJob(job_key)).map_err(|_| SendError(()))
+  pub fn remove_job_and_dependencies(&self, job_key: J) -> Result<(), SendError<()>> {
+    self.to_manager.send(FromQueueMessage::RemoveJobAndDependencies(job_key)).map_err(|_| SendError(()))
   }
-  
+
   #[inline]
-  pub fn get_output_receiver(&self) -> &Receiver<(J, Arc<O>)> { &self.from_manager }
+  pub fn get_message_receiver(&self) -> &Receiver<FromManagerMessage<J, O>> { &self.from_manager }
 
   pub fn stop_and_join(mut self) -> thread::Result<()> {
     // Replace sender and receiver with new ones that do nothing, dropping the replaced ones.
@@ -100,12 +107,12 @@ impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
 
 // Dependencies
 
-pub type Dependencies<J, D> = SmallVec<[(D, J); 4]>;
+pub type Dependencies<J, D> = SmallVec<[(D, J); 2]>;
 
 
 // Handler
 
-pub type DependencyOutputs<D, O> = SmallVec<[(D, Arc<O>); 4]>;
+pub type DependencyOutputs<D, O> = SmallVec<[(D, Arc<O>); 2]>;
 
 pub trait Handler<J, D, O>: Fn(J, DependencyOutputs<D, O>) -> O + Copy + Send + 'static {}
 
