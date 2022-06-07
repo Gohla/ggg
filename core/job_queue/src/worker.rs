@@ -9,8 +9,6 @@ use crate::{DependencyOutputs, DepKey, Handler, JobKey, Out};
 
 pub(crate) type FromManager<J, D, O> = (NodeIndex, J, DependencyOutputs<D, O>);
 
-// Worker thread
-
 pub(super) struct WorkerThread<J, D, O, H> {
   from_manager: Receiver<FromManager<J, D, O>>,
   to_manager: Sender<crate::manager::FromWorker<J, O>>,

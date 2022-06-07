@@ -73,7 +73,7 @@ impl<J: JobKey, D: DepKey, O: Out> ManagerThread<J, D, O> {
              break; // Job queue was dropped; stop this thread.
           };
           if !self.handle_message(message, &mut node_index_cache_2) {
-            break; // All workers have disconnected; stop this thread.
+            break; // Job queue or all workers have disconnected; stop this thread.
           }
         },
         recv(self.from_worker) -> result => {
@@ -81,7 +81,7 @@ impl<J: JobKey, D: DepKey, O: Out> ManagerThread<J, D, O> {
             break; // All workers have disconnected; stop this thread.
           };
           if !self.handle_completion(node_index, job_key, output, &mut node_index_cache_1, &mut node_index_cache_2) {
-            break; // All workers have disconnected; stop this thread.
+            break; // Job queue or all workers have disconnected; stop this thread.
           }
         },
       }
@@ -218,6 +218,7 @@ impl<J: JobKey, D: DepKey, O: Out> ManagerThread<J, D, O> {
     self.send_queue_empty_if_applicable()
   }
 
+  
   #[inline]
   fn send_queue_empty_if_applicable(&mut self) -> bool {
     if self.pending_jobs == 0 && self.scheduled_jobs == 0 {
