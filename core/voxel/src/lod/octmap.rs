@@ -1,13 +1,14 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 
 use lru::LruCache;
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use rustc_hash::{FxHashMap, FxHashSet};
 use ultraviolet::{Isometry3, Vec3};
+
+use job_queue::{JobQueue, JobQueueMessage};
 
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
-use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
+use crate::lod::chunk_mesh::{LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
 use crate::volume::Volume;
 
@@ -19,7 +20,7 @@ pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,
   pub fixed_lod_level: Option<u32>,
-  pub thread_pool_threads: usize,
+  pub job_queue_worker_threads: usize,
   pub chunk_mesh_cache_size: usize,
 }
 
@@ -37,7 +38,7 @@ impl Default for LodOctmapSettings {
       total_size: 4096,
       lod_factor: 1.0,
       fixed_lod_level: None,
-      thread_pool_threads: 10,
+      job_queue_worker_threads: 10,
       chunk_mesh_cache_size: 8192,
     }
   }
@@ -57,16 +58,14 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   volume: V,
   extractor: E,
 
-  active_aabbs: HashSet<AABB>,
-  keep_aabbs: HashSet<AABB>,
-  lod_chunk_meshes: HashMap<AABB, (E::Chunk, bool)>,
+  active_aabbs: FxHashSet<AABB>,
+  keep_aabbs: FxHashSet<AABB>,
+  lod_chunk_meshes: FxHashMap<AABB, Arc<E::Chunk>>,
 
-  requested_aabbs: HashSet<AABB>,
-  thread_pool: ThreadPool,
-  tx: Sender<(AABB, E::Chunk)>,
-  rx: Receiver<(AABB, E::Chunk)>,
+  requested_aabbs: FxHashSet<AABB>,
+  job_queue: JobQueue<AABB, (), (u32, V, E, E::Chunk), E::Chunk>,
 
-  chunk_mesh_cache: LruCache<AABB, E::Chunk>,
+  chunk_mesh_cache: LruCache<AABB, Arc<E::Chunk>>,
 }
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
@@ -74,7 +73,6 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2();
-    let (tx, rx) = std::sync::mpsc::channel();
     Self {
       total_size: settings.total_size,
       lod_factor: settings.lod_factor,
@@ -87,14 +85,15 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       volume,
       extractor,
 
-      active_aabbs: HashSet::new(),
-      keep_aabbs: HashSet::new(),
-      lod_chunk_meshes: HashMap::new(),
+      active_aabbs: FxHashSet::default(),
+      keep_aabbs: FxHashSet::default(),
+      lod_chunk_meshes: FxHashMap::default(),
 
-      requested_aabbs: HashSet::new(),
-      thread_pool: ThreadPoolBuilder::new().num_threads(settings.thread_pool_threads).build().unwrap_or_else(|e| panic!("Failed to create thread pool: {:?}", e)),
-      tx,
-      rx,
+      requested_aabbs: FxHashSet::default(),
+      job_queue: JobQueue::new(settings.job_queue_worker_threads, |aabb, _, (total_size, volume, extractor, mut chunk): (u32, V, E, E::Chunk)| {
+        extractor.extract::<V>(total_size, aabb, &volume, &mut chunk);
+        chunk
+      }).unwrap_or_else(|e| panic!("Failed to create job queue: {:?}", e)),
 
       chunk_mesh_cache: LruCache::new(settings.chunk_mesh_cache_size),
     }
@@ -104,25 +103,30 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
   #[profiling::function]
-  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &(E::Chunk, bool))>) {
+  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
     let position = self.transform_inversed.transform_vec(position);
 
-    for (aabb, lod_chunk_mesh) in self.rx.try_iter() {
-      self.lod_chunk_meshes.insert(aabb, (lod_chunk_mesh, true));
-      self.requested_aabbs.remove(&aabb);
+    for message in self.job_queue.get_message_receiver().try_iter() {
+      match message {
+        JobQueueMessage::JobCompleted(aabb, lod_chunk_mesh) => {
+          self.lod_chunk_meshes.insert(aabb, lod_chunk_mesh);
+          self.requested_aabbs.remove(&aabb);
+        }
+        _ => {}
+      }
     }
 
     self.active_aabbs.clear();
-    let prev_keep: HashSet<_> = self.keep_aabbs.drain().collect();
+    let prev_keep: FxHashSet<_> = self.keep_aabbs.drain().collect();
 
     self.update_root_node(position);
 
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      if let Some((lod_chunk_mesh, filled)) = self.lod_chunk_meshes.remove(removed) {
-        if filled {
-          self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);
-          // TODO: reuse the chunk mush returned by push by clearing it and using it for new chunk meshes?
-        }
+      // TODO: this crashes, fix it.
+      //self.job_queue.remove_job_and_dependencies(*removed).unwrap();
+      if let Some(lod_chunk_mesh) = self.lod_chunk_meshes.remove(removed) {
+        self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);
+        // TODO: reuse the chunk mesh returned by put by clearing it and using it for new chunk meshes?
       }
     }
 
@@ -133,10 +137,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn clear(&mut self) {
     self.keep_aabbs.clear();
     self.active_aabbs.clear();
-    for (_, (vertices, filled)) in &mut self.lod_chunk_meshes {
-      vertices.clear();
-      *filled = false;
-    }
+    self.lod_chunk_meshes.clear();
     self.chunk_mesh_cache.clear();
   }
 
@@ -191,32 +192,36 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
-    let (chunk_mesh, filled) = self.lod_chunk_meshes.entry(aabb).or_default();
-    if *filled { return true; }
+    if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
+    // let lod_chunk_mesh = self.lod_chunk_meshes.entry(aabb).or_default();
+    // if *filled { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
     if let Some(cached_chunk_mesh) = self.chunk_mesh_cache.pop(&aabb) {
-      *chunk_mesh = cached_chunk_mesh;
-      *filled = true;
+      self.lod_chunk_meshes.insert(aabb, cached_chunk_mesh); // OPTO: use entry API to prevent double hashing with `contains_key` above.
       return true;
     }
-    let chunk = std::mem::take(chunk_mesh);
-    self.request_chunk(aabb, chunk);
+    // OPTO: keep pool of unused (empty) meshes and pass in an empty one here?
+    self.request_chunk(aabb, E::Chunk::default());
     return false;
   }
 
   #[profiling::function]
-  fn request_chunk(&mut self, aabb: AABB, mut chunk: E::Chunk) {
+  fn request_chunk(&mut self, aabb: AABB, lod_chunk_mesh: E::Chunk) {
     self.requested_aabbs.insert(aabb);
     let total_size = self.total_size;
     let volume = self.volume.clone();
     let extractor = self.extractor.clone();
-    let tx = self.tx.clone();
-    self.thread_pool.spawn(move || {
-      extractor.extract::<V>(total_size, aabb, &volume, &mut chunk);
-      tx.send((aabb, chunk)).ok(); // Ignore hangups.
-    })
+    self.job_queue.add_job(aabb, (total_size, volume, extractor, lod_chunk_mesh)).unwrap();
   }
 }
+
+pub enum LodJobKey {}
+
+pub enum LodDependencyKey {}
+
+pub enum LodJobOutput {}
+
+pub enum LodJobHandler {}
 
 // Trait implementation
 
@@ -228,7 +233,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
   }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &(<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk, bool))> + '_>) {
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk>)> + '_>) {
     let (transform, chunks) = self.update(position);
     (transform, Box::new(chunks))
   }

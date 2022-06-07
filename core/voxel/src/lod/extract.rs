@@ -7,7 +7,7 @@ use crate::volume::Volume;
 
 /// Extracts chunks of vertices with LOD from a volume.
 pub trait LodExtractor<C: ChunkSize>: Clone + Send + 'static {
-  type Chunk: LodChunkMesh;
+  type Chunk: LodChunkMesh + Send + Sync + 'static;
 
   fn extract<V: Volume>(
     &self,

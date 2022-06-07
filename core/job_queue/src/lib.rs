@@ -20,23 +20,26 @@ mod manager;
 
 // Message from manager
 
-pub enum FromManagerMessage<J, O> {
+pub enum JobQueueMessage<J, I, O> {
   JobCompleted(J, Arc<O>),
+  PendingJobRemoved(J, I),
+  RunningJobRemoved(J),
+  CompletedJobRemoved(J, Arc<O>),
   QueueEmpty,
 }
 
 
 // Job queue
 
-pub struct JobQueue<J, D, O> {
+pub struct JobQueue<J, D, I, O> {
   manager_thread_handle: JoinHandle<()>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  to_manager: Sender<manager::FromQueue<J, D>>,
-  from_manager: Receiver<FromManagerMessage<J, O>>,
+  to_manager: Sender<manager::FromQueue<J, D, I>>,
+  from_manager: Receiver<JobQueueMessage<J, I, O>>,
 }
 
-impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
-  pub fn new(worker_thread_count: usize, handler: impl Handler<J, D, O>) -> std::io::Result<Self> {
+impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
+  pub fn new(worker_thread_count: usize, handler: impl Handler<J, D, I, O>) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
     let (worker_to_manager_sender, worker_to_manager_receiver) = unbounded();
@@ -73,13 +76,13 @@ impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
   }
 
   #[inline]
-  pub fn add_job(&self, job_key: J) -> Result<(), SendError<()>> {
-    self.add_job_with_dependencies(job_key, Dependencies::default())
+  pub fn add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
+    self.add_job_with_dependencies(job_key, Dependencies::default(), input)
   }
 
   #[inline]
-  pub fn add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D>) -> Result<(), SendError<()>> {
-    self.to_manager.send(FromQueueMessage::AddJob(job_key, dependencies)).map_err(|_| SendError(()))
+  pub fn add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D>, input: I) -> Result<(), SendError<()>> {
+    self.to_manager.send(FromQueueMessage::AddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
   }
 
   #[inline]
@@ -88,7 +91,7 @@ impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
   }
 
   #[inline]
-  pub fn get_message_receiver(&self) -> &Receiver<FromManagerMessage<J, O>> { &self.from_manager }
+  pub fn get_message_receiver(&self) -> &Receiver<JobQueueMessage<J, I, O>> { &self.from_manager }
 
   pub fn stop_and_join(mut self) -> thread::Result<()> {
     // Replace sender and receiver with new ones that do nothing, dropping the replaced ones.
@@ -107,16 +110,16 @@ impl<J: JobKey, D: DepKey, O: Out> JobQueue<J, D, O> {
 
 // Dependencies
 
-pub type Dependencies<J, D> = SmallVec<[(D, J); 2]>;
+pub type Dependencies<J, D> = SmallVec<[(D, J); 4]>;
 
 
 // Handler
 
-pub type DependencyOutputs<D, O> = SmallVec<[(D, Arc<O>); 2]>;
+pub type DependencyOutputs<D, O> = SmallVec<[(D, Arc<O>); 4]>;
 
-pub trait Handler<J, D, O>: Fn(J, DependencyOutputs<D, O>) -> O + Copy + Send + 'static {}
+pub trait Handler<J, D, I, O>: Fn(J, DependencyOutputs<D, O>, I) -> O + Send + 'static + Clone {}
 
-impl<T, J, D, O> Handler<J, D, O> for T where T: Fn(J, DependencyOutputs<D, O>) -> O + Copy + Send + 'static {}
+impl<T, J, D, I, O> Handler<J, D, I, O> for T where T: Fn(J, DependencyOutputs<D, O>, I) -> O + Send + 'static + Clone {}
 
 
 // Trait aliases
@@ -129,6 +132,11 @@ impl<T> JobKey for T where T: Send + 'static + Copy + Eq + Hash + Debug {}
 pub trait DepKey: Send + 'static + Copy {}
 
 impl<T> DepKey for T where T: Send + 'static + Copy {}
+
+
+pub trait In: Send + 'static {}
+
+impl<T> In for T where T: Send + 'static {}
 
 
 pub trait Out: Send + Sync + 'static {}

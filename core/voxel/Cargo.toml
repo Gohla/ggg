@@ -10,14 +10,15 @@ publish = false
 common = { path = "../common" }
 gfx = { path = "../gfx" }
 gui_widget = { path = "../gui_widget" }
+job_queue = { path = "../job_queue" }
 simdnoise = { git = "https://github.com/jackmott/rust-simd-noise.git", branch = "master" }
 wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.18"
 ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
-rayon = "1.5"
 lru = "0.7"
 flagset = "0.4"
+rustc-hash = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 tracing = "0.1"
 profiling = "1"

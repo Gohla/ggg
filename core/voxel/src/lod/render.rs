@@ -103,10 +103,9 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     let extractor = self.chunk_mesh_manager.get_extractor().clone();
     let (transform, chunks) = self.chunk_mesh_manager.update(position);
 
-    for (aabb, (chunk, filled)) in chunks {
+    for (aabb, chunk) in chunks {
       let is_empty = chunk.is_empty();
       if !is_empty {
-        if !*filled { continue; }
         extractor.update_render_data(chunk, &mut self.vertices, &mut self.indices, &mut self.draws);
       }
       if settings.debug_render_octree_nodes {

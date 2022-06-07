@@ -262,7 +262,7 @@ impl Settings {
   ) -> bool {
     ui.collapsing_open_with_grid("LOD octmap", "Grid", |ui| {
       ui.label("Thread pool threads");
-      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.thread_pool_threads, 1, 1..=2usize.pow(8));
+      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.job_queue_worker_threads, 1, 1..=2usize.pow(8));
       ui.end_row();
       ui.label("Chunk mesh cache size");
       ui.drag_unlabelled_range(&mut self.lod_octmap_settings.chunk_mesh_cache_size, 1, 1..=2usize.pow(16));
