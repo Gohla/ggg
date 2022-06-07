@@ -11,3 +11,4 @@ petgraph = { version = "0.6", default-features = false, features = ["stable_grap
 smallvec = "1"
 rustc-hash = "1"
 tracing = "0.1"
+profiling = "1"

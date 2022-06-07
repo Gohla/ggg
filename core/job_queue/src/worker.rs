@@ -38,6 +38,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, H: Handler<J, D, I, O>> WorkerThread<J
 
   #[inline]
   fn run(self, thread_index: usize) {
+    profiling::register_thread!();
     trace!("Started job queue worker thread {}", thread_index);
     loop {
       if let Ok((node_index, job_key, dependencies, input)) = self.from_manager.recv() {

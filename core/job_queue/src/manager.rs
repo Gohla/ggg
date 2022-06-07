@@ -63,6 +63,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
 
   #[inline]
   fn run(mut self) {
+    profiling::register_thread!();
     trace!("Started job queue manager thread");
     let mut node_index_cache_1 = Vec::new();
     let mut node_index_cache_2 = Vec::new();
@@ -99,6 +100,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
     }
   }
 
+  #[profiling::function]
   #[inline]
   fn handle_completion(&mut self, node_index: NodeIndex, job_key: J, output: O, node_index_cache_1: &mut Vec<NodeIndex>, node_index_cache_2: &mut Vec<NodeIndex>) -> bool {
     // Check if job is still in the dependency graph; it could have been removed while running.
@@ -121,6 +123,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
   }
 
 
+  #[profiling::function]
   #[inline]
   fn add_job(&mut self, job_key: J, dependencies: Dependencies<J, D>, input: I, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     if let Some(_node_index) = self.job_key_to_node_index.get(&job_key) {
@@ -146,6 +149,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
     true
   }
 
+  #[profiling::function]
   #[inline]
   fn remove_job_and_dependencies(&mut self, job_key: J, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     if let Some(node_index) = self.job_key_to_node_index.remove(&job_key) {
@@ -180,6 +184,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
   }
 
 
+  #[profiling::function]
   #[inline]
   fn try_schedule_job(&mut self, node_index: NodeIndex, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     trace!("Try to schedule job {:?}", node_index);
@@ -200,6 +205,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
     true
   }
 
+  #[profiling::function]
   #[inline]
   fn schedule_job(&mut self, node_index: NodeIndex, dependencies: DependencyOutputs<D, O>) -> bool {
     let job_status = &mut self.job_graph[node_index];
@@ -213,6 +219,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
     true
   }
 
+  #[profiling::function]
   #[inline]
   fn complete_job(&mut self, node_index: NodeIndex, job_key: J, output: O) -> bool {
     trace!("Completing job {:?}", node_index);
@@ -224,6 +231,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
   }
 
 
+  #[profiling::function]
   #[inline]
   fn send_queue_empty_if_applicable(&mut self) -> bool {
     if self.pending_jobs == 0 && self.scheduled_jobs == 0 {
