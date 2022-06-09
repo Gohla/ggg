@@ -66,82 +66,85 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   ) -> Result<(), SendError<()>> {
     let min = aabb.min();
     let max = aabb.max();
-    let step = aabb.step::<C>();
+    let size = aabb.size();
 
     // Gather dependencies to sample jobs.
     let mut dependencies = Dependencies::new();
     // Regular
     {
-      let key = LodJobKey::Sample(AABB::new_unchecked(min, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Regular, key));
     }
     // Positive X
-    if max.x < total_size && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
+    let make_x_border = max.x < total_size;
+    if make_x_border && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
       let min_x = {
         let mut min = min;
         min.x = max.x;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_x, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_x, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::X, key));
     }
     // Positive Y
-    if max.y < total_size && self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks {
+    let make_y_border = max.y < total_size;
+    if make_y_border && (self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks) {
       let min_y = {
         let mut min = min;
         min.y = max.y;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_y, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_y, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Y, key));
     }
     // Positive Z
-    if max.z < total_size && self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks {
+    let make_z_border = max.z < total_size;
+    if make_z_border && (self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks) {
       let min_z = {
         let mut min = min;
         min.z = max.z;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_z, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_z, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Z, key));
     }
     // Positive XY
-    if self.settings.extract_border_xy_chunks {
+    if make_x_border && make_y_border && self.settings.extract_border_xy_chunks {
       let min_xy = {
         let mut min = min;
         min.x = max.x;
         min.y = max.y;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_xy, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_xy, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::XY, key));
     }
     // Positive YZ
-    if self.settings.extract_border_yz_chunks {
+    if make_y_border && make_z_border && self.settings.extract_border_yz_chunks {
       let min_yz = {
         let mut min = min;
         min.y = max.y;
         min.z = max.z;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_yz, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_yz, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::YZ, key));
     }
     // Positive XZ
-    if self.settings.extract_border_xz_chunks {
+    if make_x_border && make_z_border && self.settings.extract_border_xz_chunks {
       let min_xz = {
         let mut min = min;
         min.x = max.x;
         min.z = max.z;
         min
       };
-      let key = LodJobKey::Sample(AABB::new_unchecked(min_xz, step));
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_xz, size));
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::XZ, key));
     }

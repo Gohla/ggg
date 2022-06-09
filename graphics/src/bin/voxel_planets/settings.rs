@@ -291,6 +291,8 @@ impl Settings {
             *lod_chunk_mesh_manager.get_fixed_lod_level_mut() = Some(1);
           }
           ui.drag_unlabelled_range(lod_chunk_mesh_manager.get_fixed_lod_level_mut().as_mut().unwrap(), 1, 0..=3);
+        } else {
+          *lod_chunk_mesh_manager.get_fixed_lod_level_mut() = None;
         }
       });
       self.lod_octmap_settings.fixed_lod_level = lod_chunk_mesh_manager.get_fixed_lod_level(); // Also update settings.
