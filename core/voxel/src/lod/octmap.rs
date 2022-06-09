@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use lru::LruCache;
@@ -38,7 +39,7 @@ impl Default for LodOctmapSettings {
       total_size: 4096,
       lod_factor: 1.0,
       fixed_lod_level: None,
-      job_queue_worker_threads: 10,
+      job_queue_worker_threads: std::thread::available_parallelism().unwrap_or(NonZeroUsize::new(8).unwrap()).get(),
       chunk_mesh_cache_size: 8192,
     }
   }
@@ -121,13 +122,17 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
     self.update_root_node(position);
 
+    let mut send_error = false;
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      // TODO: this crashes, fix it.
-      //self.job_queue.remove_job_and_dependencies(*removed).unwrap();
+      send_error |= self.job_queue.remove_job_and_dependencies(*removed).is_err();
+      if send_error { break; }
       if let Some(lod_chunk_mesh) = self.lod_chunk_meshes.remove(removed) {
         self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);
         // TODO: reuse the chunk mesh returned by put by clearing it and using it for new chunk meshes?
       }
+    }
+    if send_error {
+      self.handle_send_error();
     }
 
     let chunks = self.lod_chunk_meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
@@ -193,8 +198,6 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
-    // let lod_chunk_mesh = self.lod_chunk_meshes.entry(aabb).or_default();
-    // if *filled { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
     if let Some(cached_chunk_mesh) = self.chunk_mesh_cache.pop(&aabb) {
       self.lod_chunk_meshes.insert(aabb, cached_chunk_mesh); // OPTO: use entry API to prevent double hashing with `contains_key` above.
@@ -211,17 +214,18 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     let total_size = self.total_size;
     let volume = self.volume.clone();
     let extractor = self.extractor.clone();
-    self.job_queue.add_job(aabb, (total_size, volume, extractor, lod_chunk_mesh)).unwrap();
+    self.job_queue.add_job(aabb, (total_size, volume, extractor, lod_chunk_mesh))
+      .unwrap_or_else(|_| self.handle_send_error())
+  }
+
+  fn handle_send_error(&mut self) {
+    if let Err(e) = self.job_queue.take_and_join() {
+      std::panic::resume_unwind(e);
+    } else {
+      panic!("Communicating with the job queue failed, but it did not panic");
+    }
   }
 }
-
-pub enum LodJobKey {}
-
-pub enum LodDependencyKey {}
-
-pub enum LodJobOutput {}
-
-pub enum LodJobHandler {}
 
 // Trait implementation
 

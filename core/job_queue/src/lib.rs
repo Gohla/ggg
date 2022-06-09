@@ -1,5 +1,4 @@
 #![feature(iter_collect_into)]
-#![feature(let_else)]
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -32,7 +31,7 @@ pub enum JobQueueMessage<J, I, O> {
 // Job queue
 
 pub struct JobQueue<J, D, I, O> {
-  manager_thread_handle: JoinHandle<()>,
+  manager_thread_handle: Option<JoinHandle<()>>,
   worker_thread_handles: Vec<JoinHandle<()>>,
   to_manager: Sender<manager::FromQueue<J, D, I>>,
   from_manager: Receiver<JobQueueMessage<J, I, O>>,
@@ -68,12 +67,13 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
     }
 
     Ok(Self {
-      manager_thread_handle,
+      manager_thread_handle: Some(manager_thread_handle),
       worker_thread_handles,
       to_manager: external_to_manager_sender,
       from_manager: manager_to_external_receiver,
     })
   }
+
 
   #[inline]
   pub fn add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
@@ -90,23 +90,54 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
     self.to_manager.send(FromQueueMessage::RemoveJobAndDependencies(job_key)).map_err(|_| SendError(()))
   }
 
+
   #[inline]
   pub fn get_message_receiver(&self) -> &Receiver<JobQueueMessage<J, I, O>> { &self.from_manager }
 
+
   pub fn stop_and_join(mut self) -> thread::Result<()> {
+    self.stop();
+    self.join()
+  }
+
+  pub fn stop(&mut self) {
     // Replace sender and receiver with new ones that do nothing, dropping the replaced ones.
     let (empty_sender, _) = bounded(0);
     drop(std::mem::replace(&mut self.to_manager, empty_sender));
     let empty_receiver = never();
     drop(std::mem::replace(&mut self.from_manager, empty_receiver));
-    // Wait for threads to stop.
-    self.manager_thread_handle.join()?;
+  }
+
+  /// Takes ownership of self by replacing it with a default job queue that does nothing, and then joins the taken self.
+  pub fn take_and_join(&mut self) -> thread::Result<()> {
+    let job_queue = std::mem::take(self);
+    job_queue.join()
+  }
+
+  pub fn join(self) -> thread::Result<()> {
+    if let Some(join_handle) = self.manager_thread_handle {
+      join_handle.join()?;
+    }
     for worker_thread in self.worker_thread_handles {
       worker_thread.join()?;
     }
     Ok(())
   }
 }
+
+impl<J, D, I, O> Default for JobQueue<J, D, I, O> {
+  fn default() -> Self {
+    let (empty_sender, _) = bounded(0);
+    let empty_receiver = never();
+    Self {
+      manager_thread_handle: None,
+      worker_thread_handles: Vec::new(),
+      to_manager: empty_sender,
+      from_manager: empty_receiver,
+    }
+  }
+}
+
 
 // Dependencies
 
