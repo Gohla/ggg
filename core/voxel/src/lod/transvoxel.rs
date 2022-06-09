@@ -1,13 +1,20 @@
+use std::borrow::Borrow;
+use std::sync::Arc;
+
+use job_queue::{Dependencies, DependencyOutputs, JobQueue, SendError};
+
 use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
+use crate::lod::octmap::{LodJobInput, LodJobKey, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::marching_cubes::MarchingCubes;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::Transvoxel;
-use crate::volume::Volume;
+use crate::volume::{Sphere, SphereSettings, Volume};
 
 // Settings
 
@@ -49,35 +56,47 @@ pub struct TransvoxelExtractor<C: ChunkSize> {
 
 impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   type Chunk = TransvoxelLodChunkVertices;
+  type JobDepKey = ();
 
   #[inline]
-  fn extract<V: Volume>(&self, total_size: u32, aabb: AABB, volume: &V, chunk: &mut Self::Chunk) {
-    let lores_min = aabb.min();
-    let lores_max = aabb.max();
-    let lores_step = aabb.step::<C>();
-    let chunk_samples = volume.sample_chunk(lores_min, lores_step);
-    if self.settings.extract_regular_chunks {
-      self.marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
-    }
-    if lores_step != 1 { // At max LOD level, no need to create transition cells.
-      let hires_step = lores_step / 2;
-      if self.settings.extract_transition_lo_x_chunks && lores_min.x > 0 {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::LoX, volume, hires_step, lores_step, &mut chunk.transition_lo_x_chunk);
+  fn create_jobs<V: Volume, const DS: usize>(&self, total_size: u32, aabb: AABB, volume: V, lod_chunk_mesh: Self::Chunk, job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>) -> Result<(), SendError<()>> {
+    let sample_key = LodJobKey::Sample(aabb);
+    job_queue.add_job(sample_key, LodJobInput::Sample(volume))?;
+    job_queue.add_job_with_dependencies(LodJobKey::Mesh(aabb), Dependencies::from_elem(((), sample_key), 1), LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    Ok(())
+  }
+
+  #[inline]
+  fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
+    let (_, output): &((), Arc<LodJobOutput<ChunkSamples<C>, Self::Chunk>>) = &dependency_outputs[0];
+    if let LodJobOutput::Sample(chunk_samples) = output.borrow() {
+      let lores_min = aabb.min();
+      let lores_max = aabb.max();
+      let lores_step = aabb.step::<C>();
+      if self.settings.extract_regular_chunks {
+        self.marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
       }
-      if self.settings.extract_transition_hi_x_chunks && lores_max.x < total_size {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::HiX, volume, hires_step, lores_step, &mut chunk.transition_hi_x_chunk);
-      }
-      if self.settings.extract_transition_lo_y_chunks && lores_min.y > 0 {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::LoY, volume, hires_step, lores_step, &mut chunk.transition_lo_y_chunk);
-      }
-      if self.settings.extract_transition_hi_y_chunks && lores_max.y < total_size {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::HiY, volume, hires_step, lores_step, &mut chunk.transition_hi_y_chunk);
-      }
-      if self.settings.extract_transition_lo_z_chunks && lores_min.z > 0 {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::LoZ, volume, hires_step, lores_step, &mut chunk.transition_lo_z_chunk);
-      }
-      if self.settings.extract_transition_hi_z_chunks && lores_max.z < total_size {
-        self.extract_transvoxel_chunk(aabb, TransitionSide::HiZ, volume, hires_step, lores_step, &mut chunk.transition_hi_z_chunk);
+      if lores_step != 1 { // At max LOD level, no need to create transition cells.
+        let volume = Sphere::new(SphereSettings::default()); // HACK: create volume here until we port this to use dependencies.
+        let hires_step = lores_step / 2;
+        if self.settings.extract_transition_lo_x_chunks && lores_min.x > 0 {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &mut chunk.transition_lo_x_chunk);
+        }
+        if self.settings.extract_transition_hi_x_chunks && lores_max.x < total_size {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::HiX, &volume, hires_step, lores_step, &mut chunk.transition_hi_x_chunk);
+        }
+        if self.settings.extract_transition_lo_y_chunks && lores_min.y > 0 {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::LoY, &volume, hires_step, lores_step, &mut chunk.transition_lo_y_chunk);
+        }
+        if self.settings.extract_transition_hi_y_chunks && lores_max.y < total_size {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::HiY, &volume, hires_step, lores_step, &mut chunk.transition_hi_y_chunk);
+        }
+        if self.settings.extract_transition_lo_z_chunks && lores_min.z > 0 {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &mut chunk.transition_lo_z_chunk);
+        }
+        if self.settings.extract_transition_hi_z_chunks && lores_max.z < total_size {
+          self.extract_transvoxel_chunk(aabb, TransitionSide::HiZ, &volume, hires_step, lores_step, &mut chunk.transition_hi_z_chunk);
+        }
       }
     }
   }

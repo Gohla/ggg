@@ -34,7 +34,7 @@ pub(super) struct ManagerThread<J, D, I, O, const DS: usize> {
   running_jobs: u32,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I, O ,DS> {
+impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I, O, DS> {
   #[inline]
   pub(super) fn new(
     from_queue: Receiver<FromQueue<J, D, I, DS>>,
@@ -135,9 +135,9 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[profiling::function]
   #[inline]
   fn add_job(&mut self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I, node_index_cache: &mut Vec<NodeIndex>) -> bool {
-    if let Some(node_index) = self.job_key_to_node_index.get(&job_key) {
-      panic!("Attempt to add job with key {:?} which already exists: {:?}", job_key, node_index);
-      // Note: may allow this in the future by updating dependencies and re-executing the task if needed.
+    if let Some(_node_index) = self.job_key_to_node_index.get(&job_key) {
+      // Do nothing.
+      // TODO: should check if job has different inputs or dependencies and act accordingly.
     } else {
       let node_index = self.job_graph.add_node(JobStatus::Pending(job_key, input));
       self.pending_jobs += 1;
@@ -156,6 +156,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       // Try to schedule job.
       return self.try_schedule_job(node_index, node_index_cache);
     }
+    true
   }
 
   #[profiling::function]

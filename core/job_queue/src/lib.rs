@@ -5,7 +5,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
-use crossbeam_channel::{bounded, never, Receiver, Sender, SendError, unbounded};
+use crossbeam_channel::{bounded, never, Receiver, Sender, unbounded};
+pub use crossbeam_channel::SendError;
 use smallvec::SmallVec;
 
 use manager::ManagerThread;

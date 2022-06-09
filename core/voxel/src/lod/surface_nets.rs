@@ -1,8 +1,14 @@
+use std::borrow::Borrow;
+
+use job_queue::{Dependencies, DependencyOutputs, JobQueue, SendError};
+
 use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
+use crate::lod::octmap::{LodJobInput, LodJobKey, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::surface_nets::lod::SurfaceNetsLod;
 use crate::surface_nets::SurfaceNets;
@@ -47,96 +53,210 @@ pub struct SurfaceNetsExtractor<C: ChunkSize> {
 
 impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   type Chunk = SurfaceNetsLodChunkMesh;
+  type JobDepKey = SampleKind;
 
   #[inline]
-  fn extract<V: Volume>(&self, total_size: u32, aabb: AABB, volume: &V, chunk: &mut Self::Chunk) {
+  fn create_jobs<V: Volume, const DS: usize>(
+    &self,
+    total_size: u32,
+    aabb: AABB,
+    volume: V,
+    lod_chunk_mesh: Self::Chunk,
+    job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
+  ) -> Result<(), SendError<()>> {
     let min = aabb.min();
     let max = aabb.max();
     let step = aabb.step::<C>();
-    let chunk_samples = volume.sample_chunk(min, step);
-    if self.settings.extract_regular_chunks {
-      self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
-    }
 
-    let min_x = {
-      let mut min = min;
-      min.x = max.x;
-      min
-    };
-    let min_y = {
-      let mut min = min;
-      min.y = max.y;
-      min
-    };
-    let min_z = {
-      let mut min = min;
-      min.z = max.z;
-      min
-    };
-
-    let sample_x = self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks;
-    let chunk_samples_x = (sample_x && max.x < total_size).then(|| {
-      volume.sample_chunk(min_x, step)
-    });
-    let sample_y = self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks;
-    let chunk_samples_y = (sample_y && max.y < total_size).then(|| {
-      volume.sample_chunk(min_y, step)
-    });
-    let sample_z = self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks;
-    let chunk_samples_z = (sample_z && max.z < total_size).then(|| {
-      volume.sample_chunk(min_z, step)
-    });
-
-    if self.settings.extract_border_x_chunks {
-      if let Some(chunk_samples_x) = &chunk_samples_x {
-        self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, chunk_samples_x, &mut chunk.border_x_chunk);
-      }
+    // Gather dependencies to sample jobs.
+    let mut dependencies = Dependencies::new();
+    // Regular
+    {
+      let key = LodJobKey::Sample(AABB::new_unchecked(min, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::Regular, key));
     }
-    if self.settings.extract_border_y_chunks {
-      if let Some(chunk_samples_y) = &chunk_samples_y {
-        self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y, chunk_samples_y, &mut chunk.border_y_chunk);
-      }
+    // Positive X
+    if max.x < total_size && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
+      let min_x = {
+        let mut min = min;
+        min.x = max.x;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_x, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::X, key));
     }
-    if self.settings.extract_border_z_chunks {
-      if let Some(chunk_samples_z) = &chunk_samples_z {
-        self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z, chunk_samples_z, &mut chunk.border_z_chunk);
-      }
+    // Positive Y
+    if max.y < total_size && self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks {
+      let min_y = {
+        let mut min = min;
+        min.y = max.y;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_y, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::Y, key));
     }
-
+    // Positive Z
+    if max.z < total_size && self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks {
+      let min_z = {
+        let mut min = min;
+        min.z = max.z;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_z, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::Z, key));
+    }
+    // Positive XY
     if self.settings.extract_border_xy_chunks {
-      if let (Some(chunk_samples_x), Some(chunk_samples_y)) = (&chunk_samples_x, &chunk_samples_y) {
-        let min_xy = {
-          let mut min = min;
-          min.x = max.x;
-          min.y = max.y;
-          min
-        };
-        let chunk_samples_xy = volume.sample_chunk(min_xy, step);
-        self.surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x, chunk_samples_x, min_y, chunk_samples_y, min_xy, &chunk_samples_xy, &mut chunk.border_xy_chunk);
-      }
+      let min_xy = {
+        let mut min = min;
+        min.x = max.x;
+        min.y = max.y;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_xy, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::XY, key));
     }
+    // Positive YZ
     if self.settings.extract_border_yz_chunks {
-      if let (Some(chunk_samples_y), Some(chunk_samples_z)) = &(&chunk_samples_y, &chunk_samples_z) {
-        let min_yz = {
-          let mut min = min;
-          min.y = max.y;
-          min.z = max.z;
-          min
-        };
-        let chunk_samples_yz = volume.sample_chunk(min_yz, step);
-        self.surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y, chunk_samples_y, min_z, chunk_samples_z, min_yz, &chunk_samples_yz, &mut chunk.border_yz_chunk);
+      let min_yz = {
+        let mut min = min;
+        min.y = max.y;
+        min.z = max.z;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_yz, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::YZ, key));
+    }
+    // Positive XZ
+    if self.settings.extract_border_xz_chunks {
+      let min_xz = {
+        let mut min = min;
+        min.x = max.x;
+        min.z = max.z;
+        min
+      };
+      let key = LodJobKey::Sample(AABB::new_unchecked(min_xz, step));
+      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      dependencies.push((SampleKind::XZ, key));
+    }
+
+    job_queue.add_job_with_dependencies(LodJobKey::Mesh(aabb), dependencies, LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+
+    Ok(())
+  }
+
+  #[inline]
+  fn run_job<const DS: usize>(
+    &self,
+    _total_size: u32,
+    aabb: AABB,
+    dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
+    chunk: &mut Self::Chunk,
+  ) {
+    // Gather samples
+    let mut chunk_samples = None;
+    let mut chunk_samples_x = None;
+    let mut chunk_samples_y = None;
+    let mut chunk_samples_z = None;
+    let mut chunk_samples_xy = None;
+    let mut chunk_samples_yz = None;
+    let mut chunk_samples_xz = None;
+    for (neighbor, output) in dependency_outputs {
+      match neighbor {
+        SampleKind::Regular => chunk_samples = Some(output),
+        SampleKind::X => chunk_samples_x = Some(output),
+        SampleKind::Y => chunk_samples_y = Some(output),
+        SampleKind::Z => chunk_samples_z = Some(output),
+        SampleKind::XY => chunk_samples_xy = Some(output),
+        SampleKind::YZ => chunk_samples_yz = Some(output),
+        SampleKind::XZ => chunk_samples_xz = Some(output),
       }
     }
-    if self.settings.extract_border_xz_chunks {
-      if let (Some(chunk_samples_x), Some(chunk_samples_z)) = &(&chunk_samples_x, &chunk_samples_z) {
-        let min_xz = {
-          let mut min = min;
-          min.x = max.x;
-          min.z = max.z;
-          min
-        };
-        let chunk_samples_xz = volume.sample_chunk(min_xz, step);
-        self.surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x, chunk_samples_x, min_z, chunk_samples_z, min_xz, &chunk_samples_xz, &mut chunk.border_xz_chunk);
+    if chunk_samples.is_none() {
+      return;
+    }
+    let chunk_samples = chunk_samples.unwrap();
+    if let LodJobOutput::Sample(chunk_samples) = chunk_samples.borrow() {
+      // Extract
+      let min = aabb.min();
+      let max = aabb.max();
+      let step = aabb.step::<C>();
+      let min_x = { // TODO: reduce code duplication?
+        let mut min = min;
+        min.x = max.x;
+        min
+      };
+      let min_y = {
+        let mut min = min;
+        min.y = max.y;
+        min
+      };
+      let min_z = {
+        let mut min = min;
+        min.z = max.z;
+        min
+      };
+      // Regular
+      self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
+      // Positive X border
+      if let Some(chunk_samples_x) = &chunk_samples_x {
+        if let LodJobOutput::Sample(chunk_samples_x) = chunk_samples_x.borrow() {
+          self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, chunk_samples_x, &mut chunk.border_x_chunk);
+        }
+      }
+      // Positive Y border
+      if let Some(chunk_samples_y) = &chunk_samples_y {
+        if let LodJobOutput::Sample(chunk_samples_y) = chunk_samples_y.borrow() {
+          self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y, chunk_samples_y, &mut chunk.border_y_chunk);
+        }
+      }
+      // Positive Z border
+      if let Some(chunk_samples_z) = &chunk_samples_z {
+        if let LodJobOutput::Sample(chunk_samples_z) = chunk_samples_z.borrow() {
+          self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z, chunk_samples_z, &mut chunk.border_z_chunk);
+        }
+      }
+      // Positive XY border
+      if let (Some(chunk_samples_x), Some(chunk_samples_y), Some(chunk_samples_xy)) = (&chunk_samples_x, &chunk_samples_y, &chunk_samples_xy) {
+        if let (LodJobOutput::Sample(chunk_samples_x), LodJobOutput::Sample(chunk_samples_y), LodJobOutput::Sample(chunk_samples_xy)) = (chunk_samples_x.borrow(), chunk_samples_y.borrow(), chunk_samples_xy.borrow()) {
+          let min_xy = {
+            let mut min = min;
+            min.x = max.x;
+            min.y = max.y;
+            min
+          };
+          self.surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x, chunk_samples_x, min_y, chunk_samples_y, min_xy, chunk_samples_xy, &mut chunk.border_xy_chunk);
+        }
+      }
+      // Positive YZ border
+      if let (Some(chunk_samples_y), Some(chunk_samples_z), Some(chunk_samples_yz)) = (&chunk_samples_y, &chunk_samples_z, &chunk_samples_yz) {
+        if let (LodJobOutput::Sample(chunk_samples_y), LodJobOutput::Sample(chunk_samples_z), LodJobOutput::Sample(chunk_samples_yz)) = (chunk_samples_y.borrow(), chunk_samples_z.borrow(), chunk_samples_yz.borrow()) {
+          let min_yz = {
+            let mut min = min;
+            min.y = max.y;
+            min.z = max.z;
+            min
+          };
+          self.surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y, chunk_samples_y, min_z, chunk_samples_z, min_yz, chunk_samples_yz, &mut chunk.border_yz_chunk);
+        }
+      }
+      // Positive XZ border
+      if let (Some(chunk_samples_x), Some(chunk_samples_z), Some(chunk_samples_xz)) = (&chunk_samples_x, &chunk_samples_z, &chunk_samples_xz) {
+        if let (LodJobOutput::Sample(chunk_samples_x), LodJobOutput::Sample(chunk_samples_z), LodJobOutput::Sample(chunk_samples_xz)) = (chunk_samples_x.borrow(), chunk_samples_z.borrow(), chunk_samples_xz.borrow()) {
+          let min_xz = {
+            let mut min = min;
+            min.x = max.x;
+            min.z = max.z;
+            min
+          };
+          self.surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x, chunk_samples_x, min_z, chunk_samples_z, min_xz, chunk_samples_xz, &mut chunk.border_xz_chunk);
+        }
       }
     }
   }
@@ -237,4 +357,17 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
     self.border_yz_chunk.clear();
     self.border_xz_chunk.clear();
   }
+}
+
+// Sample kind
+
+#[derive(Copy, Clone)]
+pub enum SampleKind {
+  Regular,
+  X,
+  Y,
+  Z,
+  XY,
+  YZ,
+  XZ,
 }

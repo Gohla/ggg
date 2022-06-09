@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 
 use crate::chunk::index::Index;
+use crate::chunk::Value;
 
 // Array trait
 
-pub trait Array<T: Copy, I>: Copy {
+pub trait Array<T: Value, I>: Value {
   fn new(default: T) -> Self;
 
   fn index(&self, index: I) -> T;
@@ -31,7 +32,7 @@ pub struct ConstArray<T, I: Index, const LEN: usize> {
   _phantom: PhantomData<I>,
 }
 
-impl<T: Copy, I: Index, const LEN: usize> Array<T, I> for ConstArray<T, I, LEN> {
+impl<T: Value, I: Index, const LEN: usize> Array<T, I> for ConstArray<T, I, LEN> {
   #[inline]
   fn new(default: T) -> Self {
     let array = [default; LEN];

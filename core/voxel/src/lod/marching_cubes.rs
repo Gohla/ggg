@@ -1,8 +1,15 @@
+use std::borrow::Borrow;
+use std::sync::Arc;
+
+use job_queue::{Dependencies, DependencyOutputs, JobQueue, SendError};
+
 use crate::chunk::mesh::{ChunkMesh, Vertex};
+use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
+use crate::lod::octmap::{LodJobInput, LodJobKey, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::marching_cubes::MarchingCubes;
 use crate::volume::Volume;
@@ -23,13 +30,35 @@ pub struct MarchingCubesExtractor<C: ChunkSize> {
 
 impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   type Chunk = MarchingCubesLodChunkVertices;
+  type JobDepKey = ();
 
   #[inline]
-  fn extract<V: Volume>(&self, _total_size: u32, aabb: AABB, volume: &V, chunk: &mut Self::Chunk) {
-    let min = aabb.min();
-    let step = aabb.step::<C>();
-    let chunk_samples = volume.sample_chunk(min, step);
-    self.marching_cubes.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
+  fn create_jobs<V: Volume, const DS: usize>(
+    &self,
+    total_size: u32,
+    aabb: AABB,
+    volume: V,
+    lod_chunk_mesh: Self::Chunk,
+    job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
+  ) -> Result<(), SendError<()>> {
+    let sample_key = LodJobKey::Sample(aabb);
+    job_queue.add_job(sample_key, LodJobInput::Sample(volume))?;
+    job_queue.add_job_with_dependencies(LodJobKey::Mesh(aabb), Dependencies::from_elem(((), sample_key), 1), LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    Ok(())
+  }
+
+  #[inline]
+  fn run_job<const DS: usize>(
+    &self,
+    _total_size: u32,
+    aabb: AABB,
+    dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
+    chunk: &mut Self::Chunk,
+  ) {
+    let (_, output): &((), Arc<LodJobOutput<ChunkSamples<C>, Self::Chunk>>) = &dependency_outputs[0];
+    if let LodJobOutput::Sample(chunk_samples) = output.borrow() {
+      self.marching_cubes.extract_chunk(aabb.min(), aabb.step::<C>(), chunk_samples, &mut chunk.regular);
+    }
   }
 
   #[inline]

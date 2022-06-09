@@ -79,7 +79,7 @@ impl AABB {
 
 
   #[inline(always)]
-  fn new_unchecked(min: UVec3, size: u32) -> Self {
+  pub fn new_unchecked(min: UVec3, size: u32) -> Self {
     Self { min, size }
   }
 }

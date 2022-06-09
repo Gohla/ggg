@@ -3,10 +3,11 @@ use std::fmt::{Display, Formatter};
 use ultraviolet::UVec3;
 
 use crate::chunk::shape::{index_from_xyz, Shape};
+use crate::chunk::Value;
 
 // Index trait
 
-pub trait Index: Copy {
+pub trait Index: Value {
   fn from_u32(i: u32) -> Self;
   fn into_u32(self) -> u32;
   fn into_usize(self) -> usize;

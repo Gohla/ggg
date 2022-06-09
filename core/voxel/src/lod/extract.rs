@@ -1,19 +1,33 @@
+use job_queue::{DependencyOutputs, DepKey, JobQueue, SendError};
+
 use crate::chunk::mesh::Vertex;
+use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
+use crate::lod::octmap::{LodJobInput, LodJobKey, LodJobOutput};
 use crate::lod::render::LodDraw;
 use crate::volume::Volume;
 
 /// Extracts chunks of vertices with LOD from a volume.
-pub trait LodExtractor<C: ChunkSize>: Clone + Send + 'static {
+pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   type Chunk: LodChunkMesh + Send + Sync + 'static;
+  type JobDepKey: DepKey;
 
-  fn extract<V: Volume>(
+  fn create_jobs<V: Volume, const DS: usize>(
     &self,
     total_size: u32,
     aabb: AABB,
-    volume: &V,
+    volume: V,
+    lod_chunk_mesh: Self::Chunk,
+    job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
+  ) -> Result<(), SendError<()>>;
+
+  fn run_job<const DS: usize>(
+    &self,
+    total_size: u32,
+    aabb: AABB,
+    dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
     chunk: &mut Self::Chunk,
   );
 
@@ -28,12 +42,19 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + 'static {
 
 // Box forwarders
 
-impl<C: ChunkSize, CM: LodChunkMesh, T: LodExtractor<C, Chunk=CM> + ?Sized> LodExtractor<C> for Box<T> {
+impl<C: ChunkSize, CM: LodChunkMesh, JD: DepKey, T: LodExtractor<C, Chunk=CM, JobDepKey=JD> + ?Sized> LodExtractor<C> for Box<T> {
   type Chunk = CM;
+  type JobDepKey = JD;
+
 
   #[inline]
-  fn extract<V: Volume>(&self, total_size: u32, aabb: AABB, volume: &V, chunk: &mut Self::Chunk) {
-    (**self).extract::<V>(total_size, aabb, volume, chunk)
+  fn create_jobs<V: Volume, const DS: usize>(&self, total_size: u32, aabb: AABB, volume: V, lod_chunk_mesh: Self::Chunk, job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>) -> Result<(), SendError<()>> {
+    (**self).create_jobs::<V, DS>(total_size, aabb, volume, lod_chunk_mesh, job_queue)
+  }
+
+  #[inline]
+  fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
+    (**self).run_job(total_size, aabb, dependency_outputs, chunk);
   }
 
   #[inline]

@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ops::Range;
 
 use ultraviolet::{Mat4, Vec3, Vec4};
@@ -10,6 +11,7 @@ use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::size::ChunkSize;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
+use crate::lod::octmap::LodJobOutput;
 
 // Trait
 
@@ -101,18 +103,20 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     self.draws.clear();
 
     let extractor = self.chunk_mesh_manager.get_extractor().clone();
-    let (transform, chunks) = self.chunk_mesh_manager.update(position);
+    let (transform, outputs) = self.chunk_mesh_manager.update(position);
 
-    for (aabb, chunk) in chunks {
-      let is_empty = chunk.is_empty();
-      if !is_empty {
-        extractor.update_render_data(chunk, &mut self.vertices, &mut self.indices, &mut self.draws);
-      }
-      if settings.debug_render_octree_nodes {
-        if is_empty {
-          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
-        } else {
-          debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+    for (aabb, output) in outputs {
+      if let LodJobOutput::Mesh(lod_chunk_mesh) = output.borrow() {
+        let is_empty = lod_chunk_mesh.is_empty();
+        if !is_empty {
+          extractor.update_render_data(lod_chunk_mesh, &mut self.vertices, &mut self.indices, &mut self.draws);
+        }
+        if settings.debug_render_octree_nodes {
+          if is_empty {
+            debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
+          } else {
+            debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+          }
         }
       }
     }
