@@ -30,15 +30,15 @@ pub enum JobQueueMessage<J, I, O> {
 
 // Job queue
 
-pub struct JobQueue<J, D, I, O> {
+pub struct JobQueue<J, D, I, O, const DS: usize = 2> {
   manager_thread_handle: Option<JoinHandle<()>>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  to_manager: Sender<manager::FromQueue<J, D, I>>,
+  to_manager: Sender<manager::FromQueue<J, D, I, DS>>,
   from_manager: Receiver<JobQueueMessage<J, I, O>>,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
-  pub fn new(worker_thread_count: usize, handler: impl Handler<J, D, I, O>) -> std::io::Result<Self> {
+impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, DS> {
+  pub fn new(worker_thread_count: usize, handler: impl Handler<J, D, I, O, DS>) -> std::io::Result<Self> {
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
     let (worker_to_manager_sender, worker_to_manager_receiver) = unbounded();
@@ -81,7 +81,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
   }
 
   #[inline]
-  pub fn add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D>, input: I) -> Result<(), SendError<()>> {
+  pub fn add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I) -> Result<(), SendError<()>> {
     self.to_manager.send(FromQueueMessage::AddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
   }
 
@@ -125,7 +125,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> JobQueue<J, D, I, O> {
   }
 }
 
-impl<J, D, I, O> Default for JobQueue<J, D, I, O> {
+impl<J, D, I, O, const DS: usize> Default for JobQueue<J, D, I, O, DS> {
   fn default() -> Self {
     let (empty_sender, _) = bounded(0);
     let empty_receiver = never();
@@ -141,16 +141,16 @@ impl<J, D, I, O> Default for JobQueue<J, D, I, O> {
 
 // Dependencies
 
-pub type Dependencies<J, D> = SmallVec<[(D, J); 4]>;
+pub type Dependencies<J, D, const DS: usize> = SmallVec<[(D, J); DS]>;
 
 
 // Handler
 
-pub type DependencyOutputs<D, O> = SmallVec<[(D, Arc<O>); 4]>;
+pub type DependencyOutputs<D, O, const DS: usize> = SmallVec<[(D, Arc<O>); DS]>;
 
-pub trait Handler<J, D, I, O>: Fn(J, DependencyOutputs<D, O>, I) -> O + Send + 'static + Clone {}
+pub trait Handler<J, D, I, O, const DS: usize>: Fn(J, DependencyOutputs<D, O, DS>, I) -> O + Send + 'static + Clone {}
 
-impl<T, J, D, I, O> Handler<J, D, I, O> for T where T: Fn(J, DependencyOutputs<D, O>, I) -> O + Send + 'static + Clone {}
+impl<T, J, D, I, O, const DS: usize> Handler<J, D, I, O, DS> for T where T: Fn(J, DependencyOutputs<D, O, DS>, I) -> O + Send + 'static + Clone {}
 
 
 // Trait aliases

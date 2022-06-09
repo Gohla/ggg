@@ -7,18 +7,18 @@ use tracing::trace;
 
 use crate::{DependencyOutputs, DepKey, Handler, In, JobKey, Out};
 
-pub(crate) type FromManager<J, D, I, O> = (NodeIndex, J, DependencyOutputs<D, O>, I);
+pub(crate) type FromManager<J, D, I, O, const DS: usize> = (NodeIndex, J, DependencyOutputs<D, O, DS>, I);
 
-pub(super) struct WorkerThread<J, D, O, I, H> {
-  from_manager: Receiver<FromManager<J, D, I, O>>,
+pub(super) struct WorkerThread<J, D, O, I, const DS: usize, H> {
+  from_manager: Receiver<FromManager<J, D, I, O, DS>>,
   to_manager: Sender<crate::manager::FromWorker<J, O>>,
   handler: H,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out, H: Handler<J, D, I, O>> WorkerThread<J, D, O, I, H> {
+impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize, H: Handler<J, D, I, O, DS>> WorkerThread<J, D, O, I, DS, H> {
   #[inline]
   pub(super) fn new(
-    from_manager: Receiver<FromManager<J, D, I, O>>,
+    from_manager: Receiver<FromManager<J, D, I, O, DS>>,
     to_manager: Sender<crate::manager::FromWorker<J, O>>,
     handler: H,
   ) -> Self {

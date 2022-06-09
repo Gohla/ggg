@@ -12,19 +12,19 @@ use crate::{Dependencies, DependencyOutputs, DepKey, In, JobKey, JobQueueMessage
 
 // Message from queue
 
-pub(crate) enum FromQueueMessage<J, D, I> {
-  AddJob(J, Dependencies<J, D>, I),
+pub(crate) enum FromQueueMessage<J, D, I, const DS: usize> {
+  AddJob(J, Dependencies<J, D, DS>, I),
   RemoveJobAndDependencies(J),
 }
 
 // Manager thread
 
-pub(crate) type FromQueue<J, D, I> = FromQueueMessage<J, D, I>;
+pub(crate) type FromQueue<J, D, I, const DS: usize> = FromQueueMessage<J, D, I, DS>;
 pub(crate) type FromWorker<J, O> = (NodeIndex, J, O);
 
-pub(super) struct ManagerThread<J, D, I, O> {
-  from_queue: Receiver<FromQueue<J, D, I>>,
-  to_worker: Sender<crate::worker::FromManager<J, D, I, O>>,
+pub(super) struct ManagerThread<J, D, I, O, const DS: usize> {
+  from_queue: Receiver<FromQueue<J, D, I, DS>>,
+  to_worker: Sender<crate::worker::FromManager<J, D, I, O, DS>>,
   from_worker: Receiver<FromWorker<J, O>>,
   to_queue: Sender<JobQueueMessage<J, I, O>>,
 
@@ -34,11 +34,11 @@ pub(super) struct ManagerThread<J, D, I, O> {
   running_jobs: u32,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
+impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I, O ,DS> {
   #[inline]
   pub(super) fn new(
-    from_queue: Receiver<FromQueue<J, D, I>>,
-    to_worker: Sender<crate::worker::FromManager<J, D, I, O>>,
+    from_queue: Receiver<FromQueue<J, D, I, DS>>,
+    to_worker: Sender<crate::worker::FromManager<J, D, I, O, DS>>,
     from_worker: Receiver<FromWorker<J, O>>,
     to_queue: Sender<JobQueueMessage<J, I, O>>,
   ) -> Self {
@@ -95,7 +95,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
 
 
   #[inline]
-  fn handle_message(&mut self, message: FromQueueMessage<J, D, I>, node_index_cache: &mut Vec<NodeIndex>) -> bool {
+  fn handle_message(&mut self, message: FromQueueMessage<J, D, I, DS>, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     use FromQueueMessage::*;
     match message {
       AddJob(job_key, dependencies, input) => self.add_job(job_key, dependencies, input, node_index_cache),
@@ -134,7 +134,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
 
   #[profiling::function]
   #[inline]
-  fn add_job(&mut self, job_key: J, dependencies: Dependencies<J, D>, input: I, node_index_cache: &mut Vec<NodeIndex>) -> bool {
+  fn add_job(&mut self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     if let Some(node_index) = self.job_key_to_node_index.get(&job_key) {
       panic!("Attempt to add job with key {:?} which already exists: {:?}", job_key, node_index);
       // Note: may allow this in the future by updating dependencies and re-executing the task if needed.
@@ -206,7 +206,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
         node_index_cache.clear();
         self.job_graph.neighbors_directed(node_index, Outgoing).collect_into(node_index_cache);
         if node_index_cache.iter().all(|n| self.job_graph[*n].is_completed()) {
-          let mut dependency_outputs = DependencyOutputs::<D, O>::new();
+          let mut dependency_outputs = DependencyOutputs::<D, O, DS>::new();
           for dependency_node_index in node_index_cache.drain(..) {
             let dependency_output = self.job_graph[dependency_node_index].clone_completed();
             let dependency_edge_index = self.job_graph.find_edge(node_index, dependency_node_index).unwrap(); // Unwrap OK: edge exists.
@@ -222,7 +222,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out> ManagerThread<J, D, I, O> {
 
   #[profiling::function]
   #[inline]
-  fn schedule_job(&mut self, node_index: NodeIndex, dependencies: DependencyOutputs<D, O>) -> bool {
+  fn schedule_job(&mut self, node_index: NodeIndex, dependencies: DependencyOutputs<D, O, DS>) -> bool {
     let job_status = &mut self.job_graph[node_index];
     trace!("Scheduling job {:?}", node_index);
     if let JobStatus::Pending(job_key, input) = std::mem::replace(job_status, JobStatus::Running(*job_status.get_job_key())) {

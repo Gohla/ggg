@@ -14,7 +14,7 @@ fn main() {
     .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
     .init();
 
-  let handler = move |key: i32, deps: DependencyOutputs<f32, f32>, input: f32| {
+  let handler = move |key: i32, deps: DependencyOutputs<f32, f32, 1>, input: f32| {
     trace!("Executing job {} with deps {:?}", key, deps);
     let (dep, dep_output) = if deps.len() > 0 {
       let dep = &deps[0];
