@@ -168,7 +168,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       Dfs::new(&self.job_graph, node_index).iter(&self.job_graph).collect_into(node_index_cache);
       for n in node_index_cache.drain(..) {
         if self.job_graph.neighbors_directed(n, Incoming).next().is_some() {
-          panic!("Attempt to remove job {:?} which has incoming dependencies", n);
+          panic!("Attempt to remove job {:?} with key {:?} which has incoming dependencies: {:?}", n, self.job_graph.node_weight(n).map(|s|s.get_job_key()), self.job_graph.neighbors_directed(n, Incoming).into_iter().collect::<Vec<_>>());
         }
         if let Some(job_status) = self.job_graph.remove_node(n) {
           let (job_key, send_success) = match job_status {
