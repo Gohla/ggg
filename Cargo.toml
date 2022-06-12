@@ -45,7 +45,7 @@ inherits = "dev"
 # Debug profile: full debug information, no optimisations. Low compile-time.
 [profile.dbg]
 inherits = "dev"
-opt-level = 0
+opt-level = 1
 debug = true
 debug-assertions = true
 overflow-checks = true

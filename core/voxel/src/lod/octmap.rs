@@ -138,7 +138,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
     let mut send_error = false;
     for removed in prev_keep.difference(&self.keep_aabbs) {
-      send_error |= self.job_queue.remove_job_and_dependencies(LodJobKey::Mesh(*removed)).is_err();
+      send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
       if send_error { break; }
       if let Some(lod_chunk_mesh) = self.lod_chunk_meshes.remove(removed) {
         self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);

@@ -37,7 +37,7 @@ fn main() {
     job_queue.add_job_with_dependencies(key, dependencies, key as f32 * 2.0).unwrap();
     prev = Some(key);
   }
-  job_queue.remove_job_and_dependencies(1023).unwrap();
+  job_queue.try_remove_job_and_orphaned_dependencies(1023).unwrap();
 
   let receiver = job_queue.get_message_receiver();
   let mut done = false;

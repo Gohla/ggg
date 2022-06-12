@@ -87,8 +87,8 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
   }
 
   #[inline]
-  pub fn remove_job_and_dependencies(&self, job_key: J) -> Result<(), SendError<()>> {
-    self.to_manager.send(FromQueueMessage::RemoveJobAndDependencies(job_key)).map_err(|_| SendError(()))
+  pub fn try_remove_job_and_orphaned_dependencies(&self, job_key: J) -> Result<(), SendError<()>> {
+    self.to_manager.send(FromQueueMessage::TryRemoveJobAndOrphanedDependencies(job_key)).map_err(|_| SendError(()))
   }
 
 

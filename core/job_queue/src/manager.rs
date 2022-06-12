@@ -14,7 +14,7 @@ use crate::{Dependencies, DependencyOutputs, DepKey, In, JobKey, JobQueueMessage
 
 pub(crate) enum FromQueueMessage<J, D, I, const DS: usize> {
   AddJob(J, Dependencies<J, D, DS>, I),
-  RemoveJobAndDependencies(J),
+  TryRemoveJobAndOrphanedDependencies(J),
 }
 
 // Manager thread
@@ -99,7 +99,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     use FromQueueMessage::*;
     match message {
       AddJob(job_key, dependencies, input) => self.add_job(job_key, dependencies, input, node_index_cache),
-      RemoveJobAndDependencies(job_key) => self.remove_job_and_dependencies(job_key, node_index_cache),
+      TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key, node_index_cache),
     }
   }
 
@@ -161,14 +161,14 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
 
   #[profiling::function]
   #[inline]
-  fn remove_job_and_dependencies(&mut self, job_key: J, node_index_cache: &mut Vec<NodeIndex>) -> bool {
-    if let Some(node_index) = self.job_key_to_node_index.remove(&job_key) {
-      trace!("Removing job {:?} with key {:?} along with dependencies", node_index, job_key);
+  fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: J, node_index_cache: &mut Vec<NodeIndex>) -> bool {
+    if let Some(node_index) = self.job_key_to_node_index.get(&job_key) {
+      trace!("Try to removing job {:?} with key {:?} along with orphaned dependencies", node_index, job_key);
       node_index_cache.clear();
-      Dfs::new(&self.job_graph, node_index).iter(&self.job_graph).collect_into(node_index_cache);
+      Dfs::new(&self.job_graph, *node_index).iter(&self.job_graph).collect_into(node_index_cache);
       for n in node_index_cache.drain(..) {
         if self.job_graph.neighbors_directed(n, Incoming).next().is_some() {
-          panic!("Attempt to remove job {:?} with key {:?} which has incoming dependencies: {:?}", n, self.job_graph.node_weight(n).map(|s|s.get_job_key()), self.job_graph.neighbors_directed(n, Incoming).into_iter().collect::<Vec<_>>());
+          continue; // Job has incoming dependencies, can't remove it.
         }
         if let Some(job_status) = self.job_graph.remove_node(n) {
           let (job_key, send_success) = match job_status {
