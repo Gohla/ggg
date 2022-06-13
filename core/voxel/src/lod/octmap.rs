@@ -95,7 +95,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       job_queue: JobQueue::new(settings.job_queue_worker_threads, move |job_key: LodJobKey, dependency_outputs, input: LodJobInput<V, E::Chunk>| {
         match (job_key, input) {
           (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
-            LodJobOutput::Sample(volume.sample_chunk(aabb.min(), aabb.step::<C>()))
+            LodJobOutput::Sample(volume.sample_chunk(aabb.min, aabb.step::<C>()))
           }
           (LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, mut lod_chunk_mesh }) => {
             extractor.run_job(total_size, aabb, dependency_outputs, &mut lod_chunk_mesh);
@@ -206,7 +206,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       lod_level >= self.max_lod_level.min(fixed_lod_level)
     } else {
-      lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size() as f32
+      lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size as f32
     }
   }
 
@@ -239,7 +239,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum LodJobKey {
   Sample(AABB),
   Mesh(AABB),

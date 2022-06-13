@@ -55,7 +55,7 @@ pub fn transvoxel_benchmark(c: &mut Criterion) {
   let aabb = AABB::from_size(size);
   let aabbs = aabb.subdivide();
   let lores_aabb = aabbs[4]; // 4th subdivision is at 0,0 with z as center.
-  let lores_min = lores_aabb.min();
+  let lores_min = lores_aabb.min;
   let lores_step = lores_aabb.step::<C16>();
 
   let side = TransitionSide::LoZ;

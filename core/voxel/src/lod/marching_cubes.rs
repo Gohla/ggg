@@ -57,7 +57,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   ) {
     let (_, output): &((), Arc<LodJobOutput<ChunkSamples<C>, Self::Chunk>>) = &dependency_outputs[0];
     if let LodJobOutput::Sample(chunk_samples) = output.borrow() {
-      self.marching_cubes.extract_chunk(aabb.min(), aabb.step::<C>(), chunk_samples, &mut chunk.regular);
+      self.marching_cubes.extract_chunk(aabb.min, aabb.step::<C>(), chunk_samples, &mut chunk.regular);
     }
   }
 

@@ -113,9 +113,9 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         }
         if settings.debug_render_octree_nodes {
           if is_empty {
-            debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_empty_color);
+            debug_renderer.draw_cube_lines(aabb.min.into(), aabb.size as f32, settings.debug_render_octree_node_empty_color);
           } else {
-            debug_renderer.draw_cube_lines(aabb.min().into(), aabb.size() as f32, settings.debug_render_octree_node_color);
+            debug_renderer.draw_cube_lines(aabb.min.into(), aabb.size as f32, settings.debug_render_octree_node_color);
           }
         }
       }

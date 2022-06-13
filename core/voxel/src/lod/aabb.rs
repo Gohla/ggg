@@ -1,12 +1,14 @@
+use std::cmp::Ordering;
+
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::size::ChunkSize;
 
 /// Square axis-aligned bounding box, always in powers of 2, and with size always larger than 1.
-#[derive(Default, Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct AABB {
-  min: UVec3,
-  size: u32,
+  pub min: UVec3,
+  pub size: u32,
 }
 
 impl AABB {
@@ -20,23 +22,17 @@ impl AABB {
   }
 
   #[inline(always)]
-  pub fn min(&self) -> UVec3 { self.min }
-
-  #[inline(always)]
-  pub fn size(&self) -> u32 { self.size }
-
-  #[inline(always)]
-  pub fn step<C: ChunkSize>(&self) -> u32 { self.size() / C::CELLS_IN_CHUNK_ROW }
+  pub fn step<C: ChunkSize>(&self) -> u32 { self.size / C::CELLS_IN_CHUNK_ROW }
 
   #[inline(always)]
   pub fn size_3d(&self) -> UVec3 { UVec3::new(self.size, self.size, self.size) }
 
   #[inline(always)]
-  pub fn max(&self) -> UVec3 { self.min + self.size_3d() }
+  pub fn max_point(&self) -> UVec3 { self.min + self.size_3d() }
 
   #[inline]
   pub fn extends(&self) -> u32 {
-    self.size() / 2 // Note: no rounding needed because AABB is always size of 2 and > 1.
+    self.size / 2 // Note: no rounding needed because AABB is always size of 2 and > 1.
   }
 
   #[inline]
@@ -81,5 +77,17 @@ impl AABB {
   #[inline(always)]
   pub fn new_unchecked(min: UVec3, size: u32) -> Self {
     Self { min, size }
+  }
+}
+
+impl PartialOrd<AABB> for AABB {
+  fn partial_cmp(&self, other: &AABB) -> Option<Ordering> {
+    (self.min.x, self.min.y, self.min.z, self.size).partial_cmp(&(other.min.x, other.min.y, other.min.z, other.size))
+  }
+}
+
+impl Ord for AABB {
+  fn cmp(&self, other: &Self) -> Ordering {
+    (self.min.x, self.min.y, self.min.z, self.size).cmp(&(other.min.x, other.min.y, other.min.z, other.size))
   }
 }

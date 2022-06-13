@@ -8,7 +8,7 @@ use job_queue::{Dependencies, DependencyOutputs, JobQueue};
 fn main() {
   profiling::register_thread!();
   dotenv::dotenv().ok();
-  let filter_layer = EnvFilter::from_default_env();
+  let filter_layer = EnvFilter::from_env("MAIN_LOG");
   tracing_subscriber::registry()
     .with(filter_layer)
     .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))

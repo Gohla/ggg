@@ -2,12 +2,11 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use flume::{Receiver, Sender};
-use petgraph::graph::NodeIndex;
 use tracing::trace;
 
 use crate::{DependencyOutputs, DepKey, Handler, In, JobKey, Out};
 
-pub(crate) type FromManager<J, D, I, O, const DS: usize> = (NodeIndex, J, DependencyOutputs<D, O, DS>, I);
+pub(crate) type FromManager<J, D, I, O, const DS: usize> = (J, DependencyOutputs<D, O, DS>, I);
 
 pub(super) struct WorkerThread<J, D, O, I, const DS: usize, H> {
   from_manager: Receiver<FromManager<J, D, I, O, DS>>,
@@ -41,10 +40,10 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize, H: Handler<J, D, I, O
     profiling::register_thread!();
     trace!("Started job queue worker thread {}", thread_index);
     loop {
-      if let Ok((node_index, job_key, dependencies, input)) = self.from_manager.recv() {
-        trace!("Running job {:?}", node_index);
+      if let Ok((job_key, dependencies, input)) = self.from_manager.recv() {
+        trace!("Running job {:?}", job_key);
         let output = (self.handler)(job_key, dependencies, input);
-        if self.to_manager.send((node_index, job_key, output)).is_err() {
+        if self.to_manager.send((job_key, output)).is_err() {
           break; // Manager has disconnected; stop this thread.
         }
       } else {

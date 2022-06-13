@@ -64,9 +64,9 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     lod_chunk_mesh: Self::Chunk,
     job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
   ) -> Result<(), SendError<()>> {
-    let min = aabb.min();
-    let max = aabb.max();
-    let size = aabb.size();
+    let min = aabb.min;
+    let max = aabb.max_point();
+    let size = aabb.size;
 
     // Gather dependencies to sample jobs.
     let mut dependencies = Dependencies::new();
@@ -187,8 +187,8 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     let chunk_samples = chunk_samples.unwrap();
     if let LodJobOutput::Sample(chunk_samples) = chunk_samples.borrow() {
       // Extract
-      let min = aabb.min();
-      let max = aabb.max();
+      let min = aabb.min;
+      let max = aabb.max_point();
       let step = aabb.step::<C>();
       let min_x = { // TODO: reduce code duplication?
         let mut min = min;

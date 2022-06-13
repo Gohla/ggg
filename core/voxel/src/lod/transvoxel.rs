@@ -70,8 +70,8 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
     let (_, output): &((), Arc<LodJobOutput<ChunkSamples<C>, Self::Chunk>>) = &dependency_outputs[0];
     if let LodJobOutput::Sample(chunk_samples) = output.borrow() {
-      let lores_min = aabb.min();
-      let lores_max = aabb.max();
+      let lores_min = aabb.min;
+      let lores_max = aabb.max_point();
       let lores_step = aabb.step::<C>();
       if self.settings.extract_regular_chunks {
         self.marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
@@ -155,7 +155,7 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
       &hires_chunk_mins,
       &hires_chunk_samples,
       hires_step,
-      aabb.min(),
+      aabb.min,
       lores_step,
       chunk_vertices,
     );

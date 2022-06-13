@@ -20,7 +20,7 @@ impl TransitionSide {
   pub fn subdivided_face_of_side_minimums(&self, aabb: AABB) -> [UVec3; 4] {
     match self {
       TransitionSide::LoX => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
         let extends = aabb.extends();
         let x = min.x - extends;
@@ -32,9 +32,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiX => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
-        let x = min.x + aabb.size();
+        let x = min.x + aabb.size;
         [
           UVec3::new(x, min.y, min.z),
           UVec3::new(x, min.y, cen.z),
@@ -43,7 +43,7 @@ impl TransitionSide {
         ]
       }
       TransitionSide::LoY => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
         let extends = aabb.extends();
         let y = min.y - extends;
@@ -55,9 +55,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiY => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
-        let y = min.y + aabb.size();
+        let y = min.y + aabb.size;
         [
           UVec3::new(min.x, y, min.z),
           UVec3::new(cen.x, y, min.z),
@@ -66,7 +66,7 @@ impl TransitionSide {
         ]
       }
       TransitionSide::LoZ => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
         let extends = aabb.extends();
         let z = min.z - extends;
@@ -78,9 +78,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiZ => {
-        let min = aabb.min();
+        let min = aabb.min;
         let cen = aabb.center();
-        let z = min.z + aabb.size();
+        let z = min.z + aabb.size;
         [
           UVec3::new(min.x, min.y, z),
           UVec3::new(cen.x, min.y, z),
