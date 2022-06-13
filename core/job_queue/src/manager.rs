@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
-use crossbeam_channel::{Receiver, select, Sender};
+use flume::{Receiver, Sender};
 use petgraph::prelude::*;
 use petgraph::visit::Walker;
 use rustc_hash::FxHashMap;
@@ -68,34 +68,40 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     let mut node_index_cache_1 = Vec::new();
     let mut node_index_cache_2 = Vec::new();
     loop {
-      select! {
-        recv(self.from_queue) -> message => {
-          if let Ok(message) = message {
-            if !self.handle_message(message, &mut node_index_cache_2) {
-              break; // Job queue or all workers have disconnected; stop this thread.
-            }
-          } else {
-            break; // Job queue was dropped; stop this thread.
-          }
-
-        },
-        recv(self.from_worker) -> result => {
-          if let Ok((node_index, job_key, output)) = result {
-            if !self.handle_completion(node_index, job_key, output, &mut node_index_cache_1, &mut node_index_cache_2) {
-              break; // Job queue or all workers have disconnected; stop this thread.
-            } 
-          } else {
-            break; // All workers have disconnected; stop this thread.
-          }
-        },
-      }
+      let r#continue = self.receive(&mut node_index_cache_1, &mut node_index_cache_2);
+      if !r#continue { break; }
     }
     trace!("Stopped job queue manager thread");
   }
 
+  #[inline]
+  fn receive(&mut self, node_index_cache_1: &mut Vec<NodeIndex>, node_index_cache_2: &mut Vec<NodeIndex>) -> bool {
+    let selected = flume::Selector::new()
+      .recv(&self.from_queue, |message| {
+        if let Ok(message) = message {
+          Some(SelectedReceiver::FromQueue(message))
+        } else {
+          None // Job queue was dropped; stop this thread.
+        }
+      })
+      .recv(&self.from_worker, |result| {
+        if let Ok(result) = result {
+          Some(SelectedReceiver::FromWorker(result))
+        } else {
+          None // All workers have disconnected; stop this thread.
+        }
+      })
+      .wait();
+    match selected {
+      Some(SelectedReceiver::FromQueue(message)) => self.handle_from_queue(message, node_index_cache_1),
+      Some(SelectedReceiver::FromWorker((node_index, job_key, output))) => self.handle_from_worker(node_index, job_key, output, node_index_cache_1, node_index_cache_2),
+      None => false,
+    }
+  }
+
 
   #[inline]
-  fn handle_message(&mut self, message: FromQueueMessage<J, D, I, DS>, node_index_cache: &mut Vec<NodeIndex>) -> bool {
+  fn handle_from_queue(&mut self, message: FromQueueMessage<J, D, I, DS>, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     use FromQueueMessage::*;
     match message {
       AddJob(job_key, dependencies, input) => self.add_job(job_key, dependencies, input, node_index_cache),
@@ -105,7 +111,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
 
   #[profiling::function]
   #[inline]
-  fn handle_completion(&mut self, node_index: NodeIndex, job_key: J, output: O, node_index_cache_1: &mut Vec<NodeIndex>, node_index_cache_2: &mut Vec<NodeIndex>) -> bool {
+  fn handle_from_worker(&mut self, node_index: NodeIndex, job_key: J, output: O, node_index_cache_1: &mut Vec<NodeIndex>, node_index_cache_2: &mut Vec<NodeIndex>) -> bool {
     use JobStatus::*;
     match self.job_graph.node_weight(node_index) {
       Some(Pending(_, _)) => return true, // Job was removed, added, and not scheduled while it was running -> don't complete it.
@@ -138,6 +144,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     if let Some(_node_index) = self.job_key_to_node_index.get(&job_key) {
       // Do nothing.
       // TODO: should check if job has different inputs or dependencies and act accordingly.
+      true
     } else {
       let node_index = self.job_graph.add_node(JobStatus::Pending(job_key, input));
       self.pending_jobs += 1;
@@ -147,6 +154,9 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       for (dependency, dep_job_key) in dependencies.into_iter() {
         if let Some(dependency_node_index) = self.job_key_to_node_index.get(&dep_job_key) {
           let dependency_node_index = *dependency_node_index;
+          if !self.job_graph.contains_node(dependency_node_index) {
+            panic!("Attempt to add dependency to job {:?} which has not been added", dependency_node_index);
+          }
           self.job_graph.add_edge(node_index, dependency_node_index, dependency);
           trace!("Added dependency from job {:?} to {:?}", node_index, dependency_node_index);
         } else {
@@ -154,45 +164,43 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
         }
       }
       // Try to schedule job.
-      return self.try_schedule_job(node_index, node_index_cache);
+      self.try_schedule_job(node_index, node_index_cache)
     }
-    true
   }
 
   #[profiling::function]
   #[inline]
   fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: J, node_index_cache: &mut Vec<NodeIndex>) -> bool {
+    node_index_cache.clear();
     if let Some(node_index) = self.job_key_to_node_index.get(&job_key) {
       trace!("Try to removing job {:?} with key {:?} along with orphaned dependencies", node_index, job_key);
-      node_index_cache.clear();
-      Dfs::new(&self.job_graph, *node_index).iter(&self.job_graph).collect_into(node_index_cache);
-      for n in node_index_cache.drain(..) {
-        if self.job_graph.neighbors_directed(n, Incoming).next().is_some() {
-          continue; // Job has incoming dependencies, can't remove it.
-        }
-        if let Some(job_status) = self.job_graph.remove_node(n) {
-          let (job_key, send_success) = match job_status {
-            JobStatus::Pending(job_key, input) => {
-              self.pending_jobs -= 1;
-              let send_success = self.to_queue.send(JobQueueMessage::PendingJobRemoved(job_key, input)).is_ok();
-              (job_key, send_success)
-            }
-            JobStatus::Running(job_key) => {
-              self.running_jobs -= 1;
-              let send_success = self.to_queue.send(JobQueueMessage::RunningJobRemoved(job_key)).is_ok();
-              (job_key, send_success)
-            }
-            JobStatus::Completed(job_key, output) => {
-              let send_success = self.to_queue.send(JobQueueMessage::CompletedJobRemoved(job_key, output)).is_ok();
-              (job_key, send_success)
-            }
-          };
-          if !send_success { return false; }
-          self.job_key_to_node_index.remove(&job_key);
-          if !self.send_queue_empty_if_applicable() { return false; }
-        }
-        trace!("Removed job {:?}", n);
+      Bfs::new(&self.job_graph, *node_index).iter(&self.job_graph).collect_into(node_index_cache);
+    }
+    for n in node_index_cache.drain(..) {
+      if self.job_graph.neighbors_directed(n, Incoming).next().is_some() {
+        continue; // Job has incoming dependencies, can't remove it.
       }
+      let job_status = self.job_graph.remove_node(n).unwrap(); // Unwrap OK: node must exist.
+      let (job_key, send_success) = match job_status {
+        JobStatus::Pending(job_key, input) => {
+          self.pending_jobs -= 1;
+          let send_success = self.to_queue.send(JobQueueMessage::PendingJobRemoved(job_key, input)).is_ok();
+          (job_key, send_success)
+        }
+        JobStatus::Running(job_key) => {
+          self.running_jobs -= 1;
+          let send_success = self.to_queue.send(JobQueueMessage::RunningJobRemoved(job_key)).is_ok();
+          (job_key, send_success)
+        }
+        JobStatus::Completed(job_key, output) => {
+          let send_success = self.to_queue.send(JobQueueMessage::CompletedJobRemoved(job_key, output)).is_ok();
+          (job_key, send_success)
+        }
+      };
+      self.job_key_to_node_index.remove(&job_key);
+      trace!("Removed job {:?} with key {:?}", n, job_key);
+      if !send_success { return false; }
+      if !self.send_queue_empty_if_applicable() { return false; }
     }
     true
   }
@@ -202,20 +210,18 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[inline]
   fn try_schedule_job(&mut self, node_index: NodeIndex, node_index_cache: &mut Vec<NodeIndex>) -> bool {
     trace!("Try to schedule job {:?}", node_index);
-    if let Some(job_status) = self.job_graph.node_weight(node_index) {
-      if let JobStatus::Pending(_, _) = job_status {
-        node_index_cache.clear();
-        self.job_graph.neighbors_directed(node_index, Outgoing).collect_into(node_index_cache);
-        if node_index_cache.iter().all(|n| self.job_graph[*n].is_completed()) {
-          let mut dependency_outputs = DependencyOutputs::<D, O, DS>::new();
-          for dependency_node_index in node_index_cache.drain(..) {
-            let dependency_output = self.job_graph[dependency_node_index].clone_completed();
-            let dependency_edge_index = self.job_graph.find_edge(node_index, dependency_node_index).unwrap(); // Unwrap OK: edge exists.
-            let dependency_edge = self.job_graph[dependency_edge_index];
-            dependency_outputs.push((dependency_edge, dependency_output));
-          }
-          return self.schedule_job(node_index, dependency_outputs);
+    if let Some(JobStatus::Pending(_, _)) = self.job_graph.node_weight(node_index) {
+      node_index_cache.clear();
+      self.job_graph.neighbors_directed(node_index, Outgoing).collect_into(node_index_cache);
+      if node_index_cache.iter().all(|n| self.job_graph[*n].is_completed()) {
+        let mut dependency_outputs = DependencyOutputs::<D, O, DS>::new();
+        for dependency_node_index in node_index_cache.drain(..) {
+          let dependency_output = self.job_graph[dependency_node_index].clone_completed();
+          let dependency_edge_index = self.job_graph.find_edge(node_index, dependency_node_index).unwrap(); // Unwrap OK: edge exists.
+          let dependency_edge = self.job_graph[dependency_edge_index];
+          dependency_outputs.push((dependency_edge, dependency_output));
         }
+        return self.schedule_job(node_index, dependency_outputs);
       }
     }
     true
@@ -288,4 +294,11 @@ impl<J, I, O> JobStatus<J, I, O> {
       _ => panic!("Attempt to call `clone_completed` on non-`Completed` job status")
     }
   }
+}
+
+// Selected receiver
+
+enum SelectedReceiver<J, D, I, O, const DS: usize> {
+  FromQueue(FromQueue<J, D, I, DS>),
+  FromWorker(FromWorker<J, O>),
 }

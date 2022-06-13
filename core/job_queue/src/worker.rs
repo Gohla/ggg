@@ -1,7 +1,7 @@
 use std::thread;
 use std::thread::JoinHandle;
 
-use crossbeam_channel::{Receiver, Sender};
+use flume::{Receiver, Sender};
 use petgraph::graph::NodeIndex;
 use tracing::trace;
 

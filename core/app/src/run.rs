@@ -39,24 +39,41 @@ pub enum CreateError {
 #[profiling::function]
 pub async fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
   profiling::register_thread!();
-  
+
   #[cfg(target_arch = "wasm32")] {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
   }
 
   dotenv::dotenv().ok();
 
-  let filter_layer = EnvFilter::from_default_env();
-  let layered = tracing_subscriber::registry()
-    .with(filter_layer)
-    ;
-  #[cfg(not(target_arch = "wasm32"))] {
-    layered
-      .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-      .init();
-  }
+  let directories = Directories::new(&options.name);
+
+  let main_filter_layer = EnvFilter::from_env("MAIN_LOG");
+  let layered = tracing_subscriber::registry();
+
+  #[cfg(not(target_arch = "wasm32"))] let _guard = {
+    let layered = layered.with(
+      tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_filter(main_filter_layer)
+    );
+    let log_path = directories.log_dir().join("log.txt");
+    std::fs::create_dir_all(directories.log_dir()).unwrap();
+    let log_file = std::fs::File::create(log_path).unwrap();
+    let writer = std::io::BufWriter::new(log_file);
+    let (non_blocking, guard) = tracing_appender::non_blocking(writer);
+    let layered = layered.with(
+      tracing_subscriber::fmt::layer()
+        .with_writer(non_blocking)
+        .with_ansi(false)
+        .with_filter(EnvFilter::from_env("FILE_LOG"))
+    );
+    layered.init();
+    guard
+  };
   #[cfg(target_arch = "wasm32")] {
     layered
+      .with(main_filter_layer)
       .with(tracing_wasm::WASMLayer::new(tracing_wasm::WASMLayerConfig::default()))
       .init();
   }
@@ -71,7 +88,6 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
     let input_sys = OsInputSys::new(input_event_rx);
     (event_sys, event_rx, input_sys)
   };
-  let directories = Directories::new(&options.name);
   let os = Os { window, directories };
 
   let instance = Instance::new(options.graphics_backends);
@@ -111,7 +127,7 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
 
   let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
   let gui = Gui::new(&device, surface.get_texture_format(), Some(egui_memory));
-  
+
   let sample_count = options.sample_count;
   let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {
     TextureBuilder::new_depth(screen_size.physical, format)
@@ -266,7 +282,7 @@ fn run_app_cycle<A: Application>(
   minimized: &mut bool,
 ) -> bool {
   profiling::finish_frame!();
-  
+
   // Timing
   let frame_time = frame_timer.frame();
   timing_stats.frame(frame_time);

@@ -21,6 +21,9 @@ impl Directories {
   pub fn cache_dir(&self) -> &Path { self.project_dirs.cache_dir() }
 
   #[inline]
+  pub fn log_dir(&self) -> &Path { self.project_dirs.data_local_dir() }
+
+  #[inline]
   pub fn config_dir(&self) -> &Path { self.project_dirs.config_dir() }
 
   #[inline]

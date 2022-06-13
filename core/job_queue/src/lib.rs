@@ -5,8 +5,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
-use crossbeam_channel::{bounded, never, Receiver, Sender, unbounded};
-pub use crossbeam_channel::SendError;
+use flume::{bounded, Receiver, Sender, unbounded};
+pub use flume::SendError;
 use smallvec::SmallVec;
 
 use manager::ManagerThread;
@@ -105,7 +105,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
     // Replace sender and receiver with new ones that do nothing, dropping the replaced ones.
     let (empty_sender, _) = bounded(0);
     drop(std::mem::replace(&mut self.to_manager, empty_sender));
-    let empty_receiver = never();
+    let (_, empty_receiver) = bounded(0);
     drop(std::mem::replace(&mut self.from_manager, empty_receiver));
   }
 
@@ -129,7 +129,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
 impl<J, D, I, O, const DS: usize> Default for JobQueue<J, D, I, O, DS> {
   fn default() -> Self {
     let (empty_sender, _) = bounded(0);
-    let empty_receiver = never();
+    let (_, empty_receiver) = bounded(0);
     Self {
       manager_thread_handle: None,
       worker_thread_handles: Vec::new(),
@@ -161,9 +161,9 @@ pub trait JobKey: Send + 'static + Copy + Eq + Hash + Debug {}
 impl<T> JobKey for T where T: Send + 'static + Copy + Eq + Hash + Debug {}
 
 
-pub trait DepKey: Send + 'static + Copy {}
+pub trait DepKey: Send + 'static + Copy + Debug {}
 
-impl<T> DepKey for T where T: Send + 'static + Copy {}
+impl<T> DepKey for T where T: Send + 'static + Copy + Debug {}
 
 
 pub trait In: Send + 'static {}

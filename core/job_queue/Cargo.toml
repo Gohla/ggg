@@ -6,7 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-crossbeam-channel = "0.5"
+flume = "0.10"
 petgraph = { version = "0.6", default-features = false, features = ["stable_graph"] }
 smallvec = { version = "1", features = ["const_generics"] }
 rustc-hash = "1"

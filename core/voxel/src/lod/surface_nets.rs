@@ -72,7 +72,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     let mut dependencies = Dependencies::new();
     // Regular
     {
-      let key = LodJobKey::Sample(AABB::new_unchecked(min, size));
+      let key = LodJobKey::Sample(aabb);
       job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Regular, key));
     }
@@ -364,7 +364,7 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
 
 // Sample kind
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum SampleKind {
   Regular,
   X,

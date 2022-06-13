@@ -132,12 +132,13 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     }
 
     self.active_aabbs.clear();
-    let prev_keep: FxHashSet<_> = self.keep_aabbs.drain().collect();
+    let prev_keep: FxHashSet<_> = self.keep_aabbs.drain().collect(); // OPTO: clear and collect into existing hashset.
 
     self.update_root_node(position);
 
     let mut send_error = false;
     for removed in prev_keep.difference(&self.keep_aabbs) {
+      self.requested_aabbs.remove(&removed);
       send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
       if send_error { break; }
       if let Some(lod_chunk_mesh) = self.lod_chunk_meshes.remove(removed) {

@@ -21,6 +21,7 @@ dotenv = "0.15"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+tracing-appender = "0.2"
 tracing-log = "0.1"
 profiling = "1"
 tracy-client = { version = "0.13", optional = true }
