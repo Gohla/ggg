@@ -5,7 +5,7 @@ use lru::LruCache;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ultraviolet::{Isometry3, Vec3};
 
-use job_queue::{In, JobQueue, JobQueueMessage, Out};
+use job_queue::{In, JobQueue, JobQueueMessage};
 
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
@@ -62,12 +62,12 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
 
   active_aabbs: FxHashSet<AABB>,
   keep_aabbs: FxHashSet<AABB>,
-  lod_chunk_meshes: FxHashMap<AABB, Arc<LodJobOutput<ChunkSamples<C>, E::Chunk>>>,
+  lod_chunk_meshes: FxHashMap<AABB, Arc<E::Chunk>>,
 
   requested_aabbs: FxHashSet<AABB>,
   job_queue: JobQueue<LodJobKey, E::JobDepKey, LodJobInput<V, E::Chunk>, LodJobOutput<ChunkSamples<C>, E::Chunk>, 6>,
 
-  chunk_mesh_cache: LruCache<AABB, Arc<LodJobOutput<ChunkSamples<C>, E::Chunk>>>,
+  chunk_mesh_cache: LruCache<AABB, Arc<E::Chunk>>,
 }
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
@@ -95,11 +95,11 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       job_queue: JobQueue::new(settings.job_queue_worker_threads, move |job_key: LodJobKey, dependency_outputs, input: LodJobInput<V, E::Chunk>| {
         match (job_key, input) {
           (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
-            LodJobOutput::Sample(volume.sample_chunk(aabb.min, aabb.step::<C>()))
+            LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.min, aabb.step::<C>())))
           }
           (LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, mut lod_chunk_mesh }) => {
             extractor.run_job(total_size, aabb, dependency_outputs, &mut lod_chunk_mesh);
-            LodJobOutput::Mesh(lod_chunk_mesh)
+            LodJobOutput::Mesh(Arc::new(lod_chunk_mesh))
           }
           _ => panic!("BAD")
         }
@@ -113,15 +113,15 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
 
   #[profiling::function]
-  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<LodJobOutput<ChunkSamples<C>, E::Chunk>>)>) {
+  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
     let position = self.transform_inversed.transform_vec(position);
 
     for message in self.job_queue.get_message_receiver().try_iter() {
       match message {
         JobQueueMessage::JobCompleted(job_key, output) => {
-          match job_key {
-            LodJobKey::Mesh(aabb) => {
-              self.lod_chunk_meshes.insert(aabb, output.clone());
+          match (job_key, output) {
+            (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) => {
+              self.lod_chunk_meshes.insert(aabb, arc);
               self.requested_aabbs.remove(&aabb);
             }
             _ => {}
@@ -239,6 +239,9 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 }
 
+
+// Job types
+
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum LodJobKey {
   Sample(AABB),
@@ -260,12 +263,23 @@ pub enum LodJobInput<V: In, CM: In> {
   Mesh { total_size: u32, lod_chunk_mesh: CM },
 }
 
-pub enum LodJobOutput<CS: Out, CM: Out> {
-  Sample(CS),
-  Mesh(CM),
+pub enum LodJobOutput<CS, CM> {
+  Sample(Arc<CS>),
+  Mesh(Arc<CM>),
 }
 
-// Trait implementation
+impl<CS, CM> Clone for LodJobOutput<CS, CM> {
+  #[inline]
+  fn clone(&self) -> Self {
+    match self {
+      LodJobOutput::Sample(arc) => LodJobOutput::Sample(arc.clone()),
+      LodJobOutput::Mesh(arc) => LodJobOutput::Mesh(arc.clone()),
+    }
+  }
+}
+
+
+// LodChunkMeshManager trait implementation
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for LodOctmap<V, C, E> {
   type Extractor = E;
@@ -275,7 +289,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
   }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<LodJobOutput<ChunkSamples<C>, E::Chunk>>)> + '_>) {
+  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<E::Chunk>)> + '_>) {
     let (transform, chunks) = self.update(position);
     (transform, Box::new(chunks))
   }

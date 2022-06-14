@@ -1,6 +1,3 @@
-use std::borrow::Borrow;
-use std::sync::Arc;
-
 use job_queue::{Dependencies, DependencyOutputs, JobQueue, SendError};
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
@@ -43,7 +40,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   ) -> Result<(), SendError<()>> {
     let sample_key = LodJobKey::Sample(aabb);
     job_queue.try_add_job(sample_key, LodJobInput::Sample(volume))?;
-    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), Dependencies::from_elem(((), sample_key), 1), LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, lod_chunk_mesh }, Dependencies::from_elem(((), sample_key), 1))?;
     Ok(())
   }
 
@@ -55,8 +52,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
     dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
     chunk: &mut Self::Chunk,
   ) {
-    let (_, output): &((), Arc<LodJobOutput<ChunkSamples<C>, Self::Chunk>>) = &dependency_outputs[0];
-    if let LodJobOutput::Sample(chunk_samples) = output.borrow() {
+    if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
       self.marching_cubes.extract_chunk(aabb.min, aabb.step::<C>(), chunk_samples, &mut chunk.regular);
     }
   }

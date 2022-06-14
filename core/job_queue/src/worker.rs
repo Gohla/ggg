@@ -36,7 +36,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize, H: Handler<J, D, I, O
   }
 
   #[inline]
-  fn run(self, thread_index: usize) {
+  fn run(mut self, thread_index: usize) {
     profiling::register_thread!();
     trace!("Started job queue worker thread {}", thread_index);
     loop {

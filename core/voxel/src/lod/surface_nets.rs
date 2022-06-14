@@ -149,7 +149,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       dependencies.push((SampleKind::XZ, key));
     }
 
-    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), dependencies, LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, lod_chunk_mesh }, dependencies)?;
 
     Ok(())
   }

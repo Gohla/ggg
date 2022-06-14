@@ -2,7 +2,6 @@
 
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use flume::{bounded, Receiver, Sender, unbounded};
@@ -21,10 +20,10 @@ mod manager;
 // Message from manager
 
 pub enum JobQueueMessage<J, I, O> {
-  JobCompleted(J, Arc<O>),
+  JobCompleted(J, O),
   PendingJobRemoved(J, I),
   RunningJobRemoved(J),
-  CompletedJobRemoved(J, Arc<O>),
+  CompletedJobRemoved(J, O),
   QueueEmpty,
 }
 
@@ -78,11 +77,11 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
 
   #[inline]
   pub fn try_add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
-    self.try_add_job_with_dependencies(job_key, Dependencies::default(), input)
+    self.try_add_job_with_dependencies(job_key, input, Dependencies::default())
   }
 
   #[inline]
-  pub fn try_add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I) -> Result<(), SendError<()>> {
+  pub fn try_add_job_with_dependencies(&self, job_key: J, input: I, dependencies: Dependencies<J, D, DS>) -> Result<(), SendError<()>> {
     self.to_manager.send(FromQueueMessage::TryAddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
   }
 
@@ -147,11 +146,11 @@ pub type Dependencies<J, D, const DS: usize> = SmallVec<[(D, J); DS]>;
 
 // Handler
 
-pub type DependencyOutputs<D, O, const DS: usize> = SmallVec<[(D, Arc<O>); DS]>;
+pub type DependencyOutputs<D, O, const DS: usize> = SmallVec<[(D, O); DS]>;
 
-pub trait Handler<J, D, I, O, const DS: usize>: Fn(J, DependencyOutputs<D, O, DS>, I) -> O + Send + 'static + Clone {}
+pub trait Handler<J, D, I, O, const DS: usize>: FnMut(J, DependencyOutputs<D, O, DS>, I) -> O + Clone + Send + 'static {}
 
-impl<T, J, D, I, O, const DS: usize> Handler<J, D, I, O, DS> for T where T: Fn(J, DependencyOutputs<D, O, DS>, I) -> O + Send + 'static + Clone {}
+impl<T, J, D, I, O, const DS: usize> Handler<J, D, I, O, DS> for T where T: FnMut(J, DependencyOutputs<D, O, DS>, I) -> O + Clone + Send + 'static {}
 
 
 // Trait aliases
@@ -161,9 +160,9 @@ pub trait JobKey: Send + 'static + Copy + Eq + Ord + Hash + Debug {}
 impl<T> JobKey for T where T: Send + 'static + Copy + Eq + Ord + Hash + Debug {}
 
 
-pub trait DepKey: Send + 'static + Copy + Debug {}
+pub trait DepKey: Send + Copy + Debug + 'static {}
 
-impl<T> DepKey for T where T: Send + 'static + Copy + Debug {}
+impl<T> DepKey for T where T: Send + Copy + Debug + 'static + {}
 
 
 pub trait In: Send + 'static {}
@@ -171,7 +170,7 @@ pub trait In: Send + 'static {}
 impl<T> In for T where T: Send + 'static {}
 
 
-pub trait Out: Send + Sync + 'static {}
+pub trait Out: Send + Clone + 'static {}
 
-impl<T> Out for T where T: Send + Sync + 'static {}
+impl<T> Out for T where T: Send + Clone + 'static {}
 

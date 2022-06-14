@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -108,7 +107,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key, job_key_cache),
     }
   }
-  
+
   #[inline]
   fn handle_from_worker(&mut self, job_key: J, output: O, job_key_cache_1: &mut Vec<J>, job_key_cache_2: &mut Vec<J>) -> bool {
     use JobStatus::*;
@@ -204,7 +203,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       if job_key_cache.iter().all(|j| self.job_key_to_job_status[j].is_completed()) {
         let mut dependency_outputs = DependencyOutputs::<D, O, DS>::new();
         for dependency_job_key in job_key_cache.drain(..) {
-          let dependency_output = self.job_key_to_job_status[&dependency_job_key].clone_completed();
+          let dependency_output = self.job_key_to_job_status[&dependency_job_key].clone_output_completed();
           let dependency_edge = self.job_graph[(job_key, dependency_job_key)];
           dependency_outputs.push((dependency_edge, dependency_output));
         }
@@ -229,9 +228,8 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[inline]
   fn complete_job(&mut self, job_key: J, output: O) -> bool {
     trace!("Completing job {:?}", job_key);
-    let wrapped = Arc::new(output);
-    *self.job_key_to_job_status.get_mut(&job_key).unwrap() = JobStatus::Completed(wrapped.clone()); // Unwrap OK: job must exist when complete_job is called.
-    if self.to_queue.send(JobQueueMessage::JobCompleted(job_key, wrapped)).is_err() { return false; }
+    *self.job_key_to_job_status.get_mut(&job_key).unwrap() = JobStatus::Completed(output.clone()); // Unwrap OK: job must exist when complete_job is called.
+    if self.to_queue.send(JobQueueMessage::JobCompleted(job_key, output)).is_err() { return false; }
     self.decrement_running_jobs_and_send_queue_empty_if_applicable()
   }
 
@@ -269,10 +267,10 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
 pub(super) enum JobStatus<I, O> {
   Pending(I),
   Running,
-  Completed(Arc<O>),
+  Completed(O),
 }
 
-impl<I, O> JobStatus<I, O> {
+impl<I, O: Out> JobStatus<I, O> {
   #[inline]
   fn is_completed(&self) -> bool {
     match self {
@@ -281,10 +279,10 @@ impl<I, O> JobStatus<I, O> {
     }
   }
   #[inline]
-  fn clone_completed(&self) -> Arc<O> {
+  fn clone_output_completed(&self) -> O {
     match self {
-      Self::Completed(arc) => arc.clone(),
-      _ => panic!("Attempt to call `clone_completed` on non-`Completed` job status")
+      Self::Completed(output) => output.clone(),
+      _ => panic!("Attempt to call `clone_output_completed` on non-`Completed` job status")
     }
   }
 }

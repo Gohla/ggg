@@ -13,18 +13,17 @@ fn main() {
     .with(filter_layer)
     .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
     .init();
-
-  let handler = move |key: i32, deps: DependencyOutputs<f32, f32, 1>, input: f32| {
+  
+  let job_queue = JobQueue::new(8, move |key: i32, deps: DependencyOutputs<f32, f32, 1>, input: f32| {
     trace!("Executing job {} with deps {:?}", key, deps);
     let (dep, dep_output) = if deps.len() > 0 {
       let dep = &deps[0];
-      (dep.0, *dep.1)
+      (dep.0, dep.1)
     } else {
       (1.0, 1.0)
     };
     key as f32 * input * (1.0 / dep_output) * dep
-  };
-  let job_queue = JobQueue::new(8, handler).unwrap();
+  }).unwrap();
 
   let mut prev = None;
   for key in 1i32..1024 {
@@ -34,7 +33,7 @@ fn main() {
       Dependencies::default()
     };
     trace!("Adding job with key {} and dependencies {:?}", key, dependencies);
-    job_queue.try_add_job_with_dependencies(key, dependencies, key as f32 * 2.0).unwrap();
+    job_queue.try_add_job_with_dependencies(key, key as f32 * 2.0, dependencies).unwrap();
     prev = Some(key);
   }
   job_queue.try_remove_job_and_orphaned_dependencies(1023).unwrap();
