@@ -77,13 +77,13 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
 
 
   #[inline]
-  pub fn add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
-    self.add_job_with_dependencies(job_key, Dependencies::default(), input)
+  pub fn try_add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
+    self.try_add_job_with_dependencies(job_key, Dependencies::default(), input)
   }
 
   #[inline]
-  pub fn add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I) -> Result<(), SendError<()>> {
-    self.to_manager.send(FromQueueMessage::AddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
+  pub fn try_add_job_with_dependencies(&self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I) -> Result<(), SendError<()>> {
+    self.to_manager.send(FromQueueMessage::TryAddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
   }
 
   #[inline]

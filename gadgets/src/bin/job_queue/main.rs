@@ -34,7 +34,7 @@ fn main() {
       Dependencies::default()
     };
     trace!("Adding job with key {} and dependencies {:?}", key, dependencies);
-    job_queue.add_job_with_dependencies(key, dependencies, key as f32 * 2.0).unwrap();
+    job_queue.try_add_job_with_dependencies(key, dependencies, key as f32 * 2.0).unwrap();
     prev = Some(key);
   }
   job_queue.try_remove_job_and_orphaned_dependencies(1023).unwrap();

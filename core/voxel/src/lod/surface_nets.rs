@@ -73,7 +73,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     // Regular
     {
       let key = LodJobKey::Sample(aabb);
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Regular, key));
     }
     // Positive X
@@ -85,7 +85,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_x, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::X, key));
     }
     // Positive Y
@@ -97,7 +97,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_y, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Y, key));
     }
     // Positive Z
@@ -109,7 +109,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_z, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::Z, key));
     }
     // Positive XY
@@ -121,7 +121,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_xy, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::XY, key));
     }
     // Positive YZ
@@ -133,7 +133,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_yz, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::YZ, key));
     }
     // Positive XZ
@@ -145,11 +145,11 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         min
       };
       let key = LodJobKey::Sample(AABB::new_unchecked(min_xz, size));
-      job_queue.add_job(key, LodJobInput::Sample(volume.clone()))?;
+      job_queue.try_add_job(key, LodJobInput::Sample(volume.clone()))?;
       dependencies.push((SampleKind::XZ, key));
     }
 
-    job_queue.add_job_with_dependencies(LodJobKey::Mesh(aabb), dependencies, LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), dependencies, LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
 
     Ok(())
   }

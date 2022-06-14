@@ -42,8 +42,8 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
     job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>,
   ) -> Result<(), SendError<()>> {
     let sample_key = LodJobKey::Sample(aabb);
-    job_queue.add_job(sample_key, LodJobInput::Sample(volume))?;
-    job_queue.add_job_with_dependencies(LodJobKey::Mesh(aabb), Dependencies::from_elem(((), sample_key), 1), LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
+    job_queue.try_add_job(sample_key, LodJobInput::Sample(volume))?;
+    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), Dependencies::from_elem(((), sample_key), 1), LodJobInput::Mesh { total_size, lod_chunk_mesh })?;
     Ok(())
   }
 

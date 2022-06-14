@@ -13,7 +13,7 @@ use crate::{Dependencies, DependencyOutputs, DepKey, In, JobKey, JobQueueMessage
 // Message from queue
 
 pub(crate) enum FromQueueMessage<J, D, I, const DS: usize> {
-  AddJob(J, Dependencies<J, D, DS>, I),
+  TryAddJob(J, Dependencies<J, D, DS>, I),
   TryRemoveJobAndOrphanedDependencies(J),
 }
 
@@ -104,7 +104,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   fn handle_from_queue(&mut self, message: FromQueueMessage<J, D, I, DS>, job_key_cache: &mut Vec<J>) -> bool {
     use FromQueueMessage::*;
     match message {
-      AddJob(job_key, dependencies, input) => self.add_job(job_key, dependencies, input, job_key_cache),
+      TryAddJob(job_key, dependencies, input) => self.try_add_job(job_key, dependencies, input, job_key_cache),
       TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key, job_key_cache),
     }
   }
@@ -137,10 +137,8 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
 
   #[profiling::function]
   #[inline]
-  fn add_job(&mut self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I, job_key_cache: &mut Vec<J>) -> bool {
+  fn try_add_job(&mut self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I, job_key_cache: &mut Vec<J>) -> bool {
     if self.job_key_to_job_status.contains_key(&job_key) {
-      // Do nothing.
-      // TODO: should check if job has different inputs or dependencies and act accordingly?
       return true;
     }
     self.job_graph.add_node(job_key);
@@ -162,7 +160,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[profiling::function]
   #[inline]
   fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: J, job_key_cache: &mut Vec<J>) -> bool {
-    if self.job_key_to_job_status.contains_key(&job_key) {
+    if !self.job_key_to_job_status.contains_key(&job_key) {
       return true;
     }
     trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
@@ -173,16 +171,17 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
         continue; // Job has incoming dependencies, can't remove it.
       }
       self.job_graph.remove_node(j);
+      trace!("Removed job {:?}", j);
       let job_status = self.job_key_to_job_status.remove(&j).unwrap(); // Unwrap OK: mapping must exist.
       let send_success = match job_status {
         JobStatus::Pending(input) => {
-          self.pending_jobs -= 1;
           let send_success = self.to_queue.send(JobQueueMessage::PendingJobRemoved(j, input)).is_ok();
+          let send_success = self.decrement_pending_jobs_and_send_queue_empty_if_applicable() | send_success;
           send_success
         }
         JobStatus::Running => {
-          self.running_jobs -= 1;
           let send_success = self.to_queue.send(JobQueueMessage::RunningJobRemoved(j)).is_ok();
+          let send_success = self.decrement_running_jobs_and_send_queue_empty_if_applicable() | send_success;
           send_success
         }
         JobStatus::Completed(output) => {
@@ -190,9 +189,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
           send_success
         }
       };
-      trace!("Removed job {:?}", j);
       if !send_success { return false; }
-      if !self.send_queue_empty_if_applicable() { return false; }
     }
     true
   }
@@ -237,17 +234,33 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     trace!("Completing job {:?}", job_key);
     let wrapped = Arc::new(output);
     *self.job_key_to_job_status.get_mut(&job_key).unwrap() = JobStatus::Completed(wrapped.clone()); // Unwrap OK: job must exist when complete_job is called.
-    self.running_jobs -= 1;
     if self.to_queue.send(JobQueueMessage::JobCompleted(job_key, wrapped)).is_err() { return false; }
-    self.send_queue_empty_if_applicable()
+    self.decrement_running_jobs_and_send_queue_empty_if_applicable()
   }
 
 
-  #[profiling::function]
   #[inline]
-  fn send_queue_empty_if_applicable(&mut self) -> bool {
-    if self.pending_jobs == 0 && self.running_jobs == 0 {
-      return self.to_queue.send(JobQueueMessage::QueueEmpty).is_ok();
+  fn decrement_pending_jobs_and_send_queue_empty_if_applicable(&mut self) -> bool {
+    if self.pending_jobs > 0 {
+      self.pending_jobs -= 1;
+      if self.pending_jobs == 0 && self.running_jobs == 0 {
+        return self.to_queue.send(JobQueueMessage::QueueEmpty).is_ok();
+      }
+    } else {
+      panic!("Attempt to decrement pending jobs while pending jobs is 0");
+    }
+    true
+  }
+
+  #[inline]
+  fn decrement_running_jobs_and_send_queue_empty_if_applicable(&mut self) -> bool {
+    if self.running_jobs > 0 {
+      self.running_jobs -= 1;
+      if self.running_jobs == 0 && self.pending_jobs == 0 {
+        return self.to_queue.send(JobQueueMessage::QueueEmpty).is_ok();
+      }
+    } else {
+      panic!("Attempt to decrement running jobs while running jobs is 0");
     }
     true
   }
