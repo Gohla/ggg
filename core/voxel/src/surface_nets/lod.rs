@@ -21,6 +21,7 @@ type ShapeXZ<C> = <C as ChunkSize>::CellRowQuadXZShape;
 type RowVertexIndexArray<C> = <C as ChunkSize>::CellRowQuadArray<u16>;
 type RowCaseArray<C> = <C as ChunkSize>::CellRowQuadArray<Case>;
 
+#[repr(transparent)]
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNetsLod<C: ChunkSize> {
   _chunk_size_phantom: PhantomData<C>,

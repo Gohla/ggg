@@ -21,6 +21,7 @@ type VoxelShape<C> = <C as ChunkSize>::VoxelChunkShape;
 type VertexIndexArray<C> = <C as ChunkSize>::CellChunkArray<u16>;
 type CaseArray<C> = <C as ChunkSize>::CellChunkArray<Case>;
 
+#[repr(transparent)]
 #[derive(Default, Copy, Clone)]
 pub struct SurfaceNets<C: ChunkSize> {
   _chunk_size_phantom: PhantomData<C>,
