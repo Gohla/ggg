@@ -265,7 +265,7 @@ impl Settings {
       ui.drag_unlabelled_range(&mut self.lod_octmap_settings.job_queue_worker_threads, 1, 1..=2usize.pow(8));
       ui.end_row();
       ui.label("Chunk mesh cache size");
-      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.chunk_mesh_cache_size, 1, 1..=2usize.pow(16));
+      ui.drag_unlabelled_range(&mut self.lod_octmap_settings.empty_lod_chunk_mesh_cache_size, 1, 1..=2usize.pow(16));
       ui.end_row();
       return ui.button("Update").clicked();
     }).body_returned.map(|i| i.inner).unwrap_or(false)

@@ -1,7 +1,7 @@
+use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use lru::LruCache;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ultraviolet::{Isometry3, Vec3};
 
@@ -10,7 +10,7 @@ use job_queue::{In, JobQueue, JobQueueMessage};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
-use crate::lod::chunk_mesh::{LodChunkMeshManager, LodChunkMeshManagerParameters};
+use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
 use crate::volume::Volume;
 
@@ -23,7 +23,7 @@ pub struct LodOctmapSettings {
   pub lod_factor: f32,
   pub fixed_lod_level: Option<u32>,
   pub job_queue_worker_threads: usize,
-  pub chunk_mesh_cache_size: usize,
+  pub empty_lod_chunk_mesh_cache_size: usize,
 }
 
 impl LodOctmapSettings {
@@ -41,7 +41,7 @@ impl Default for LodOctmapSettings {
       lod_factor: 1.0,
       fixed_lod_level: None,
       job_queue_worker_threads: std::thread::available_parallelism().unwrap_or(NonZeroUsize::new(8).unwrap()).get(),
-      chunk_mesh_cache_size: 8192,
+      empty_lod_chunk_mesh_cache_size: 4096,
     }
   }
 }
@@ -63,11 +63,10 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   active_aabbs: FxHashSet<AABB>,
   keep_aabbs: FxHashSet<AABB>,
   lod_chunk_meshes: FxHashMap<AABB, Arc<E::Chunk>>,
+  empty_lod_chunk_mesh_cache: VecDeque<E::Chunk>,
 
   requested_aabbs: FxHashSet<AABB>,
-  job_queue: JobQueue<LodJobKey, E::JobDepKey, LodJobInput<V, E::Chunk>, LodJobOutput<ChunkSamples<C>, E::Chunk>, 6>,
-
-  chunk_mesh_cache: LruCache<AABB, Arc<E::Chunk>>,
+  job_queue: JobQueue<LodJobKey, E::JobDepKey, LodJobInput<V, E::Chunk>, LodJobOutput<ChunkSamples<C>, E::Chunk>, 7>,
 }
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
@@ -90,6 +89,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       active_aabbs: FxHashSet::default(),
       keep_aabbs: FxHashSet::default(),
       lod_chunk_meshes: FxHashMap::default(),
+      empty_lod_chunk_mesh_cache: VecDeque::with_capacity(settings.empty_lod_chunk_mesh_cache_size),
 
       requested_aabbs: FxHashSet::default(),
       job_queue: JobQueue::new(settings.job_queue_worker_threads, move |job_key: LodJobKey, dependency_outputs, input: LodJobInput<V, E::Chunk>| {
@@ -101,11 +101,9 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
             extractor.run_job(total_size, aabb, dependency_outputs, &mut lod_chunk_mesh);
             LodJobOutput::Mesh(Arc::new(lod_chunk_mesh))
           }
-          _ => panic!("BAD")
+          _ => { panic!("Received non-matching job key and input") }
         }
       }).unwrap_or_else(|e| panic!("Failed to create job queue: {:?}", e)),
-
-      chunk_mesh_cache: LruCache::new(settings.chunk_mesh_cache_size),
     }
   }
 
@@ -119,12 +117,14 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     for message in self.job_queue.get_message_receiver().try_iter() {
       match message {
         JobQueueMessage::JobCompleted(job_key, output) => {
-          match (job_key, output) {
-            (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) => {
-              self.lod_chunk_meshes.insert(aabb, arc);
-              self.requested_aabbs.remove(&aabb);
-            }
-            _ => {}
+          if let (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) = (job_key, output) {
+            self.lod_chunk_meshes.insert(aabb, arc);
+            self.requested_aabbs.remove(&aabb);
+          }
+        }
+        JobQueueMessage::CompletedJobRemoved(_, output) => {
+          if let LodJobOutput::Mesh(arc) = output {
+            Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, arc);
           }
         }
         _ => {}
@@ -141,9 +141,8 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       self.requested_aabbs.remove(&removed);
       send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
       if send_error { break; }
-      if let Some(lod_chunk_mesh) = self.lod_chunk_meshes.remove(removed) {
-        self.chunk_mesh_cache.put(*removed, lod_chunk_mesh);
-        // TODO: reuse the chunk mesh returned by put by clearing it and using it for new chunk meshes?
+      if let Some(arc) = self.lod_chunk_meshes.remove(removed) {
+        Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, arc);
       }
     }
     if send_error {
@@ -158,7 +157,6 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     self.keep_aabbs.clear();
     self.active_aabbs.clear();
     self.lod_chunk_meshes.clear();
-    self.chunk_mesh_cache.clear();
   }
 
   #[profiling::function]
@@ -210,16 +208,13 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     }
   }
 
+
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if self.requested_aabbs.contains(&aabb) { return false; }
-    if let Some(cached_chunk_mesh) = self.chunk_mesh_cache.pop(&aabb) {
-      self.lod_chunk_meshes.insert(aabb, cached_chunk_mesh); // OPTO: use entry API to prevent double hashing with `contains_key` above.
-      return true;
-    }
-    // OPTO: keep pool of unused (empty) meshes and pass in an empty one here?
-    self.request_chunk(aabb, E::Chunk::default());
+    let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
+    self.request_chunk(aabb, empty_lod_chunk_mesh);
     return false;
   }
 
@@ -229,6 +224,17 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     self.extractor.create_jobs(self.total_size, aabb, self.volume.clone(), lod_chunk_mesh, &self.job_queue)
       .unwrap_or_else(|_| self.handle_send_error());
   }
+
+
+  #[inline]
+  fn cache_empty_lod_chunk_mesh(empty_lod_chunk_mesh_cache: &mut VecDeque<E::Chunk>, arc: Arc<E::Chunk>) {
+    if empty_lod_chunk_mesh_cache.len() >= empty_lod_chunk_mesh_cache.capacity() { return; }
+    if let Ok(mut lod_chunk_mesh) = Arc::try_unwrap(arc) {
+      lod_chunk_mesh.clear();
+      empty_lod_chunk_mesh_cache.push_back(lod_chunk_mesh);
+    }
+  }
+
 
   fn handle_send_error(&mut self) {
     if let Err(e) = self.job_queue.take_and_join() {

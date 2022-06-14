@@ -115,19 +115,15 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       Some(Pending(_)) => return true, // Job was removed, added, and not scheduled while it was running -> don't complete it.
       Some(Completed(_)) => return true, // Job was removed, added, scheduled, and completed while it was running -> don't complete it.
       None => return true, // Job was removed while it was running -> don't complete it.
-      _ => {}
+      _ => {} // Otherwise: continue.
     }
     // Complete job.
-    if !self.complete_job(job_key, output) {
-      return false;
-    }
+    if !self.complete_job(job_key, output) { return false; }
     // Try to schedule dependent jobs.
     job_key_cache_1.clear();
     self.job_graph.neighbors_directed(job_key, Incoming).collect_into(job_key_cache_1);
     for dependent_node_index in job_key_cache_1.drain(..) {
-      if !self.try_schedule_job(dependent_node_index, job_key_cache_2) {
-        return false;
-      }
+      if !self.try_schedule_job(dependent_node_index, job_key_cache_2) { return false; }
     }
     true
   }
@@ -136,9 +132,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[profiling::function]
   #[inline]
   fn try_add_job(&mut self, job_key: J, dependencies: Dependencies<J, D, DS>, input: I, job_key_cache: &mut Vec<J>) -> bool {
-    if self.job_key_to_job_status.contains_key(&job_key) {
-      return true;
-    }
+    if self.job_key_to_job_status.contains_key(&job_key) { return true; }
     self.job_graph.add_node(job_key);
     self.job_key_to_job_status.insert(job_key, JobStatus::Pending(input));
     self.pending_jobs += 1;
@@ -158,9 +152,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
   #[profiling::function]
   #[inline]
   fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: J, job_key_cache: &mut Vec<J>) -> bool {
-    if !self.job_key_to_job_status.contains_key(&job_key) {
-      return true;
-    }
+    if !self.job_key_to_job_status.contains_key(&job_key) { return true; }
     trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
     job_key_cache.clear();
     Bfs::new(&self.job_graph, job_key).iter(&self.job_graph).collect_into(job_key_cache);

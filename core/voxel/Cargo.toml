@@ -16,7 +16,6 @@ wgpu = { version = "0.12", features = ["spirv"] }
 egui = "0.18"
 ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
-lru = "0.7"
 flagset = "0.4"
 rustc-hash = "1"
 serde = { version = "1", features = ["derive"], optional = true }
