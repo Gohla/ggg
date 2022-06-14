@@ -108,8 +108,7 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
       TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key, job_key_cache),
     }
   }
-
-  #[profiling::function]
+  
   #[inline]
   fn handle_from_worker(&mut self, job_key: J, output: O, job_key_cache_1: &mut Vec<J>, job_key_cache_2: &mut Vec<J>) -> bool {
     use JobStatus::*;
@@ -215,7 +214,6 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     true
   }
 
-  #[profiling::function]
   #[inline]
   fn schedule_job(&mut self, job_key: J, dependencies: DependencyOutputs<D, O, DS>) -> bool {
     let job_status = self.job_key_to_job_status.get_mut(&job_key).unwrap(); // Unwrap OK: job must exist when schedule_job is called.
@@ -228,7 +226,6 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> ManagerThread<J, D, I
     true
   }
 
-  #[profiling::function]
   #[inline]
   fn complete_job(&mut self, job_key: J, output: O) -> bool {
     trace!("Completing job {:?}", job_key);
