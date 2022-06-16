@@ -183,18 +183,15 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
         activated[i] = sub_activated;
         all_filled &= sub_filled;
       }
-      if all_filled {
+      if all_filled { // All subdivided nodes are filled, activate each non-activated node.
         for (i, sub_aabb) in subdivided.into_iter().enumerate() {
           if !activated[i] {
             self.active_aabbs.insert(sub_aabb);
           }
         }
-        (true, true)
+        (true, true) // Act as is filled and activated, because all sub-nodes are filled and activated.
       } else {
-        if self_filled {
-          self.active_aabbs.insert(aabb);
-        }
-        (self_filled, self_filled)
+        (self_filled, false) // Not all subdivided nodes are filled, we might be filled.
       }
     }
   }
@@ -212,17 +209,13 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
-    if self.requested_aabbs.contains(&aabb) { return false; }
-    let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-    self.request_chunk(aabb, empty_lod_chunk_mesh);
+    if !self.requested_aabbs.contains(&aabb) {
+      let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
+      self.extractor.create_jobs(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh, &self.job_queue)
+        .unwrap_or_else(|_| self.handle_send_error());
+      self.requested_aabbs.insert(aabb);
+    }
     return false;
-  }
-
-  #[profiling::function]
-  fn request_chunk(&mut self, aabb: AABB, lod_chunk_mesh: E::Chunk) {
-    self.requested_aabbs.insert(aabb);
-    self.extractor.create_jobs(self.total_size, aabb, self.volume.clone(), lod_chunk_mesh, &self.job_queue)
-      .unwrap_or_else(|_| self.handle_send_error());
   }
 
 

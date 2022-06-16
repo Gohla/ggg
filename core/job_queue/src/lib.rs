@@ -155,9 +155,9 @@ impl<T, J, D, I, O, const DS: usize> Handler<J, D, I, O, DS> for T where T: FnMu
 
 // Trait aliases
 
-pub trait JobKey: Send + 'static + Copy + Eq + Ord + Hash + Debug {}
+pub trait JobKey: Send + Copy + Eq + Ord + Hash + Debug + 'static {}
 
-impl<T> JobKey for T where T: Send + 'static + Copy + Eq + Ord + Hash + Debug {}
+impl<T> JobKey for T where T: Send + Copy + Eq + Ord + Hash + Debug + 'static {}
 
 
 pub trait DepKey: Send + Copy + Debug + 'static {}
