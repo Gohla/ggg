@@ -21,7 +21,7 @@ use crate::volume::Volume;
 pub struct LodOctmapSettings {
   pub total_size: u32,
   pub lod_factor: f32,
-  pub fixed_lod_level: Option<u32>,
+  pub fixed_lod_level: Option<u8>,
   pub job_queue_worker_threads: usize,
   pub empty_lod_chunk_mesh_cache_size: usize,
 }
@@ -51,12 +51,12 @@ impl Default for LodOctmapSettings {
 pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
   total_size: u32,
   lod_factor: f32,
-  fixed_lod_level: Option<u32>,
+  fixed_lod_level: Option<u8>,
 
   transform: Isometry3,
   transform_inversed: Isometry3,
 
-  max_lod_level: u32,
+  max_lod_level: u8,
   volume: V,
   extractor: E,
 
@@ -73,7 +73,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
-    let max_lod_level = lod_0_step.log2();
+    let max_lod_level = lod_0_step.log2() as u8;
     Self {
       total_size: settings.total_size,
       lod_factor: settings.lod_factor,
@@ -108,7 +108,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 
   #[inline]
-  pub fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
+  pub fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
 
   #[profiling::function]
   pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
@@ -179,7 +179,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 
   #[profiling::function]
-  fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) -> NodeResult {
+  fn update_nodes(&mut self, aabb: AABB, lod_level: u8, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
     if self.is_terminal(aabb, lod_level, position) {
@@ -207,7 +207,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 
   #[inline]
-  fn is_terminal(&self, aabb: AABB, lod_level: u32, position: Vec3) -> bool {
+  fn is_terminal(&self, aabb: AABB, lod_level: u8, position: Vec3) -> bool {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       lod_level >= self.max_lod_level.min(fixed_lod_level)
     } else {
@@ -298,7 +298,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
 
 impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<V, C, E> {
   #[inline]
-  fn get_max_lod_level(&self) -> u32 { self.max_lod_level }
+  fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
 
   #[inline]
   fn get_lod_factor(&self) -> f32 { self.lod_factor }
@@ -306,7 +306,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManagerParameters 
   fn get_lod_factor_mut(&mut self) -> &mut f32 { &mut self.lod_factor }
 
   #[inline]
-  fn get_fixed_lod_level(&self) -> Option<u32> { self.fixed_lod_level }
+  fn get_fixed_lod_level(&self) -> Option<u8> { self.fixed_lod_level }
   #[inline]
-  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u32> { &mut self.fixed_lod_level }
+  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u8> { &mut self.fixed_lod_level }
 }

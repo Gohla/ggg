@@ -23,13 +23,13 @@ pub trait LodChunkMeshManager<C: ChunkSize>: LodChunkMeshManagerParameters {
 
 /// Parameters for transformation, in a separate trait as they do not depend on the kind of chunks.
 pub trait LodChunkMeshManagerParameters {
-  fn get_max_lod_level(&self) -> u32;
+  fn get_max_lod_level(&self) -> u8;
 
   fn get_lod_factor(&self) -> f32;
   fn get_lod_factor_mut(&mut self) -> &mut f32;
 
-  fn get_fixed_lod_level(&self) -> Option<u32>;
-  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u32>;
+  fn get_fixed_lod_level(&self) -> Option<u8>;
+  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u8>;
 }
 
 // Box forwarders
@@ -47,7 +47,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, T> LodChunkMeshManager<C> for Box<T> wher
 
 impl<T: LodChunkMeshManagerParameters + ?Sized> LodChunkMeshManagerParameters for Box<T> {
   #[inline]
-  fn get_max_lod_level(&self) -> u32 { (**self).get_max_lod_level() }
+  fn get_max_lod_level(&self) -> u8 { (**self).get_max_lod_level() }
 
   #[inline]
   fn get_lod_factor(&self) -> f32 { (**self).get_lod_factor() }
@@ -55,7 +55,7 @@ impl<T: LodChunkMeshManagerParameters + ?Sized> LodChunkMeshManagerParameters fo
   fn get_lod_factor_mut(&mut self) -> &mut f32 { (**self).get_lod_factor_mut() }
 
   #[inline]
-  fn get_fixed_lod_level(&self) -> Option<u32> { (**self).get_fixed_lod_level() }
+  fn get_fixed_lod_level(&self) -> Option<u8> { (**self).get_fixed_lod_level() }
   #[inline]
-  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u32> { (**self).get_fixed_lod_level_mut() }
+  fn get_fixed_lod_level_mut(&mut self) -> &mut Option<u8> { (**self).get_fixed_lod_level_mut() }
 }
