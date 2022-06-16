@@ -159,27 +159,37 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     self.lod_chunk_meshes.clear();
   }
 
+  #[inline]
+  fn cache_empty_lod_chunk_mesh(empty_lod_chunk_mesh_cache: &mut VecDeque<E::Chunk>, arc: Arc<E::Chunk>) {
+    if empty_lod_chunk_mesh_cache.len() >= empty_lod_chunk_mesh_cache.capacity() { return; }
+    if let Ok(mut lod_chunk_mesh) = Arc::try_unwrap(arc) {
+      lod_chunk_mesh.clear();
+      empty_lod_chunk_mesh_cache.push_back(lod_chunk_mesh);
+    }
+  }
+
+
   #[profiling::function]
   fn update_root_node(&mut self, position: Vec3) {
     let root = AABB::from_size(self.total_size);
-    let (filled, activated) = self.update_nodes(root, 0, position);
+    let NodeResult { filled, activated } = self.update_nodes(root, 0, position);
     if filled && !activated {
       self.active_aabbs.insert(root);
     }
   }
 
   #[profiling::function]
-  fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) -> (bool, bool) {
+  fn update_nodes(&mut self, aabb: AABB, lod_level: u32, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
     if self.is_terminal(aabb, lod_level, position) {
-      (self_filled, false)
+      NodeResult::new(self_filled, false)
     } else { // Subdivide
       let mut all_filled = true;
       let subdivided = aabb.subdivide();
       let mut activated = [false; 8];
       for (i, sub_aabb) in subdivided.into_iter().enumerate() {
-        let (sub_filled, sub_activated) = self.update_nodes(sub_aabb, lod_level + 1, position);
+        let NodeResult { filled: sub_filled, activated: sub_activated } = self.update_nodes(sub_aabb, lod_level + 1, position);
         activated[i] = sub_activated;
         all_filled &= sub_filled;
       }
@@ -189,9 +199,9 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
             self.active_aabbs.insert(sub_aabb);
           }
         }
-        (true, true) // Act as is filled and activated, because all sub-nodes are filled and activated.
+        NodeResult::new(true, true) // Act as is filled and activated, because all sub-nodes are filled and activated.
       } else {
-        (self_filled, false) // Not all subdivided nodes are filled, we might be filled.
+        NodeResult::new(self_filled, false) // Not all subdivided nodes are filled, we might be filled.
       }
     }
   }
@@ -204,7 +214,6 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
       lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size as f32
     }
   }
-
 
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
@@ -219,16 +228,6 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   }
 
 
-  #[inline]
-  fn cache_empty_lod_chunk_mesh(empty_lod_chunk_mesh_cache: &mut VecDeque<E::Chunk>, arc: Arc<E::Chunk>) {
-    if empty_lod_chunk_mesh_cache.len() >= empty_lod_chunk_mesh_cache.capacity() { return; }
-    if let Ok(mut lod_chunk_mesh) = Arc::try_unwrap(arc) {
-      lod_chunk_mesh.clear();
-      empty_lod_chunk_mesh_cache.push_back(lod_chunk_mesh);
-    }
-  }
-
-
   fn handle_send_error(&mut self) {
     if let Err(e) = self.job_queue.take_and_join() {
       std::panic::resume_unwind(e);
@@ -239,22 +238,25 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 }
 
 
+// Octmap algorithm return type
+
+struct NodeResult {
+  filled: bool,
+  activated: bool,
+}
+
+impl NodeResult {
+  #[inline]
+  fn new(filled: bool, activated: bool) -> Self { Self { filled, activated } }
+}
+
+
 // Job types
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum LodJobKey {
   Sample(AABB),
   Mesh(AABB),
-}
-
-impl LodJobKey {
-  #[inline]
-  pub fn get_aabb(&self) -> &AABB {
-    match self {
-      LodJobKey::Sample(aabb) => aabb,
-      LodJobKey::Mesh(aabb) => aabb,
-    }
-  }
 }
 
 pub enum LodJobInput<V: In, CM: In> {
