@@ -62,14 +62,14 @@ impl AABB {
     let cen = self.center();
     let extends = self.extends();
     [
-      Self::new_unchecked(min, extends),
-      Self::new_unchecked(UVec3::new(min.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, min.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(min.x, min.y, cen.z), extends),
+      Self::new_unchecked(cen, extends),
       Self::new_unchecked(UVec3::new(min.x, cen.y, cen.z), extends),
       Self::new_unchecked(UVec3::new(cen.x, min.y, cen.z), extends),
-      Self::new_unchecked(cen, extends),
+      Self::new_unchecked(UVec3::new(min.x, min.y, cen.z), extends),
+      Self::new_unchecked(UVec3::new(cen.x, cen.y, min.z), extends),
+      Self::new_unchecked(UVec3::new(min.x, cen.y, min.z), extends),
+      Self::new_unchecked(UVec3::new(cen.x, min.y, min.z), extends),
+      Self::new_unchecked(min, extends),
     ]
   }
 

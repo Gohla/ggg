@@ -177,8 +177,8 @@ pub struct Camera {
 
 impl Camera {
   #[inline]
-  pub fn new(viewport: PhysicalSize) -> Self {
-    Self {
+  pub fn new(viewport: PhysicalSize, settings: &mut CameraSettings) -> Self {
+    let mut camera = Self {
       viewport,
       position: Vec3::zero(),
       direction: Vec3::one(),
@@ -189,7 +189,9 @@ impl Camera {
       projection_inverse: Mat4::identity().inversed(),
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
-    }
+    };
+    camera.update(settings, &CameraInput::default(), Duration::default());
+    camera
   }
 
   #[inline]

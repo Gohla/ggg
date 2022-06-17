@@ -46,13 +46,13 @@ impl app::Application for SurfaceNetsDemo {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let camera_settings = CameraSettings::with_defaults_arcball_orthographic();
+    let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;
     light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
 
-    let camera = Camera::new(os.window.get_inner_size().physical);
+    let camera = Camera::new(os.window.get_inner_size().physical, &mut camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());

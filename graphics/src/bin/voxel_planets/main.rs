@@ -49,7 +49,7 @@ impl app::Application for VoxelPlanets {
     settings.camera_debugging.default_settings = settings::default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let camera = Camera::new(os.window.get_inner_size().physical);
+    let camera = Camera::new(os.window.get_inner_size().physical, &mut settings.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
     let mut debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());

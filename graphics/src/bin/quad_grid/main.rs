@@ -90,9 +90,9 @@ impl app::Application for QuadGrid {
   type Config = ();
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let camera_settings = CameraSettings::with_defaults_arcball_perspective();
+    let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(os.window.get_inner_size().physical);
+    let camera = Camera::new(os.window.get_inner_size().physical, &mut camera_settings);
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()

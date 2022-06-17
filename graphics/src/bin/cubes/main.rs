@@ -93,7 +93,7 @@ impl app::Application for Cubes {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(os.window.get_inner_size().physical);
+    let camera = Camera::new(os.window.get_inner_size().physical, &mut camera_settings);
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
