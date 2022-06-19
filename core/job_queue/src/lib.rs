@@ -2,11 +2,11 @@
 
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::thread::{self, JoinHandle};
 
 use flume::{bounded, Receiver, Sender, unbounded};
 pub use flume::SendError;
-use smallvec::SmallVec;
 
 use manager::ManagerThread;
 use worker::WorkerThread;
@@ -19,26 +19,36 @@ mod manager;
 
 // Message from manager
 
-pub enum JobQueueMessage<J, I, O> {
-  JobCompleted(J, O),
-  PendingJobRemoved(J, I),
-  RunningJobRemoved(J),
-  CompletedJobRemoved(J, O),
+pub enum JobQueueMessage<JK, I, O> {
+  JobCompleted(JK, O),
+  PendingJobRemoved(JK, I),
+  RunningJobRemoved(JK),
+  CompletedJobRemoved(JK, O),
   QueueEmpty,
 }
 
 
 // Job queue
 
-pub struct JobQueue<J, D, I, O, const DS: usize = 2> {
+pub struct JobQueue<JK, DK, I, J, O> {
   manager_thread_handle: Option<JoinHandle<()>>,
   worker_thread_handles: Vec<JoinHandle<()>>,
-  to_manager: Sender<manager::FromQueue<J, D, I, DS>>,
-  from_manager: Receiver<JobQueueMessage<J, I, O>>,
+  to_manager: Sender<manager::FromQueue<JK, J>>,
+  from_manager: Receiver<JobQueueMessage<JK, I, O>>,
+
+  _dependency_key_phantom: PhantomData<DK>,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, DS> {
-  pub fn new(worker_thread_count: usize, handler: impl Handler<J, D, I, O, DS>) -> std::io::Result<Self> {
+impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, I, J, O> {
+  pub fn new(
+    worker_thread_count: usize,
+    worker_thread_job_buffer_count: usize,
+    dependency_output_cache_count: usize,
+    handler: impl Handler<JK, DK, I, O>
+  ) -> std::io::Result<Self> {
+    assert!(worker_thread_count > 0, "Worker thread count must be higher than 0");
+    assert!(worker_thread_job_buffer_count > 0, "Worker thread job buffer count must be higher than 0");
+    
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
     let (worker_to_manager_sender, worker_to_manager_receiver) = unbounded();
@@ -49,6 +59,8 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
       manager_to_worker_sender,
       worker_to_manager_receiver,
       manager_to_external_sender,
+      worker_thread_job_buffer_count,
+      dependency_output_cache_count,
     );
     let manager_thread_handle = manager_thread.create_thread_and_run()?;
 
@@ -71,28 +83,36 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
       worker_thread_handles,
       to_manager: external_to_manager_sender,
       from_manager: manager_to_external_receiver,
+      _dependency_key_phantom: PhantomData::default(),
     })
   }
 
+  fn new_dummy() -> Self {
+    let (empty_sender, _) = bounded(0);
+    let (_, empty_receiver) = bounded(0);
+    Self {
+      manager_thread_handle: None,
+      worker_thread_handles: Vec::new(),
+      to_manager: empty_sender,
+      from_manager: empty_receiver,
+      _dependency_key_phantom: PhantomData::default(),
+    }
+  }
+
 
   #[inline]
-  pub fn try_add_job(&self, job_key: J, input: I) -> Result<(), SendError<()>> {
-    self.try_add_job_with_dependencies(job_key, input, Dependencies::default())
+  pub fn try_add_job(&self, job: J) -> Result<(), SendError<()>> {
+    self.to_manager.send(FromQueueMessage::TryAddJob(job)).map_err(|_| SendError(()))
   }
 
   #[inline]
-  pub fn try_add_job_with_dependencies(&self, job_key: J, input: I, dependencies: Dependencies<J, D, DS>) -> Result<(), SendError<()>> {
-    self.to_manager.send(FromQueueMessage::TryAddJob(job_key, dependencies, input)).map_err(|_| SendError(()))
-  }
-
-  #[inline]
-  pub fn try_remove_job_and_orphaned_dependencies(&self, job_key: J) -> Result<(), SendError<()>> {
+  pub fn try_remove_job_and_orphaned_dependencies(&self, job_key: JK) -> Result<(), SendError<()>> {
     self.to_manager.send(FromQueueMessage::TryRemoveJobAndOrphanedDependencies(job_key)).map_err(|_| SendError(()))
   }
 
 
   #[inline]
-  pub fn get_message_receiver(&self) -> &Receiver<JobQueueMessage<J, I, O>> { &self.from_manager }
+  pub fn get_message_receiver(&self) -> &Receiver<JobQueueMessage<JK, I, O>> { &self.from_manager }
 
 
   pub fn stop_and_join(mut self) -> thread::Result<()> {
@@ -108,9 +128,9 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
     drop(std::mem::replace(&mut self.from_manager, empty_receiver));
   }
 
-  /// Takes ownership of self by replacing it with a default job queue that does nothing, and then joins the taken self.
+  /// Takes ownership of self by replacing it with a dummy job queue that does nothing, and then joins the taken self.
   pub fn take_and_join(&mut self) -> thread::Result<()> {
-    let job_queue = std::mem::take(self);
+    let job_queue = std::mem::replace(self, Self::new_dummy());
     job_queue.join()
   }
 
@@ -125,32 +145,24 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize> JobQueue<J, D, I, O, 
   }
 }
 
-impl<J, D, I, O, const DS: usize> Default for JobQueue<J, D, I, O, DS> {
-  fn default() -> Self {
-    let (empty_sender, _) = bounded(0);
-    let (_, empty_receiver) = bounded(0);
-    Self {
-      manager_thread_handle: None,
-      worker_thread_handles: Vec::new(),
-      to_manager: empty_sender,
-      from_manager: empty_receiver,
-    }
-  }
+
+// Job
+
+pub trait Job<JK: JobKey, DK: DepKey, I: In>: Send + 'static {
+  fn key(&self) -> &JK;
+
+  type DependencyIntoIterator: IntoIterator<Item=(DK, Self)>;
+  fn into(self) -> (I, Self::DependencyIntoIterator);
 }
-
-
-// Dependencies
-
-pub type Dependencies<J, D, const DS: usize> = SmallVec<[(D, J); DS]>;
 
 
 // Handler
 
-pub type DependencyOutputs<D, O, const DS: usize> = SmallVec<[(D, O); DS]>;
+// pub type DependencyOutputs<'a, DK, O> = ;
 
-pub trait Handler<J, D, I, O, const DS: usize>: FnMut(J, DependencyOutputs<D, O, DS>, I) -> O + Clone + Send + 'static {}
+pub trait Handler<JK, DK, I, O>: FnMut(JK, I, &[(DK, O)]) -> O + Clone + Send + 'static {}
 
-impl<T, J, D, I, O, const DS: usize> Handler<J, D, I, O, DS> for T where T: FnMut(J, DependencyOutputs<D, O, DS>, I) -> O + Clone + Send + 'static {}
+impl<T, JK, DK, I, O> Handler<JK, DK, I, O> for T where T: FnMut(JK, I, &[(DK, O)]) -> O + Clone + Send + 'static {}
 
 
 // Trait aliases

@@ -2,10 +2,11 @@ use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+use profiling::scope;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ultraviolet::{Isometry3, Vec3};
 
-use job_queue::{In, JobQueue, JobQueueMessage};
+use job_queue::{Job, JobQueue, JobQueueMessage};
 
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
@@ -48,7 +49,7 @@ impl Default for LodOctmapSettings {
 
 // LOD octmap
 
-pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
+pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> {
   total_size: u32,
   lod_factor: f32,
   fixed_lod_level: Option<u8>,
@@ -62,15 +63,16 @@ pub struct LodOctmap<V: Volume, C: ChunkSize, E: LodExtractor<C>> {
 
   active_aabbs: FxHashSet<AABB>,
   keep_aabbs: FxHashSet<AABB>,
+  prev_keep_aabbs: FxHashSet<AABB>,
   lod_chunk_meshes: FxHashMap<AABB, Arc<E::Chunk>>,
   empty_lod_chunk_mesh_cache: VecDeque<E::Chunk>,
   empty_lod_chunk_mesh_cache_size: usize,
 
   requested_aabbs: FxHashSet<AABB>,
-  job_queue: JobQueue<LodJobKey, E::JobDepKey, LodJobInput<V, E::Chunk>, LodJobOutput<ChunkSamples<C>, E::Chunk>, 7>,
+  job_queue: JobQueue<LodJobKey, E::DependencyKey, LodJobInput<V, E::Chunk>, LodJob<V, LodJobInput<V, E::JobInput>, LodJobDependencyIterator<C, V, E>>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
 }
 
-impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodOctmap<C, V, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
@@ -89,23 +91,28 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
 
       active_aabbs: FxHashSet::default(),
       keep_aabbs: FxHashSet::default(),
+      prev_keep_aabbs: FxHashSet::default(),
       lod_chunk_meshes: FxHashMap::default(),
       empty_lod_chunk_mesh_cache: VecDeque::with_capacity(settings.empty_lod_chunk_mesh_cache_size),
       empty_lod_chunk_mesh_cache_size: settings.empty_lod_chunk_mesh_cache_size,
 
       requested_aabbs: FxHashSet::default(),
-      job_queue: JobQueue::new(settings.job_queue_worker_threads, move |job_key: LodJobKey, dependency_outputs, input: LodJobInput<V, E::Chunk>| {
-        match (job_key, input) {
-          (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
-            LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.min, aabb.step::<C>())))
+      job_queue: JobQueue::new(
+        settings.job_queue_worker_threads,
+        1024,
+        1024,
+        move |job_key, input, dependency_outputs| {
+          match (job_key, input) {
+            (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
+              LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.min, aabb.step::<C>())))
+            }
+            (LodJobKey::Mesh(aabb), LodJobInput::Mesh(input)) => {
+              let lod_chunk_mesh = extractor.run_job(input, dependency_outputs);
+              LodJobOutput::Mesh(Arc::new(lod_chunk_mesh))
+            }
+            _ => { panic!("Received non-matching job key and input") }
           }
-          (LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, mut lod_chunk_mesh }) => {
-            extractor.run_job(total_size, aabb, dependency_outputs, &mut lod_chunk_mesh);
-            LodJobOutput::Mesh(Arc::new(lod_chunk_mesh))
-          }
-          _ => { panic!("Received non-matching job key and input") }
-        }
-      }).unwrap_or_else(|e| panic!("Failed to create job queue: {:?}", e)),
+        }).unwrap_or_else(|e| panic!("Failed to create job queue: {:?}", e)),
     }
   }
 
@@ -116,39 +123,49 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
   pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
     let position = self.transform_inversed.transform_vec(position);
 
-    for message in self.job_queue.get_message_receiver().try_iter() {
-      match message {
-        JobQueueMessage::JobCompleted(job_key, output) => {
-          if let (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) = (job_key, output) {
-            self.lod_chunk_meshes.insert(aabb, arc);
-            self.requested_aabbs.remove(&aabb);
+    {
+      scope!("Process job queue messages");
+      for message in self.job_queue.get_message_receiver().try_iter() {
+        match message {
+          JobQueueMessage::JobCompleted(job_key, output) => {
+            if let (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) = (job_key, output) {
+              self.lod_chunk_meshes.insert(aabb, arc);
+              self.requested_aabbs.remove(&aabb);
+            }
           }
-        }
-        JobQueueMessage::CompletedJobRemoved(_, output) => {
-          if let LodJobOutput::Mesh(arc) = output {
-            Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+          JobQueueMessage::CompletedJobRemoved(_, output) => {
+            if let LodJobOutput::Mesh(arc) = output {
+              Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+            }
           }
+          _ => {}
         }
-        _ => {}
       }
     }
 
-    self.active_aabbs.clear();
-    let prev_keep: FxHashSet<_> = self.keep_aabbs.drain().collect(); // OPTO: clear and collect into existing hashset.
+    {
+      scope!("Clear active/keep AABBs");
+      self.active_aabbs.clear();
+      self.prev_keep_aabbs.clear();
+      self.keep_aabbs.drain().collect_into(&mut self.prev_keep_aabbs);
+    }
 
     self.update_root_node(position);
 
-    let mut send_error = false;
-    for removed in prev_keep.difference(&self.keep_aabbs) {
-      self.requested_aabbs.remove(&removed);
-      send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
-      if send_error { break; }
-      if let Some(arc) = self.lod_chunk_meshes.remove(removed) {
-        Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+    {
+      scope!("Process removed AABBs");
+      let mut send_error = false;
+      for removed in self.prev_keep_aabbs.difference(&self.keep_aabbs) {
+        self.requested_aabbs.remove(&removed);
+        send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
+        if send_error { break; }
+        if let Some(arc) = self.lod_chunk_meshes.remove(removed) {
+          Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+        }
       }
-    }
-    if send_error {
-      self.handle_send_error();
+      if send_error {
+        self.handle_send_error();
+      }
     }
 
     let chunks = self.lod_chunk_meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
@@ -312,8 +329,9 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodOctmap<V, C, E> {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_aabbs.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-      self.extractor.create_jobs(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh, &self.job_queue)
-        .unwrap_or_else(|_| self.handle_send_error());
+      let (input, dependencies) = self.extractor.create_job(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh, &self.job_queue);
+      let job = LodJob { key: LodJobKey::Mesh(aabb), input, dependencies };
+      self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_aabbs.insert(aabb);
     }
     return false;
@@ -379,9 +397,60 @@ pub enum LodJobKey {
   Mesh(AABB),
 }
 
-pub enum LodJobInput<V: In, CM: In> {
+pub enum LodJobInput<V, JI> {
   Sample(V),
-  Mesh { total_size: u32, lod_chunk_mesh: CM },
+  Mesh(JI),
+}
+
+pub struct LodJob<V, JI, DI> {
+  key: LodJobKey,
+  input: LodJobInput<V, JI>,
+  dependencies: Option<DI>,
+}
+
+impl<V, JI, DI> LodJob<V, JI, DI> {
+  pub fn new_sample(aabb: AABB, volume: V) -> Self {
+    Self {
+      key: LodJobKey::Sample(aabb),
+      input: LodJobInput::Sample(volume),
+      dependencies: None,
+    }
+  }
+
+  pub fn new_mesh(aabb: AABB, extractor_job_input: JI, extractor_dependencies_iterator: DI) -> Self {
+    Self {
+      key: LodJobKey::Mesh(aabb),
+      input: LodJobInput::Mesh(extractor_job_input),
+      dependencies: Some(extractor_dependencies_iterator),
+    }
+  }
+}
+
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> Job<LodJobKey, E::DependencyKey, LodJobInput<V, E::Chunk>> for LodJob<V, E::JobInput, E::DependenciesIntoIterator> {
+  #[inline]
+  fn key(&self) -> &LodJobKey { &self.key }
+
+  type DependencyIntoIterator = LodJobDependencyIterator<C, V, E>;
+
+  fn into(self) -> (LodJobInput<V, E::Chunk>, Self::DependencyIntoIterator) {
+    let input = self.input;
+    let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies);
+    (input, dependencies)
+  }
+}
+
+#[repr(transparent)]
+struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C, V>>(Option<E::DependenciesIntoIterator>);
+
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> Iterator for LodJobDependencyIterator<C, V, E> {
+  type Item = (E::DependencyKey, LodJob<V, E::JobInput, E::DependenciesIntoIterator>);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    match self {
+      Some(i) => i.next(),
+      _ => None,
+    }
+  }
 }
 
 pub enum LodJobOutput<CS, CM> {
@@ -402,7 +471,7 @@ impl<CS, CM> Clone for LodJobOutput<CS, CM> {
 
 // LodChunkMeshManager trait implementation
 
-impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for LodOctmap<V, C, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodChunkMeshManager<C, V> for LodOctmap<C, V, E> {
   type Extractor = E;
   #[inline]
   fn get_extractor(&self) -> &E {
@@ -416,7 +485,7 @@ impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
   }
 }
 
-impl<V: Volume, C: ChunkSize, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<V, C, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodChunkMeshManagerParameters for LodOctmap<C, V, E> {
   #[inline]
   fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
 

@@ -1013,7 +1013,6 @@ dependencies = [
  "petgraph",
  "profiling",
  "rustc-hash",
- "smallvec",
  "tracing",
 ]
 

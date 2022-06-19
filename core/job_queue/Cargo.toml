@@ -8,7 +8,6 @@ publish = false
 [dependencies]
 flume = "0.10"
 petgraph = { version = "0.6", default-features = false, features = ["graphmap"] }
-smallvec = { version = "1", features = ["const_generics"] }
 rustc-hash = "1"
 tracing = "0.1"
 profiling = "1"

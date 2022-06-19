@@ -25,12 +25,12 @@ impl<C: ChunkSize, V, E> LodManagerBuilder<C, V, E> {
     LodManagerBuilder { chunk_size: self.chunk_size, volume, extractor: self.extractor }
   }
 
-  pub fn with_extractor<EE: LodExtractor<C>>(self, extractor: EE) -> LodManagerBuilder<C, V, EE> {
+  pub fn with_extractor<EE: LodExtractor<C, V>>(self, extractor: EE) -> LodManagerBuilder<C, V, EE> {
     LodManagerBuilder { chunk_size: self.chunk_size, volume: self.volume, extractor }
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodManagerBuilder<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodManagerBuilder<C, V, E> {
   pub fn build(
     self,
     lod_octmap_settings: LodOctmapSettings,

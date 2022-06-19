@@ -53,10 +53,10 @@ pub struct TransvoxelExtractor<C: ChunkSize> {
 
 impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   type Chunk = TransvoxelLodChunkVertices;
-  type JobDepKey = ();
+  type DependencyKey = ();
 
   #[inline]
-  fn create_jobs<V: Volume, const DS: usize>(&self, total_size: u32, aabb: AABB, volume: V, lod_chunk_mesh: Self::Chunk, job_queue: &JobQueue<LodJobKey, Self::JobDepKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>) -> Result<(), SendError<()>> {
+  fn create_job<V: Volume, const DS: usize>(&self, total_size: u32, aabb: AABB, volume: V, lod_chunk_mesh: Self::Chunk, job_queue: &JobQueue<LodJobKey, Self::DependencyKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>) -> Result<(), SendError<()>> {
     let sample_key = LodJobKey::Sample(aabb);
     job_queue.try_add_job(sample_key, LodJobInput::Sample(volume))?;
     job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, lod_chunk_mesh }, Dependencies::from_elem(((), sample_key), 1))?;
@@ -64,7 +64,7 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   }
 
   #[inline]
-  fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::JobDepKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
+  fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
       let lores_min = aabb.min;
       let lores_max = aabb.max_point();

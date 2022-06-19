@@ -4,21 +4,21 @@ use std::thread::JoinHandle;
 use flume::{Receiver, Sender};
 use tracing::trace;
 
-use crate::{DependencyOutputs, DepKey, Handler, In, JobKey, Out};
+use crate::{DepKey, Handler, In, JobKey, Out};
 
-pub(crate) type FromManager<J, D, I, O, const DS: usize> = (J, DependencyOutputs<D, O, DS>, I);
+pub(crate) type FromManager<JK, DK, I, O> = (JK, I, Vec<(DK, O)>);
 
-pub(super) struct WorkerThread<J, D, O, I, const DS: usize, H> {
-  from_manager: Receiver<FromManager<J, D, I, O, DS>>,
-  to_manager: Sender<crate::manager::FromWorker<J, O>>,
+pub(super) struct WorkerThread<JK, DK, I, O, H> {
+  from_manager: Receiver<FromManager<JK, DK, I, O>>,
+  to_manager: Sender<crate::manager::FromWorker<JK, DK, O>>,
   handler: H,
 }
 
-impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize, H: Handler<J, D, I, O, DS>> WorkerThread<J, D, O, I, DS, H> {
+impl<JK: JobKey, DK: DepKey, I: In, O: Out, H: Handler<JK, DK, I, O>> WorkerThread<JK, DK, I, O, H> {
   #[inline]
   pub(super) fn new(
-    from_manager: Receiver<FromManager<J, D, I, O, DS>>,
-    to_manager: Sender<crate::manager::FromWorker<J, O>>,
+    from_manager: Receiver<FromManager<JK, DK, I, O>>,
+    to_manager: Sender<crate::manager::FromWorker<JK, DK, O>>,
     handler: H,
   ) -> Self {
     Self {
@@ -40,10 +40,10 @@ impl<J: JobKey, D: DepKey, I: In, O: Out, const DS: usize, H: Handler<J, D, I, O
     profiling::register_thread!();
     trace!("Started job queue worker thread {}", thread_index);
     loop {
-      if let Ok((job_key, dependencies, input)) = self.from_manager.recv() {
+      if let Ok((job_key, input, dependency_outputs)) = self.from_manager.recv() {
         trace!("Running job {:?}", job_key);
-        let output = (self.handler)(job_key, dependencies, input);
-        if self.to_manager.send((job_key, output)).is_err() {
+        let output = (self.handler)(job_key, input, &dependency_outputs);
+        if self.to_manager.send((job_key, output, dependency_outputs)).is_err() {
           break; // Manager has disconnected; stop this thread.
         }
       } else {
