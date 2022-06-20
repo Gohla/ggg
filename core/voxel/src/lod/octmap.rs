@@ -99,8 +99,8 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       requested_aabbs: FxHashSet::default(),
       job_queue: JobQueue::new(
         settings.job_queue_worker_threads,
-        1024,
-        1024,
+        32,
+        64,
         move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
             (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
@@ -378,7 +378,7 @@ impl NeighborLods {
   #[inline]
   fn max(&self) -> u8 { self.x.max(self.y).max(self.z).max(self.xy).max(self.yz).max(self.xz) }
   #[inline]
-  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(1) }
+  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(4) }
 }
 
 impl NodeResult {
@@ -409,6 +409,7 @@ pub struct LodJob<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
 }
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
+  #[inline]
   pub fn new_sample(aabb: AABB, volume: V) -> Self {
     Self {
       key: LodJobKey::Sample(aabb),
@@ -417,6 +418,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
     }
   }
 
+  #[inline]
   pub fn new_mesh(aabb: AABB, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIterator<V>) -> Self {
     Self {
       key: LodJobKey::Mesh(aabb),
@@ -432,6 +434,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Job<LodJobKey, E::DependencyKe
 
   type DependencyIterator = LodJobDependencyIterator<C, V, E>;
 
+  #[inline]
   fn into(self) -> (LodJobInput<V, E::JobInput>, Self::DependencyIterator) {
     let input = self.input;
     let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies);
@@ -445,6 +448,7 @@ pub struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C>>
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Iterator for LodJobDependencyIterator<C, V, E> {
   type Item = (E::DependencyKey, LodJob<C, V, E>);
 
+  #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     match &mut self.0 {
       Some(i) => i.next(),

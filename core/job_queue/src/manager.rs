@@ -121,8 +121,9 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
   }
 
   #[inline]
-  fn handle_from_worker(&mut self, job_key: JK, output: O, dependency_outputs: Vec<(DK, O)>, job_key_cache_1: &mut Vec<JK>, job_key_cache_2: &mut Vec<JK>) -> bool {
+  fn handle_from_worker(&mut self, job_key: JK, output: O, mut dependency_outputs: Vec<(DK, O)>, job_key_cache_1: &mut Vec<JK>, job_key_cache_2: &mut Vec<JK>) -> bool {
     if self.dependency_output_cache.len() < self.dependency_output_cache.capacity() {
+      dependency_outputs.clear();
       self.dependency_output_cache.push(dependency_outputs);
     }
     use JobStatus::*;
@@ -200,7 +201,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
   #[inline(always)]
   fn add_dependency_edge(&mut self, depender_job_key: JK, dependee_job_key: JK, dependency_key: DK) {
     self.job_graph.add_edge(depender_job_key, dependee_job_key, dependency_key);
-    trace!("Added dependency from job {:?} to {:?}", depender_job_key, dependee_job_key);
+    trace!("Added dependency {:?} from job {:?} to {:?}", dependency_key, depender_job_key, dependee_job_key);
   }
 
 

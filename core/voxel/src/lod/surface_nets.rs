@@ -30,6 +30,7 @@ pub struct SurfaceNetsExtractorSettings {
 }
 
 impl Default for SurfaceNetsExtractorSettings {
+  #[inline]
   fn default() -> Self {
     Self {
       extract_regular_chunks: true,
@@ -197,8 +198,10 @@ pub struct SurfaceNetsJobInput {
 // Job dependencies iterator
 
 pub struct SurfaceNetsJobDependenciesIterator<C, V> {
-  total_size: u32,
   aabb: AABBWithMax,
+  make_x_border: bool,
+  make_y_border: bool,
+  make_z_border: bool,
   volume: V,
   settings: SurfaceNetsExtractorSettings,
   stage: Option<SampleKind>,
@@ -206,10 +209,13 @@ pub struct SurfaceNetsJobDependenciesIterator<C, V> {
 }
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
+  #[inline]
   fn new(total_size: u32, aabb: AABBWithMax, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
     Self {
-      total_size,
       aabb,
+      make_x_border: aabb.max.x < total_size,
+      make_y_border: aabb.max.y < total_size,
+      make_z_border: aabb.max.z < total_size,
       volume,
       settings,
       stage: Some(SampleKind::Regular),
@@ -221,48 +227,59 @@ impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
 impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C, V> {
   type Item = (SampleKind, LodJob<C, V, SurfaceNetsExtractor<C>>);
 
+  #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
     if self.stage.is_none() { return None; }
-    let stage = self.stage.unwrap(); // Unwrap OK: stage is Some.
     let size = self.aabb.inner.size;
     // Regular
-    if stage == Regular && self.settings.extract_regular_chunks {
+    if self.stage == Some(Regular) {
       self.stage = Some(X);
-      return Some((Regular, LodJob::new_sample(AABB::new_unchecked(self.aabb.inner.min, size), self.volume.clone())))
+      if self.settings.extract_regular_chunks {
+        return Some((Regular, LodJob::new_sample(self.aabb.inner, self.volume.clone())))
+      }
     }
     // Positive X
-    let make_x_border = self.aabb.max.x < self.total_size;
-    if stage == X && make_x_border && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
+    if self.stage == Some(X) {
       self.stage = Some(Y);
-      return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
+      if self.make_x_border && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
+        return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
+      }
     }
     // Positive Y
-    let make_y_border = self.aabb.max.y < self.total_size;
-    if stage == Y && make_y_border && (self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks) {
+    if self.stage == Some(Y) {
       self.stage = Some(Z);
-      return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
+      if self.make_y_border && (self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks) {
+        return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
+      }
     }
     // Positive Z
-    let make_z_border = self.aabb.max.z < self.total_size;
-    if stage == Z && make_z_border && (self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks) {
+    if self.stage == Some(Z) {
       self.stage = Some(XY);
-      return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
+      if self.make_z_border && (self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks) {
+        return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
+      }
     }
     // Positive XY
-    if stage == XY && make_x_border && make_y_border && self.settings.extract_border_xy_chunks {
+    if self.stage == Some(XY) {
       self.stage = Some(YZ);
-      return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
+      if self.make_x_border && self.make_y_border && self.settings.extract_border_xy_chunks {
+        return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
+      }
     }
     // Positive YZ
-    if stage == YZ && make_y_border && make_z_border && self.settings.extract_border_yz_chunks {
+    if self.stage == Some(YZ) {
       self.stage = Some(XZ);
-      return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
+      if self.make_y_border && self.make_z_border && self.settings.extract_border_yz_chunks {
+        return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
+      }
     }
     // Positive XZ
-    if stage == XZ && make_x_border && make_z_border && self.settings.extract_border_xz_chunks {
+    if self.stage == Some(XZ) {
       self.stage = None;
-      return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
+      if self.make_x_border && self.make_z_border && self.settings.extract_border_xz_chunks {
+        return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
+      }
     }
     None
   }
@@ -355,28 +372,33 @@ struct AABBWithMax {
 }
 
 impl AABBWithMax {
+  #[inline]
   fn new(aabb: AABB) -> Self {
     Self { inner: aabb, max: aabb.max_point() }
   }
 
+  #[inline]
   fn min_x(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.x = self.max.x;
     min
   }
 
+  #[inline]
   fn min_y(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.y = self.max.y;
     min
   }
 
+  #[inline]
   fn min_z(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.z = self.max.z;
     min
   }
 
+  #[inline]
   fn min_xy(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.x = self.max.x;
@@ -384,6 +406,7 @@ impl AABBWithMax {
     min
   }
 
+  #[inline]
   fn min_yz(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.y = self.max.y;
@@ -391,6 +414,7 @@ impl AABBWithMax {
     min
   }
 
+  #[inline]
   fn min_xz(&self) -> UVec3 {
     let mut min = self.inner.min;
     min.x = self.max.x;
