@@ -10,19 +10,19 @@ use crate::lod::render::LodDraw;
 use crate::volume::Volume;
 
 /// Extracts chunks of vertices with LOD from a volume.
-pub trait LodExtractor<C: ChunkSize, V: Volume>: Clone + Send + Sync + 'static {
+pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   type Chunk: LodChunkMesh + Send + Sync + 'static;
   type JobInput: In;
   type DependencyKey: DepKey;
-  type DependenciesIntoIterator: IntoIterator<Item=(Self::DependencyKey, LodJob<V, Self::JobInput, Self::DependenciesIntoIterator>)>;
+  type DependenciesIntoIterator<V: Volume>: IntoIterator<Item=(Self::DependencyKey, LodJob<C, V, Self>)> + Send + 'static;
 
-  fn create_job(
+  fn create_job<V: Volume>(
     &self,
     total_size: u32,
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator);
+  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>);
 
   fn run_job(
     &self,
@@ -37,52 +37,4 @@ pub trait LodExtractor<C: ChunkSize, V: Volume>: Clone + Send + Sync + 'static {
     indices: &mut Vec<u16>,
     draws: &mut Vec<LodDraw>,
   );
-}
-
-// Box forwarders
-
-impl<
-  C: ChunkSize,
-  V: Volume,
-  CM: LodChunkMesh,
-  JI: In,
-  DK: DepKey,
-  DI: IntoIterator<Item=(DK, LodJob<V, JI, DI>)>,
-  T: LodExtractor<C, V, Chunk=CM, DependencyKey=DK, JobInput=JI, DependenciesIntoIterator=DI> + ?Sized
-> LodExtractor<C, V> for Box<T> {
-  type Chunk = CM;
-  type JobInput = JI;
-  type DependencyKey = DK;
-  type DependenciesIntoIterator = DI;
-
-  #[inline]
-  fn create_job(
-    &self,
-    total_size: u32,
-    aabb: AABB,
-    volume: V,
-    empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator) {
-    (**self).create_job(total_size, aabb, volume, empty_lod_chunk_mesh)
-  }
-
-  #[inline]
-  fn run_job(
-    &self,
-    input: Self::JobInput,
-    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
-  ) -> Self::Chunk {
-    (**self).run_job(input, dependency_outputs)
-  }
-
-  #[inline]
-  fn update_render_data(
-    &self,
-    chunk: &Self::Chunk,
-    vertices: &mut Vec<Vertex>,
-    indices: &mut Vec<u16>,
-    draws: &mut Vec<LodDraw>,
-  ) {
-    (**self).update_render_data(chunk, vertices, indices, draws)
-  }
 }

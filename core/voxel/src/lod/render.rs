@@ -10,7 +10,6 @@ use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::size::ChunkSize;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
-use crate::volume::Volume;
 
 // Trait
 
@@ -86,8 +85,8 @@ impl<MM> SimpleLodRenderDataManager<MM> {
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>, MM> LodRenderDataManager<C> for SimpleLodRenderDataManager<MM> where
-  MM: LodChunkMeshManager<C, V, Extractor=E>
+impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLodRenderDataManager<MM> where
+  MM: LodChunkMeshManager<C, Extractor=E>
 {
   #[profiling::function]
   fn update(

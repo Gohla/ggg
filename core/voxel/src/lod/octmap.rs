@@ -49,7 +49,7 @@ impl Default for LodOctmapSettings {
 
 // LOD octmap
 
-pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> {
+pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   total_size: u32,
   lod_factor: f32,
   fixed_lod_level: Option<u8>,
@@ -69,10 +69,10 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> {
   empty_lod_chunk_mesh_cache_size: usize,
 
   requested_aabbs: FxHashSet<AABB>,
-  job_queue: JobQueue<LodJobKey, E::DependencyKey, LodJobInput<V, E::Chunk>, LodJob<V, LodJobInput<V, E::JobInput>, LodJobDependencyIterator<C, V, E>>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
+  job_queue: JobQueue<LodJobKey, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodOctmap<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
     let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
@@ -101,12 +101,12 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodOctmap<C, V, E> {
         settings.job_queue_worker_threads,
         1024,
         1024,
-        move |job_key, input, dependency_outputs| {
+        move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
             (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
               LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.min, aabb.step::<C>())))
             }
-            (LodJobKey::Mesh(aabb), LodJobInput::Mesh(input)) => {
+            (LodJobKey::Mesh(_), LodJobInput::Mesh(input)) => {
               let lod_chunk_mesh = extractor.run_job(input, dependency_outputs);
               LodJobOutput::Mesh(Arc::new(lod_chunk_mesh))
             }
@@ -329,8 +329,8 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodOctmap<C, V, E> {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_aabbs.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-      let (input, dependencies) = self.extractor.create_job(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh, &self.job_queue);
-      let job = LodJob { key: LodJobKey::Mesh(aabb), input, dependencies };
+      let (input, dependencies) = self.extractor.create_job(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh);
+      let job = LodJob { key: LodJobKey::Mesh(aabb), input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_aabbs.insert(aabb);
     }
@@ -402,13 +402,13 @@ pub enum LodJobInput<V, JI> {
   Mesh(JI),
 }
 
-pub struct LodJob<V, JI, DI> {
+pub struct LodJob<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   key: LodJobKey,
-  input: LodJobInput<V, JI>,
-  dependencies: Option<DI>,
+  input: LodJobInput<V, E::JobInput>,
+  dependencies: Option<E::DependenciesIntoIterator<V>>,
 }
 
-impl<V, JI, DI> LodJob<V, JI, DI> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
   pub fn new_sample(aabb: AABB, volume: V) -> Self {
     Self {
       key: LodJobKey::Sample(aabb),
@@ -417,7 +417,7 @@ impl<V, JI, DI> LodJob<V, JI, DI> {
     }
   }
 
-  pub fn new_mesh(aabb: AABB, extractor_job_input: JI, extractor_dependencies_iterator: DI) -> Self {
+  pub fn new_mesh(aabb: AABB, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIntoIterator<V>) -> Self {
     Self {
       key: LodJobKey::Mesh(aabb),
       input: LodJobInput::Mesh(extractor_job_input),
@@ -426,27 +426,27 @@ impl<V, JI, DI> LodJob<V, JI, DI> {
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> Job<LodJobKey, E::DependencyKey, LodJobInput<V, E::Chunk>> for LodJob<V, E::JobInput, E::DependenciesIntoIterator> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Job<LodJobKey, E::DependencyKey, LodJobInput<V, E::JobInput>> for LodJob<C, V, E> {
   #[inline]
   fn key(&self) -> &LodJobKey { &self.key }
 
   type DependencyIntoIterator = LodJobDependencyIterator<C, V, E>;
 
-  fn into(self) -> (LodJobInput<V, E::Chunk>, Self::DependencyIntoIterator) {
+  fn into(self) -> (LodJobInput<V, E::JobInput>, Self::DependencyIntoIterator) {
     let input = self.input;
-    let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies);
+    let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies.map(|i|i.into_iter()));
     (input, dependencies)
   }
 }
 
 #[repr(transparent)]
-struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C, V>>(Option<E::DependenciesIntoIterator>);
+pub struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C>>(Option<<<E as LodExtractor<C>>::DependenciesIntoIterator<V> as IntoIterator>::IntoIter>);
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> Iterator for LodJobDependencyIterator<C, V, E> {
-  type Item = (E::DependencyKey, LodJob<V, E::JobInput, E::DependenciesIntoIterator>);
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Iterator for LodJobDependencyIterator<C, V, E> {
+  type Item = (E::DependencyKey, LodJob<C, V, E>);
 
   fn next(&mut self) -> Option<Self::Item> {
-    match self {
+    match &mut self.0 {
       Some(i) => i.next(),
       _ => None,
     }
@@ -471,7 +471,7 @@ impl<CS, CM> Clone for LodJobOutput<CS, CM> {
 
 // LodChunkMeshManager trait implementation
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodChunkMeshManager<C, V> for LodOctmap<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManager<C> for LodOctmap<C, V, E> {
   type Extractor = E;
   #[inline]
   fn get_extractor(&self) -> &E {
@@ -485,7 +485,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodChunkMeshManager<C, V> f
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C, V>> LodChunkMeshManagerParameters for LodOctmap<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<C, V, E> {
   #[inline]
   fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
 

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
@@ -24,34 +26,35 @@ pub struct MarchingCubesExtractor<C: ChunkSize> {
   _settings: MarchingCubesExtractorSettings,
 }
 
-impl<C: ChunkSize, V: Volume> LodExtractor<C, V> for MarchingCubesExtractor<C> {
+impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   type Chunk = MarchingCubesLodChunkMesh;
   type JobInput = MarchingCubesJobInput;
   type DependencyKey = ();
-  type DependenciesIntoIterator = [(Self::DependencyKey, LodJob<V, Self::JobInput, Self::DependenciesIntoIterator>); 1];
+  type DependenciesIntoIterator<V: Volume> = MarchingCubesJobDependenciesIterator<C, V>;
 
   #[inline]
-  fn create_job(
+  fn create_job<V: Volume>(
     &self,
     _total_size: u32,
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator) {
+  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
     let input = MarchingCubesJobInput { aabb, empty_lod_chunk_mesh };
-    let dependencies = [((), LodJob::new_sample(aabb, volume))];
+    let dependencies = MarchingCubesJobDependenciesIterator::new(aabb, volume);
     (input, dependencies)
   }
 
   #[inline]
   fn run_job(
     &self,
-    mut input: Self::JobInput,
+    input: Self::JobInput,
     dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
   ) -> Self::Chunk {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
-      self.marching_cubes.extract_chunk(input.aabb.min, input.aabb.step::<C>(), chunk_samples, &mut input.empty_lod_chunk_mesh.regular);
-      input.empty_lod_chunk_mesh
+      let MarchingCubesJobInput { aabb, empty_lod_chunk_mesh: mut chunk } = input;
+      self.marching_cubes.extract_chunk(aabb.min, aabb.step::<C>(), chunk_samples, &mut chunk.regular);
+      chunk
     } else {
       panic!("Missing sample dependency output");
     }
@@ -76,6 +79,33 @@ impl<C: ChunkSize> MarchingCubesExtractor<C> {
 pub struct MarchingCubesJobInput {
   aabb: AABB,
   empty_lod_chunk_mesh: MarchingCubesLodChunkMesh,
+}
+
+
+// Job dependencies iterator
+
+pub struct MarchingCubesJobDependenciesIterator<C, V> {
+  aabb: AABB,
+  volume: Option<V>,
+  _chunk_size_phantom: PhantomData<C>,
+}
+
+impl<C: ChunkSize, V: Volume> MarchingCubesJobDependenciesIterator<C, V> {
+  #[inline]
+  fn new(aabb: AABB, volume: V) -> Self { Self { aabb, volume: Some(volume), _chunk_size_phantom: PhantomData::default() } }
+}
+
+impl<C: ChunkSize, V: Volume> Iterator for MarchingCubesJobDependenciesIterator<C, V> {
+  type Item = ((), LodJob<C, V, MarchingCubesExtractor<C>>);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let volume = self.volume.take();
+    if let Some(volume) = volume {
+      Some(((), LodJob::new_sample(self.aabb, volume)))
+    } else {
+      None
+    }
+  }
 }
 
 

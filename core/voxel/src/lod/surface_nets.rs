@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::marker::PhantomData;
 
 use ultraviolet::UVec3;
 
@@ -52,20 +53,20 @@ pub struct SurfaceNetsExtractor<C: ChunkSize> {
   settings: SurfaceNetsExtractorSettings,
 }
 
-impl<C: ChunkSize, V: Volume> LodExtractor<C, V> for SurfaceNetsExtractor<C> {
+impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   type Chunk = SurfaceNetsLodChunkMesh;
   type JobInput = SurfaceNetsJobInput;
   type DependencyKey = SampleKind;
-  type DependenciesIntoIterator = SurfaceNetsJobDependenciesIterator<V>;
+  type DependenciesIntoIterator<V: Volume> = SurfaceNetsJobDependenciesIterator<C, V>;
 
   #[inline]
-  fn create_job(
+  fn create_job<V: Volume>(
     &self,
     total_size: u32,
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator) {
+  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
     let aabb = AABBWithMax::new(aabb);
     let input = SurfaceNetsJobInput { aabb, empty_lod_chunk_mesh };
     let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(total_size, aabb, volume, self.settings);
@@ -105,8 +106,8 @@ impl<C: ChunkSize, V: Volume> LodExtractor<C, V> for SurfaceNetsExtractor<C> {
     if let LodJobOutput::Sample(chunk_samples) = chunk_samples.borrow() {
       // Extract
       let aabb = input.aabb;
-      let min = aabb.aabb.min;
-      let step = aabb.aabb.step::<C>();
+      let min = aabb.inner.min;
+      let step = aabb.inner.step::<C>();
       let min_x = aabb.min_x();
       let min_y = aabb.min_y();
       let min_z = aabb.min_z();
@@ -195,77 +196,79 @@ pub struct SurfaceNetsJobInput {
 
 // Job dependencies iterator
 
-#[repr(transparent)]
-pub struct SurfaceNetsJobDependenciesIterator<V> {
+pub struct SurfaceNetsJobDependenciesIterator<C, V> {
   total_size: u32,
   aabb: AABBWithMax,
   volume: V,
   settings: SurfaceNetsExtractorSettings,
   stage: Option<SampleKind>,
+  _chunk_size_phantom: PhantomData<C>,
 }
 
-impl<V: Volume> SurfaceNetsJobDependenciesIterator<V> {
+impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   fn new(total_size: u32, aabb: AABBWithMax, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
     Self {
       total_size,
       aabb,
       volume,
       settings,
-      stage: Some(SampleKind::Regular)
+      stage: Some(SampleKind::Regular),
+      _chunk_size_phantom: PhantomData::default(),
     }
   }
 }
 
-impl<V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<V> {
-  type Item = (SampleKind, LodJob<V, SurfaceNetsJobInput, Self>);
+impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C, V> {
+  type Item = (SampleKind, LodJob<C, V, SurfaceNetsExtractor<C>>);
 
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
     if self.stage.is_none() { return None; }
     let stage = self.stage.unwrap(); // Unwrap OK: stage is Some.
+    let size = self.aabb.inner.size;
     // Regular
     if stage == Regular && self.settings.extract_regular_chunks {
       self.stage = Some(X);
-      return Some((Regular, LodJob::new_sample(AABB::new_unchecked(self.min, self.size), self.volume.clone())))
+      return Some((Regular, LodJob::new_sample(AABB::new_unchecked(self.aabb.inner.min, size), self.volume.clone())))
     }
     // Positive X
     let make_x_border = self.aabb.max.x < self.total_size;
     if stage == X && make_x_border && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
       self.stage = Some(Y);
-      return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), self.size), self.volume.clone())));
+      return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
     }
     // Positive Y
     let make_y_border = self.aabb.max.y < self.total_size;
     if stage == Y && make_y_border && (self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks) {
       self.stage = Some(Z);
-      return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), self.size), self.volume.clone())));
+      return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
     }
     // Positive Z
     let make_z_border = self.aabb.max.z < self.total_size;
     if stage == Z && make_z_border && (self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks) {
       self.stage = Some(XY);
-      return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), self.size), self.volume.clone())));
+      return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
     }
     // Positive XY
     if stage == XY && make_x_border && make_y_border && self.settings.extract_border_xy_chunks {
       self.stage = Some(YZ);
-      return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), self.size), self.volume.clone())));
+      return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
     }
     // Positive YZ
     if stage == YZ && make_y_border && make_z_border && self.settings.extract_border_yz_chunks {
       self.stage = Some(XZ);
-      return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), self.size), self.volume.clone())));
+      return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
     }
     // Positive XZ
     if stage == XZ && make_x_border && make_z_border && self.settings.extract_border_xz_chunks {
       self.stage = None;
-      return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), self.size), self.volume.clone())));
+      return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
     }
     None
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum SampleKind {
   Regular,
   X,
@@ -347,49 +350,49 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
 
 #[derive(Copy, Clone)]
 struct AABBWithMax {
-  aabb: AABB,
+  inner: AABB,
   max: UVec3,
 }
 
 impl AABBWithMax {
   fn new(aabb: AABB) -> Self {
-    Self { aabb, max: aabb.max_point() }
+    Self { inner: aabb, max: aabb.max_point() }
   }
 
   fn min_x(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.x = self.max.x;
     min
   }
 
   fn min_y(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.y = self.max.y;
     min
   }
 
   fn min_z(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.z = self.max.z;
     min
   }
 
   fn min_xy(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.x = self.max.x;
     min.y = self.max.y;
     min
   }
 
   fn min_yz(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.y = self.max.y;
     min.z = self.max.z;
     min
   }
 
   fn min_xz(&self) -> UVec3 {
-    let mut min = self.aabb.min;
+    let mut min = self.inner.min;
     min.x = self.max.x;
     min.z = self.max.z;
     min

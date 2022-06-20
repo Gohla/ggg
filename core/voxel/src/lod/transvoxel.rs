@@ -1,4 +1,4 @@
-use job_queue::{Dependencies, DependencyOutputs, JobQueue, SendError};
+use std::marker::PhantomData;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
@@ -6,7 +6,7 @@ use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AABB;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
-use crate::lod::octmap::{LodJobInput, LodJobKey, LodJobOutput};
+use crate::lod::octmap::{LodJob, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::marching_cubes::MarchingCubes;
 use crate::transvoxel::side::TransitionSide;
@@ -52,20 +52,32 @@ pub struct TransvoxelExtractor<C: ChunkSize> {
 }
 
 impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
-  type Chunk = TransvoxelLodChunkVertices;
+  type Chunk = TransvoxelLodChunkMesh;
+  type JobInput = TransvoxelJobInput;
   type DependencyKey = ();
+  type DependenciesIntoIterator<V: Volume> = TransvoxelJobDependenciesIterator<C, V>;
 
   #[inline]
-  fn create_job<V: Volume, const DS: usize>(&self, total_size: u32, aabb: AABB, volume: V, lod_chunk_mesh: Self::Chunk, job_queue: &JobQueue<LodJobKey, Self::DependencyKey, LodJobInput<V, Self::Chunk>, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>) -> Result<(), SendError<()>> {
-    let sample_key = LodJobKey::Sample(aabb);
-    job_queue.try_add_job(sample_key, LodJobInput::Sample(volume))?;
-    job_queue.try_add_job_with_dependencies(LodJobKey::Mesh(aabb), LodJobInput::Mesh { total_size, lod_chunk_mesh }, Dependencies::from_elem(((), sample_key), 1))?;
-    Ok(())
+  fn create_job<V: Volume>(
+    &self,
+    total_size: u32,
+    aabb: AABB,
+    volume: V,
+    empty_lod_chunk_mesh: Self::Chunk,
+  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
+    let input = TransvoxelJobInput { total_size, aabb, empty_lod_chunk_mesh };
+    let dependencies = TransvoxelJobDependenciesIterator::new(aabb, volume);
+    (input, dependencies)
   }
 
   #[inline]
-  fn run_job<const DS: usize>(&self, total_size: u32, aabb: AABB, dependency_outputs: DependencyOutputs<Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>, DS>, chunk: &mut Self::Chunk) {
+  fn run_job(
+    &self,
+    input: Self::JobInput,
+    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
+  ) -> Self::Chunk {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
+      let TransvoxelJobInput { total_size, aabb, empty_lod_chunk_mesh: mut chunk } = input;
       let lores_min = aabb.min;
       let lores_max = aabb.max_point();
       let lores_step = aabb.step::<C>();
@@ -94,6 +106,9 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
           self.extract_transvoxel_chunk(aabb, TransitionSide::HiZ, &volume, hires_step, lores_step, &mut chunk.transition_hi_z_chunk);
         }
       }
+      chunk
+    } else {
+      panic!("Missing sample dependency output");
     }
   }
 
@@ -158,10 +173,47 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
   }
 }
 
-// Chunk vertices
+
+// Job input
+
+pub struct TransvoxelJobInput {
+  total_size: u32,
+  aabb: AABB,
+  empty_lod_chunk_mesh: TransvoxelLodChunkMesh,
+}
+
+
+// Job dependencies iterator
+
+pub struct TransvoxelJobDependenciesIterator<C, V> {
+  aabb: AABB,
+  volume: Option<V>,
+  _chunk_size_phantom: PhantomData<C>,
+}
+
+impl<C: ChunkSize, V: Volume> TransvoxelJobDependenciesIterator<C, V> {
+  #[inline]
+  fn new(aabb: AABB, volume: V) -> Self { Self { aabb, volume: Some(volume), _chunk_size_phantom: PhantomData::default() } }
+}
+
+impl<C: ChunkSize, V: Volume> Iterator for TransvoxelJobDependenciesIterator<C, V> {
+  type Item = ((), LodJob<C, V, TransvoxelExtractor<C>>);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let volume = self.volume.take();
+    if let Some(volume) = volume {
+      Some(((), LodJob::new_sample(self.aabb, volume)))
+    } else {
+      None
+    }
+  }
+}
+
+
+// Chunk mesh
 
 #[derive(Default, Clone, Debug)]
-pub struct TransvoxelLodChunkVertices {
+pub struct TransvoxelLodChunkMesh {
   pub regular: ChunkMesh,
   pub transition_lo_x_chunk: ChunkMesh,
   pub transition_hi_x_chunk: ChunkMesh,
@@ -171,7 +223,7 @@ pub struct TransvoxelLodChunkVertices {
   pub transition_hi_z_chunk: ChunkMesh,
 }
 
-impl TransvoxelLodChunkVertices {
+impl TransvoxelLodChunkMesh {
   #[inline]
   pub fn new() -> Self {
     Self::default()
@@ -199,7 +251,7 @@ impl TransvoxelLodChunkVertices {
   }
 }
 
-impl LodChunkMesh for TransvoxelLodChunkVertices {
+impl LodChunkMesh for TransvoxelLodChunkMesh {
   #[inline]
   fn is_empty(&self) -> bool {
     self.regular.is_empty() &&
