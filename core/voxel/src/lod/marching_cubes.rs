@@ -30,7 +30,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   type Chunk = MarchingCubesLodChunkMesh;
   type JobInput = MarchingCubesJobInput;
   type DependencyKey = ();
-  type DependenciesIntoIterator<V: Volume> = MarchingCubesJobDependenciesIterator<C, V>;
+  type DependenciesIterator<V: Volume> = MarchingCubesJobDependenciesIterator<C, V>;
 
   #[inline]
   fn create_job<V: Volume>(
@@ -39,7 +39,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
+  ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let input = MarchingCubesJobInput { aabb, empty_lod_chunk_mesh };
     let dependencies = MarchingCubesJobDependenciesIterator::new(aabb, volume);
     (input, dependencies)

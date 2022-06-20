@@ -57,7 +57,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   type Chunk = SurfaceNetsLodChunkMesh;
   type JobInput = SurfaceNetsJobInput;
   type DependencyKey = SampleKind;
-  type DependenciesIntoIterator<V: Volume> = SurfaceNetsJobDependenciesIterator<C, V>;
+  type DependenciesIterator<V: Volume> = SurfaceNetsJobDependenciesIterator<C, V>;
 
   #[inline]
   fn create_job<V: Volume>(
@@ -66,7 +66,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
+  ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let aabb = AABBWithMax::new(aabb);
     let input = SurfaceNetsJobInput { aabb, empty_lod_chunk_mesh };
     let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(total_size, aabb, volume, self.settings);

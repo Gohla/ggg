@@ -55,7 +55,7 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   type Chunk = TransvoxelLodChunkMesh;
   type JobInput = TransvoxelJobInput;
   type DependencyKey = ();
-  type DependenciesIntoIterator<V: Volume> = TransvoxelJobDependenciesIterator<C, V>;
+  type DependenciesIterator<V: Volume> = TransvoxelJobDependenciesIterator<C, V>;
 
   #[inline]
   fn create_job<V: Volume>(
@@ -64,7 +64,7 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
     aabb: AABB,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
-  ) -> (Self::JobInput, Self::DependenciesIntoIterator<V>) {
+  ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let input = TransvoxelJobInput { total_size, aabb, empty_lod_chunk_mesh };
     let dependencies = TransvoxelJobDependenciesIterator::new(aabb, volume);
     (input, dependencies)

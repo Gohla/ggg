@@ -405,7 +405,7 @@ pub enum LodJobInput<V, JI> {
 pub struct LodJob<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   key: LodJobKey,
   input: LodJobInput<V, E::JobInput>,
-  dependencies: Option<E::DependenciesIntoIterator<V>>,
+  dependencies: Option<E::DependenciesIterator<V>>,
 }
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
@@ -417,7 +417,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
     }
   }
 
-  pub fn new_mesh(aabb: AABB, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIntoIterator<V>) -> Self {
+  pub fn new_mesh(aabb: AABB, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIterator<V>) -> Self {
     Self {
       key: LodJobKey::Mesh(aabb),
       input: LodJobInput::Mesh(extractor_job_input),
@@ -430,17 +430,17 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Job<LodJobKey, E::DependencyKe
   #[inline]
   fn key(&self) -> &LodJobKey { &self.key }
 
-  type DependencyIntoIterator = LodJobDependencyIterator<C, V, E>;
+  type DependencyIterator = LodJobDependencyIterator<C, V, E>;
 
-  fn into(self) -> (LodJobInput<V, E::JobInput>, Self::DependencyIntoIterator) {
+  fn into(self) -> (LodJobInput<V, E::JobInput>, Self::DependencyIterator) {
     let input = self.input;
-    let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies.map(|i|i.into_iter()));
+    let dependencies = LodJobDependencyIterator::<C, V, E>(self.dependencies);
     (input, dependencies)
   }
 }
 
 #[repr(transparent)]
-pub struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C>>(Option<<<E as LodExtractor<C>>::DependenciesIntoIterator<V> as IntoIterator>::IntoIter>);
+pub struct LodJobDependencyIterator<C: ChunkSize, V: Volume, E: LodExtractor<C>>(Option<E::DependenciesIterator<V>>);
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Iterator for LodJobDependencyIterator<C, V, E> {
   type Item = (E::DependencyKey, LodJob<C, V, E>);

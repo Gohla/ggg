@@ -62,9 +62,9 @@ struct Job(i32);
 impl job_queue::Job<i32, f32, f32> for Job {
   fn key(&self) -> &i32 { &self.0 }
 
-  type DependencyIntoIterator = JobDependencyIterator;
+  type DependencyIterator = JobDependencyIterator;
 
-  fn into(self) -> (f32, Self::DependencyIntoIterator) {
+  fn into(self) -> (f32, Self::DependencyIterator) {
     let input = self.0 as f32 * 2.0;
     let dependencies = JobDependencyIterator(Some(self.0));
     (input, dependencies)

@@ -48,7 +48,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, 
   ) -> std::io::Result<Self> {
     assert!(worker_thread_count > 0, "Worker thread count must be higher than 0");
     assert!(worker_thread_job_buffer_count > 0, "Worker thread job buffer count must be higher than 0");
-    
+
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
     let (worker_to_manager_sender, worker_to_manager_receiver) = unbounded();
@@ -151,8 +151,8 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, 
 pub trait Job<JK: JobKey, DK: DepKey, I: In>: Send + 'static {
   fn key(&self) -> &JK;
 
-  type DependencyIntoIterator: IntoIterator<Item=(DK, Self)>;
-  fn into(self) -> (I, Self::DependencyIntoIterator);
+  type DependencyIterator: Iterator<Item=(DK, Self)>;
+  fn into(self) -> (I, Self::DependencyIterator);
 }
 
 
