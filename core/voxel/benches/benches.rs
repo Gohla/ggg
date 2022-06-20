@@ -2,7 +2,7 @@ use criterion::{BatchSize, black_box, Criterion, criterion_group, criterion_main
 use ultraviolet::{Isometry3, UVec3, Vec3};
 
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::size::{ChunkSize, ChunkSize16};
+use voxel::chunk::size::{ChunkSize, ChunkSize16, ChunkSize32};
 use voxel::lod::aabb::AABB;
 use voxel::lod::extract::LodExtractor;
 use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};
@@ -33,6 +33,7 @@ pub fn sphere_benchmark(c: &mut Criterion) {
 }
 
 type C16 = ChunkSize16;
+type C32 = ChunkSize32;
 
 pub fn marching_cubes_benchmark(c: &mut Criterion) {
   let sphere = Sphere::new(SphereSettings { radius: 16.0 });
@@ -75,16 +76,28 @@ pub fn transvoxel_benchmark(c: &mut Criterion) {
 }
 
 pub fn surface_nets_benchmark(c: &mut Criterion) {
-  let sphere = Sphere::new(SphereSettings { radius: 16.0 });
-  let surface_nets = SurfaceNets::<C16>::new();
-  let start = UVec3::new(0, 0, 0);
   let step = 1;
-  let chunk_samples = sphere.sample_chunk(start, step);
-  c.bench_function("SurfaceNets-Sphere-16", |b| b.iter_batched(
-    || preallocate_chunk_vertices::<C16>(),
-    |mut chunk_mesh| surface_nets.extract_chunk(start, step, &chunk_samples, &mut chunk_mesh),
-    BatchSize::SmallInput,
-  ));
+  let start = UVec3::new(0, 0, 0);
+  {
+    let sphere = Sphere::new(SphereSettings { radius: 16.0 });
+    let surface_nets = SurfaceNets::<C16>::new();
+    let chunk_samples = sphere.sample_chunk(start, step);
+    c.bench_function("SurfaceNets-Sphere-16", |b| b.iter_batched(
+      || preallocate_chunk_vertices::<C16>(),
+      |mut chunk_mesh| surface_nets.extract_chunk(start, step, &chunk_samples, &mut chunk_mesh),
+      BatchSize::SmallInput,
+    ));
+  }
+  {
+    let sphere = Sphere::new(SphereSettings { radius: 32.0 });
+    let surface_nets = SurfaceNets::<C32>::new();
+    let chunk_samples = sphere.sample_chunk(start, step);
+    c.bench_function("SurfaceNets-Sphere-32", |b| b.iter_batched(
+      || preallocate_chunk_vertices::<C32>(),
+      |mut chunk_mesh| surface_nets.extract_chunk(start, step, &chunk_samples, &mut chunk_mesh),
+      BatchSize::SmallInput,
+    ));
+  }
 }
 
 pub fn surface_nets_borders_benchmark(c: &mut Criterion) {
@@ -151,7 +164,7 @@ pub fn octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-Sphere-Transvoxel");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octmap::<_, C16, _>(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap::<C16, _, _>(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
@@ -173,7 +186,7 @@ pub fn octree_benchmark(c: &mut Criterion) {
   group.finish();
 }
 
-fn preallocate_octmap<V: Volume, C: ChunkSize, E: LodExtractor<C>>(mut octree: LodOctmap<V, C, E>, position: Vec3) -> LodOctmap<V, C, E> {
+fn preallocate_octmap<C: ChunkSize, V: Volume, E: LodExtractor<C>>(mut octree: LodOctmap<C, V, E>, position: Vec3) -> LodOctmap<C, V, E> {
   drop(octree.update(position));
   octree.clear();
   octree
