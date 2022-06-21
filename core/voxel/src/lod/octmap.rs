@@ -99,8 +99,8 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       requested_aabbs: FxHashSet::default(),
       job_queue: JobQueue::new(
         settings.job_queue_worker_threads,
-        32,
-        64,
+        16,
+        4096,
         move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
             (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {

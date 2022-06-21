@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::hash::BuildHasherDefault;
 use std::thread;
 use std::thread::JoinHandle;
@@ -6,7 +7,6 @@ use flume::{Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use petgraph::prelude::*;
-use petgraph::visit::VisitMap;
 use rustc_hash::{FxHasher, FxHashMap, FxHashSet};
 use tracing::trace;
 
@@ -39,7 +39,8 @@ pub(super) struct ManagerThread<JK, DK, I, J, O> {
   jobs_to_run: LinkedHashSet<JK, BuildHasherDefault<FxHasher>>,
 
   dependency_output_cache: Vec<Vec<(DK, O)>>,
-  bfs_cache: Bfs<JK, FxHashSet<JK>>,
+  bfs_stack_cache: VecDeque<JK>,
+  bfs_discovered_cache: FxHashSet<JK>,
 
   pending_jobs: u32,
   running_jobs: u32,
@@ -69,7 +70,8 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       jobs_to_run: LinkedHashSet::default(),
 
       dependency_output_cache: Vec::with_capacity(dependency_output_cache_count),
-      bfs_cache: Bfs::default(),
+      bfs_stack_cache: VecDeque::default(),
+      bfs_discovered_cache: FxHashSet::default(),
 
       pending_jobs: 0,
       running_jobs: 0,
@@ -115,23 +117,24 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       .wait();
     match selected {
       Some(SelectedReceiver::FromWorker((job_key, output, dependency_outputs))) => self.handle_from_worker(job_key, output, dependency_outputs, job_key_cache_1),
-      Some(SelectedReceiver::FromQueue(message)) => self.handle_from_queue(message, job_key_cache_1),
+      Some(SelectedReceiver::FromQueue(message)) => self.handle_from_queue(message),
       None => false,
     }
   }
 
 
   #[inline]
-  fn handle_from_queue(&mut self, message: FromQueueMessage<JK, J>, job_key_cache_1: &mut Vec<JK>) -> bool {
+  fn handle_from_queue(&mut self, message: FromQueueMessage<JK, J>) -> bool {
     use FromQueueMessage::*;
     match message {
       TryAddJob(job) => self.try_add_job(job),
-      TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key, job_key_cache_1),
+      TryRemoveJobAndOrphanedDependencies(job_key) => self.try_remove_job_and_orphaned_dependencies(job_key),
     }
   }
 
+  #[profiling::function]
   #[inline]
-  fn handle_from_worker(&mut self, job_key: JK, output: O, dependency_outputs: Vec<(DK, O)>, job_key_cache_1: &mut Vec<JK>) -> bool {
+  fn handle_from_worker(&mut self, job_key: JK, output: O, dependency_outputs: Vec<(DK, O)>, job_key_cache: &mut Vec<JK>) -> bool {
     self.reclaim_dependency_outputs(dependency_outputs);
     use JobStatus::*;
     match self.job_key_to_job_status.get(&job_key) {
@@ -141,9 +144,9 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       _ => {} // Otherwise: continue.
     }
     // Try to make dependent jobs ready to run.
-    job_key_cache_1.clear();
-    self.job_graph.neighbors_directed(job_key, Incoming).collect_into(job_key_cache_1);
-    for depender_job_key in job_key_cache_1.drain(..) {
+    job_key_cache.clear();
+    job_key_cache.extend(self.job_graph.neighbors_directed(job_key, Incoming));
+    for depender_job_key in job_key_cache.drain(..) {
       if !self.try_make_job_ready_to_run(depender_job_key, job_key, &output) { return false; }
     }
     // Complete job.
@@ -208,7 +211,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
 
   #[profiling::function]
   #[inline]
-  fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: JK, job_key_cache: &mut Vec<JK>) -> bool {
+  fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: JK) -> bool {
     if !self.job_key_to_job_status.contains_key(&job_key) { return true; } // Job does not exist: done.
     if let Some(_) = self.jobs_to_add.remove(&job_key) {
       // Job was not added to the graph yet: done.
@@ -216,51 +219,49 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       return true;
     }
     trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
-    // OPTO: implement custom BFS that ignores entire subgraphs of nodes that have incoming dependencies.
-    // Reset BFS traversal (using leaky API as it provides no API for this)
-    self.bfs_cache.discovered.clear();
-    self.bfs_cache.stack.clear();
-    // Start BFS traversal (again using leaky API)
-    self.bfs_cache.discovered.visit(job_key);
-    self.bfs_cache.stack.push_front(job_key);
-    // Run BFS traversal, putting items in `job_key_cache` so we can mutate the graph when we iterate that. Cannot use
-    // Walker API as it takes ownership of `bfs_cache`.
-    job_key_cache.clear();
-    while let Some(j) = self.bfs_cache.next(&self.job_graph) {
-      job_key_cache.push(j);
-    }
-    for j in job_key_cache.drain(..) {
-      if self.job_graph.neighbors_directed(j, Incoming).next().is_some() {
+    self.bfs_stack_cache.clear();
+    self.bfs_discovered_cache.clear();
+    self.bfs_stack_cache.push_back(job_key);
+    self.bfs_discovered_cache.insert(job_key);
+    while let Some(job_key) = self.bfs_stack_cache.pop_front() {
+      if self.job_graph.neighbors_directed(job_key, Incoming).next().is_some() {
         continue; // Job has incoming dependencies, can't remove it.
       }
-      self.job_graph.remove_node(j);
-      self.jobs_to_run.remove(&j);
-      trace!("Removed job {:?}", j);
-      let job_status = self.job_key_to_job_status.remove(&j).unwrap(); // Unwrap OK: mapping must exist.
+      self.job_graph.remove_node(job_key);
+      // NOTE: no need to remove from `jobs_to_add`, as either the job is in `jobs_to_add` or it is in `job_graph`, and
+      //       since we are discovering the job in `job_graph` here, it cannot be in `jobs_to_add`.
+      self.jobs_to_run.remove(&job_key);
+      trace!("Removed job {:?}", job_key);
+      let job_status = self.job_key_to_job_status.remove(&job_key).unwrap(); // Unwrap OK: mapping must exist.
       let send_success = match job_status {
         JobStatus::Pending(input, dependency_outputs) => {
           self.reclaim_dependency_outputs(dependency_outputs);
-          let send_success = self.to_queue.send(JobQueueMessage::PendingJobRemoved(j, input)).is_ok();
+          let send_success = self.to_queue.send(JobQueueMessage::PendingJobRemoved(job_key, input)).is_ok();
           let send_success = self.decrement_pending_jobs_and_send_queue_empty_if_applicable() | send_success;
           send_success
         }
         JobStatus::Running => {
-          let send_success = self.to_queue.send(JobQueueMessage::RunningJobRemoved(j)).is_ok();
+          let send_success = self.to_queue.send(JobQueueMessage::RunningJobRemoved(job_key)).is_ok();
           let send_success = self.decrement_running_jobs_and_send_queue_empty_if_applicable() | send_success;
           send_success
         }
         JobStatus::Completed(output) => {
-          let send_success = self.to_queue.send(JobQueueMessage::CompletedJobRemoved(j, output)).is_ok();
+          let send_success = self.to_queue.send(JobQueueMessage::CompletedJobRemoved(job_key, output)).is_ok();
           send_success
         }
       };
       if !send_success { return false; }
+      for dependency_job_key in self.job_graph.neighbors_directed(job_key, Outgoing) {
+        if !self.bfs_discovered_cache.contains(&dependency_job_key) {
+          self.bfs_discovered_cache.insert(dependency_job_key);
+          self.bfs_stack_cache.push_back(dependency_job_key);
+        }
+      }
     }
     true
   }
 
 
-  #[profiling::function]
   #[inline]
   fn try_make_job_ready_to_run(&mut self, depender_job_key: JK, dependee_job_key: JK, dependee_job_output: &O) -> bool {
     trace!("Try to make job {:?} ready to run due to completion of {:?}", depender_job_key, dependee_job_key);

@@ -1,5 +1,3 @@
-#![feature(iter_collect_into)]
-
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -42,12 +40,12 @@ pub struct JobQueue<JK, DK, I, J, O> {
 impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, I, J, O> {
   pub fn new(
     worker_thread_count: usize,
-    worker_thread_job_buffer_count: usize,
+    target_running_job_count: usize,
     dependency_output_cache_count: usize,
     handler: impl Handler<JK, DK, I, O>
   ) -> std::io::Result<Self> {
     assert!(worker_thread_count > 0, "Worker thread count must be higher than 0");
-    assert!(worker_thread_job_buffer_count > 0, "Worker thread job buffer count must be higher than 0");
+    assert!(target_running_job_count > 0, "Worker thread job buffer count must be higher than 0");
 
     let (external_to_manager_sender, external_to_manager_receiver) = unbounded();
     let (manager_to_worker_sender, manager_to_worker_receiver) = unbounded();
@@ -59,7 +57,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, 
       manager_to_worker_sender,
       worker_to_manager_receiver,
       manager_to_external_sender,
-      worker_thread_job_buffer_count,
+      target_running_job_count,
       dependency_output_cache_count,
     );
     let manager_thread_handle = manager_thread.create_thread_and_run()?;
