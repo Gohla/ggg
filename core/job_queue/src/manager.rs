@@ -3,8 +3,8 @@ use std::thread::JoinHandle;
 
 use flume::{Receiver, Sender};
 use petgraph::prelude::*;
-use petgraph::visit::Walker;
-use rustc_hash::FxHashMap;
+use petgraph::visit::VisitMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use tracing::trace;
 
 use crate::{DepKey, In, Job, JobKey, JobQueueMessage, Out};
@@ -33,7 +33,10 @@ pub(super) struct ManagerThread<JK, DK, I, J, O> {
   job_graph: DiGraphMap<JK, DK>,
   job_key_to_job_status: FxHashMap<JK, JobStatus<I, O>>,
   jobs_to_add: FxHashMap<JK, J>,
+
   dependency_output_cache: Vec<Vec<(DK, O)>>,
+  bfs_cache: Bfs<JK, FxHashSet<JK>>,
+
   pending_jobs: u32,
   running_jobs: u32,
 }
@@ -59,7 +62,10 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       job_graph: DiGraphMap::new(),
       job_key_to_job_status: FxHashMap::default(),
       jobs_to_add: FxHashMap::default(),
+
       dependency_output_cache: Vec::with_capacity(dependency_output_cache_count),
+      bfs_cache: Bfs::default(),
+
       pending_jobs: 0,
       running_jobs: 0,
     }
@@ -215,8 +221,18 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       return true;
     }
     trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
+    // Reset BFS traversal (using leaky API as it provides no API for this)
+    self.bfs_cache.discovered.clear();
+    self.bfs_cache.stack.clear();
+    // Start BFS traversal (again using leaky API)
+    self.bfs_cache.discovered.visit(job_key);
+    self.bfs_cache.stack.push_front(job_key);
+    // Run BFS traversal, putting items in `job_key_cache` so we can mutate the graph when we iterate that. Cannot use
+    // Walker API as it takes ownership of `bfs_cache`.
     job_key_cache.clear();
-    Bfs::new(&self.job_graph, job_key).iter(&self.job_graph).collect_into(job_key_cache);
+    while let Some(j) = self.bfs_cache.next(&self.job_graph) {
+      job_key_cache.push(j);
+    }
     for j in job_key_cache.drain(..) {
       if self.job_graph.neighbors_directed(j, Incoming).next().is_some() {
         continue; // Job has incoming dependencies, can't remove it.
