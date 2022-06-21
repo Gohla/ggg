@@ -101,7 +101,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       requested_removal: FxHashSet::default(),
       job_queue: JobQueue::new(
         settings.job_queue_worker_threads,
-        32,
+        settings.job_queue_worker_threads * 2,
         4096,
         move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
@@ -392,7 +392,7 @@ impl NeighborLods {
   #[inline]
   fn max(&self) -> u8 { self.x.max(self.y).max(self.z).max(self.xy).max(self.yz).max(self.xz) }
   #[inline]
-  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(1) }
+  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(2) }
 }
 
 impl NodeResult {
