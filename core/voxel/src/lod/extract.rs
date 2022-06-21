@@ -14,7 +14,7 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   type Chunk: LodChunkMesh + Send + Sync + 'static;
   type JobInput: In;
   type DependencyKey: DepKey;
-  type DependenciesIterator<V: Volume>: Iterator<Item=(Self::DependencyKey, LodJob<C, V, Self>)> + Send + 'static;
+  type DependenciesIterator<V: Volume>: Iterator<Item=(Self::DependencyKey, LodJob<C, V, Self>)> + ExactSizeIterator + Send + 'static;
 
   fn create_job<V: Volume>(
     &self,

@@ -455,6 +455,23 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Iterator for LodJobDependencyI
       _ => None,
     }
   }
+
+  #[inline]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    match &self.0 {
+      Some(i) => i.size_hint(),
+      _ => (0, Some(0)),
+    }
+  }
+}
+
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> ExactSizeIterator for LodJobDependencyIterator<C, V, E> {
+  fn len(&self) -> usize {
+    match &self.0 {
+      Some(i) => i.len(),
+      None => 0,
+    }
+  }
 }
 
 pub enum LodJobOutput<CS, CM> {

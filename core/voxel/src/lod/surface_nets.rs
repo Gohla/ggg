@@ -198,29 +198,47 @@ pub struct SurfaceNetsJobInput {
 // Job dependencies iterator
 
 pub struct SurfaceNetsJobDependenciesIterator<C, V> {
+  sample_regular: bool,
+  sample_x: bool,
+  sample_y: bool,
+  sample_z: bool,
+  sample_xy: bool,
+  sample_yz: bool,
+  sample_xz: bool,
   aabb: AABBWithMax,
-  make_x_border: bool,
-  make_y_border: bool,
-  make_z_border: bool,
   volume: V,
-  settings: SurfaceNetsExtractorSettings,
-  stage: Option<SampleKind>,
   _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
   fn new(total_size: u32, aabb: AABBWithMax, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+    let has_x_neighbor = aabb.max.x < total_size;
+    let has_y_neighbor = aabb.max.y < total_size;
+    let has_z_neighbor = aabb.max.z < total_size;
     Self {
+      sample_regular: settings.extract_regular_chunks,
+      sample_x: has_x_neighbor && (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks),
+      sample_y: has_y_neighbor && (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks),
+      sample_z: has_z_neighbor && (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks),
+      sample_xy: has_x_neighbor && has_y_neighbor && settings.extract_border_xy_chunks,
+      sample_yz: has_y_neighbor && has_z_neighbor && settings.extract_border_yz_chunks,
+      sample_xz: has_x_neighbor && has_z_neighbor && settings.extract_border_xz_chunks,
       aabb,
-      make_x_border: aabb.max.x < total_size,
-      make_y_border: aabb.max.y < total_size,
-      make_z_border: aabb.max.z < total_size,
       volume,
-      settings,
-      stage: Some(SampleKind::Regular),
       _chunk_size_phantom: PhantomData::default(),
     }
+  }
+
+  #[inline]
+  fn count(&self) -> usize {
+    self.sample_regular as usize
+      + self.sample_x as usize
+      + self.sample_y as usize
+      + self.sample_z as usize
+      + self.sample_xy as usize
+      + self.sample_yz as usize
+      + self.sample_xz as usize
   }
 }
 
@@ -230,59 +248,55 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
   #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
-    if self.stage.is_none() { return None; }
     let size = self.aabb.inner.size;
     // Regular
-    if self.stage == Some(Regular) {
-      self.stage = Some(X);
-      if self.settings.extract_regular_chunks {
-        return Some((Regular, LodJob::new_sample(self.aabb.inner, self.volume.clone())))
-      }
+    if self.sample_regular {
+      self.sample_regular = false;
+      return Some((Regular, LodJob::new_sample(self.aabb.inner, self.volume.clone())))
     }
     // Positive X
-    if self.stage == Some(X) {
-      self.stage = Some(Y);
-      if self.make_x_border && (self.settings.extract_border_x_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_xz_chunks) {
-        return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
-      }
+    if self.sample_x {
+      self.sample_x = false;
+      return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
     }
     // Positive Y
-    if self.stage == Some(Y) {
-      self.stage = Some(Z);
-      if self.make_y_border && (self.settings.extract_border_y_chunks || self.settings.extract_border_xy_chunks || self.settings.extract_border_yz_chunks) {
-        return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
-      }
+    if self.sample_y {
+      self.sample_y = false;
+      return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
     }
     // Positive Z
-    if self.stage == Some(Z) {
-      self.stage = Some(XY);
-      if self.make_z_border && (self.settings.extract_border_z_chunks || self.settings.extract_border_yz_chunks || self.settings.extract_border_xz_chunks) {
-        return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
-      }
+    if self.sample_z {
+      self.sample_z = false;
+      return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
     }
     // Positive XY
-    if self.stage == Some(XY) {
-      self.stage = Some(YZ);
-      if self.make_x_border && self.make_y_border && self.settings.extract_border_xy_chunks {
-        return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
-      }
+    if self.sample_xy {
+      self.sample_xy = false;
+      return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
     }
     // Positive YZ
-    if self.stage == Some(YZ) {
-      self.stage = Some(XZ);
-      if self.make_y_border && self.make_z_border && self.settings.extract_border_yz_chunks {
-        return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
-      }
+    if self.sample_yz {
+      self.sample_yz = false;
+      return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
     }
     // Positive XZ
-    if self.stage == Some(XZ) {
-      self.stage = None;
-      if self.make_x_border && self.make_z_border && self.settings.extract_border_xz_chunks {
-        return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
-      }
+    if self.sample_xz {
+      self.sample_xz = false;
+      return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
     }
     None
   }
+
+  #[inline]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    let count = self.count();
+    (count, Some(count))
+  }
+}
+
+impl<C: ChunkSize, V: Volume> ExactSizeIterator for SurfaceNetsJobDependenciesIterator<C, V> {
+  #[inline]
+  fn len(&self) -> usize { self.count() }
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

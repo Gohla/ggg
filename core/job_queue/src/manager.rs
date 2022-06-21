@@ -33,6 +33,7 @@ pub(super) struct ManagerThread<JK, DK, I, J, O> {
   job_graph: DiGraphMap<JK, DK>,
   job_key_to_job_status: FxHashMap<JK, JobStatus<I, O>>,
   jobs_to_add: FxHashMap<JK, J>,
+  jobs_to_schedule: FxHashMap<JK, (DK, O)>,
 
   dependency_output_cache: Vec<Vec<(DK, O)>>,
   bfs_cache: Bfs<JK, FxHashSet<JK>>,
@@ -62,6 +63,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
       job_graph: DiGraphMap::new(),
       job_key_to_job_status: FxHashMap::default(),
       jobs_to_add: FxHashMap::default(),
+      jobs_to_schedule: FxHashMap::default(),
 
       dependency_output_cache: Vec::with_capacity(dependency_output_cache_count),
       bfs_cache: Bfs::default(),

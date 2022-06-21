@@ -199,6 +199,7 @@ impl<C: ChunkSize, V: Volume> TransvoxelJobDependenciesIterator<C, V> {
 impl<C: ChunkSize, V: Volume> Iterator for TransvoxelJobDependenciesIterator<C, V> {
   type Item = ((), LodJob<C, V, TransvoxelExtractor<C>>);
 
+  #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     let volume = self.volume.take();
     if let Some(volume) = volume {
@@ -207,6 +208,14 @@ impl<C: ChunkSize, V: Volume> Iterator for TransvoxelJobDependenciesIterator<C, 
       None
     }
   }
+
+  #[inline]
+  fn size_hint(&self) -> (usize, Option<usize>) { match &self.volume { Some(_) => (1, Some(1)), None => (0, Some(0)) } }
+}
+
+impl<C: ChunkSize, V: Volume> ExactSizeIterator for TransvoxelJobDependenciesIterator<C, V> {
+  #[inline]
+  fn len(&self) -> usize { match &self.volume { Some(_) => 1, None => 0 } }
 }
 
 
