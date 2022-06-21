@@ -100,13 +100,6 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
   #[inline]
   fn receive(&mut self, job_key_cache_1: &mut Vec<JK>) -> bool {
     let selected = flume::Selector::new()
-      .recv(&self.from_worker, |result| {
-        if let Ok(result) = result {
-          Some(SelectedReceiver::FromWorker(result))
-        } else {
-          None // All workers have disconnected; stop this thread.
-        }
-      })
       .recv(&self.from_queue, |message| {
         if let Ok(message) = message {
           Some(SelectedReceiver::FromQueue(message))
@@ -114,10 +107,17 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
           None // Job queue was dropped; stop this thread.
         }
       })
+      .recv(&self.from_worker, |result| {
+        if let Ok(result) = result {
+          Some(SelectedReceiver::FromWorker(result))
+        } else {
+          None // All workers have disconnected; stop this thread.
+        }
+      })
       .wait();
     match selected {
-      Some(SelectedReceiver::FromWorker((job_key, output, dependency_outputs))) => self.handle_from_worker(job_key, output, dependency_outputs, job_key_cache_1),
       Some(SelectedReceiver::FromQueue(message)) => self.handle_from_queue(message),
+      Some(SelectedReceiver::FromWorker((job_key, output, dependency_outputs))) => self.handle_from_worker(job_key, output, dependency_outputs, job_key_cache_1),
       None => false,
     }
   }
@@ -162,13 +162,8 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
     let job_key = job.key();
     if self.job_key_to_job_status.contains_key(job_key) { return true; } // Job already exists in graph: done
     if self.jobs_to_add.contains_key(job_key) { return true; } // Job already exists in jobs to add map: done.
-    if self.to_worker.len() >= self.target_running_job_count {
-      // Number of jobs sent to workers is at level, don't add and schedule the job yet.
-      self.jobs_to_add.insert(*job_key, job);
-      return true;
-    }
-    self.force_add_job_and_dependencies(job);
-    self.run_jobs_until_target()
+    self.jobs_to_add.insert(*job_key, job);
+    self.run_and_add_jobs_until_target()
   }
 
   #[inline]
@@ -212,17 +207,13 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> ManagerThread<JK,
   #[profiling::function]
   #[inline]
   fn try_remove_job_and_orphaned_dependencies(&mut self, job_key: JK) -> bool {
+    if let Some(_) = self.jobs_to_add.remove(&job_key) { return true; } // Job was not added to the graph yet: done.
     if !self.job_key_to_job_status.contains_key(&job_key) { return true; } // Job does not exist: done.
-    if let Some(_) = self.jobs_to_add.remove(&job_key) {
-      // Job was not added to the graph yet: done.
-      trace!("Removed job {:?} which was not added to the dependency graph yet", job_key);
-      return true;
-    }
-    trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
     self.bfs_stack_cache.clear();
     self.bfs_discovered_cache.clear();
     self.bfs_stack_cache.push_back(job_key);
     self.bfs_discovered_cache.insert(job_key);
+    trace!("Try to remove job {:?} along with orphaned dependencies", job_key);
     while let Some(job_key) = self.bfs_stack_cache.pop_front() {
       if self.job_graph.neighbors_directed(job_key, Incoming).next().is_some() {
         continue; // Job has incoming dependencies, can't remove it.

@@ -68,7 +68,8 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   empty_lod_chunk_mesh_cache: VecDeque<E::Chunk>,
   empty_lod_chunk_mesh_cache_size: usize,
 
-  requested_aabbs: FxHashSet<AABB>,
+  requested_meshing: FxHashSet<AABB>,
+  requested_removal: FxHashSet<AABB>,
   job_queue: JobQueue<LodJobKey, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
 }
 
@@ -96,10 +97,11 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       empty_lod_chunk_mesh_cache: VecDeque::with_capacity(settings.empty_lod_chunk_mesh_cache_size),
       empty_lod_chunk_mesh_cache_size: settings.empty_lod_chunk_mesh_cache_size,
 
-      requested_aabbs: FxHashSet::default(),
+      requested_meshing: FxHashSet::default(),
+      requested_removal: FxHashSet::default(),
       job_queue: JobQueue::new(
         settings.job_queue_worker_threads,
-        16,
+        32,
         4096,
         move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
@@ -130,11 +132,19 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
           JobQueueMessage::JobCompleted(job_key, output) => {
             if let (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) = (job_key, output) {
               self.lod_chunk_meshes.insert(aabb, arc);
-              self.requested_aabbs.remove(&aabb);
+              self.requested_meshing.remove(&aabb);
+              self.requested_removal.remove(&aabb); // TODO: is this needed?
             }
           }
-          JobQueueMessage::CompletedJobRemoved(_, output) => {
-            if let LodJobOutput::Mesh(arc) = output {
+          JobQueueMessage::PendingJobRemoved(LodJobKey::Mesh(aabb), _) => {
+            self.requested_removal.remove(&aabb);
+          }
+          JobQueueMessage::RunningJobRemoved(LodJobKey::Mesh(aabb)) => {
+            self.requested_removal.remove(&aabb);
+          }
+          JobQueueMessage::CompletedJobRemoved(job_key, output) => {
+            if let (LodJobKey::Mesh(aabb), LodJobOutput::Mesh(arc)) = (job_key, output) {
+              self.requested_removal.remove(&aabb);
               Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
             }
           }
@@ -155,12 +165,15 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     {
       scope!("Process removed AABBs");
       let mut send_error = false;
-      for removed in self.prev_keep_aabbs.difference(&self.keep_aabbs) {
-        self.requested_aabbs.remove(&removed);
-        send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
-        if send_error { break; }
-        if let Some(arc) = self.lod_chunk_meshes.remove(removed) {
-          Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+      for removed in self.prev_keep_aabbs.difference(&self.keep_aabbs) { // OPTO: can we update `prev_keep_aabbs` and then drain it?
+        if !self.requested_removal.contains(removed) {
+          self.requested_meshing.remove(&removed);
+          self.requested_removal.insert(*removed);
+          send_error |= self.job_queue.try_remove_job_and_orphaned_dependencies(LodJobKey::Mesh(*removed)).is_err();
+          if send_error { break; }
+          if let Some(arc) = self.lod_chunk_meshes.remove(removed) {
+            Self::cache_empty_lod_chunk_mesh(&mut self.empty_lod_chunk_mesh_cache, self.empty_lod_chunk_mesh_cache_size, arc);
+          }
         }
       }
       if send_error {
@@ -327,12 +340,13 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
-    if !self.requested_aabbs.contains(&aabb) {
+    if !self.requested_meshing.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
       let (input, dependencies) = self.extractor.create_job(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh);
       let job = LodJob { key: LodJobKey::Mesh(aabb), input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
-      self.requested_aabbs.insert(aabb);
+      self.requested_meshing.insert(aabb);
+      self.requested_removal.remove(&aabb); // TODO: is this needed?
     }
     return false;
   }
@@ -378,7 +392,7 @@ impl NeighborLods {
   #[inline]
   fn max(&self) -> u8 { self.x.max(self.y).max(self.z).max(self.xy).max(self.yz).max(self.xz) }
   #[inline]
-  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(4) }
+  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(1) }
 }
 
 impl NodeResult {
