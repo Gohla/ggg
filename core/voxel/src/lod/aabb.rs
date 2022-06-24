@@ -1,294 +1,482 @@
-use std::cmp::Ordering;
-
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::size::ChunkSize;
 
+#[repr(transparent)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct Aabb32(u32);
+pub struct AABB(u32);
 
-impl Aabb32 {
+impl AABB {
   #[inline]
   pub fn root() -> Self { Self(1) }
-  
+
   #[inline]
   pub fn depth(&self) -> u8 { ((32 - self.0.leading_zeros()) / 3) as u8 }
+
   #[inline]
-  pub fn half_size(&self, max_half_size: u32) -> u32 { Self::half_size_internal(max_half_size, self.depth()) }
+  pub fn half_size(&self, root_half_size: u32) -> u32 { Self::half_size_internal(root_half_size, self.depth()) }
   #[inline]
-  pub fn minimum_point(&self, max_half_size: u32) -> UVec3 {
+  pub fn size(&self, root_half_size: u32) -> u32 { Self::size_internal(root_half_size, self.depth()) }
+  #[inline]
+  pub fn minimum_point(&self, root_half_size: u32) -> UVec3 {
     let depth = self.depth();
-    let mut min = UVec3::zero();
-    let mut code = self.0;
-    let mut half_size = Self::half_size_internal(max_half_size, depth);
-    for _ in (0..depth).rev() {
-      let octant = code as u8 & 0b00000111;
-      min += Self::octant_to_min(octant, half_size);
-      code = code >> 3;
-      half_size = half_size << 1;
-    }
-    min
+    let size = Self::size_internal(root_half_size, depth);
+    Self::minimum_point_internal(depth, size, self.0)
+  }
+  #[inline]
+  pub fn center_point(&self, root_half_size: u32) -> UVec3 {
+    let minimum_point = self.minimum_point(root_half_size);
+    let half_size = self.half_size(root_half_size);
+    Self::center_point_internal(minimum_point, half_size)
+  }
+  #[inline]
+  pub fn maximum_point(&self, root_half_size: u32) -> UVec3 {
+    let minimum_point = self.minimum_point(root_half_size);
+    let size = self.size(root_half_size);
+    Self::maximum_point_internal(minimum_point, size)
+  }
+  #[inline]
+  pub fn step<C: ChunkSize>(&self, root_half_size: u32) -> u32 { self.size(root_half_size) / C::CELLS_IN_CHUNK_ROW }
+  #[inline]
+  pub fn closest_point(&self, root_half_size: u32, mut point: Vec3) -> Vec3 {
+    let depth = self.depth();
+    let half_size = Self::half_size_internal(root_half_size, depth);
+    let minimum_point = Self::minimum_point_internal(depth, half_size, self.0);
+    let maximum_point = Self::maximum_point_internal(minimum_point, half_size * 2);
+    point.clamp(minimum_point.into(), maximum_point.into());
+    point
+  }
+  #[inline]
+  pub fn distance_from(&self, root_half_size: u32, point: Vec3) -> f32 {
+    let depth = self.depth();
+    let half_size = Self::half_size_internal(root_half_size, depth);
+    let minimum_point = Self::minimum_point_internal(depth, half_size, self.0);
+    let maximum_point = Self::maximum_point_internal(minimum_point, half_size * 2);
+    let minimum_point: Vec3 = minimum_point.into();
+    let maximum_point: Vec3 = maximum_point.into();
+    let dx = (minimum_point.x - point.x).max(point.x - maximum_point.x).max(0.0);
+    let dy = (minimum_point.y - point.y).max(point.y - maximum_point.y).max(0.0);
+    let dz = (minimum_point.z - point.z).max(point.z - maximum_point.z).max(0.0);
+    (dx * dx + dy * dy + dz * dz).sqrt()
+  }
+  #[inline]
+  pub fn as_sized(&self, root_half_size: u32) -> AABBSized {
+    AABBSized { root_half_size, inner: *self }
   }
 
   #[inline]
-  pub fn subdivide(&self) -> Aabb32Subdivide {
+  pub fn subdivide(&self) -> AABBIter {
     debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
-    Aabb32Subdivide::new(self)
+    AABBIter::new(self)
   }
   #[inline]
-  pub fn sibling_positive_x(&self) -> Option<Self> {
-    let depth = self.depth();
-    if depth == 0 { return None; }
-    let first_x_bit = 1 << 0;
-    if self.0 & first_x_bit != 0 { // Is X bit set on the first octant?
-      let code = self.0 & !first_x_bit; // Unset X bit on the first octant.
-      return Some(Self(code));
-    }
-    if depth == 1 { return None; } // Cannot go to parent.
-    let second_x_bit = 1 << 3;
-    if self.0 & second_x_bit != 0 { // Is X bit set on the second octant?
-      let code = self.0 & !second_x_bit; // Unset X bit on the second octant.
-      return Some(Self(code));
-    }
-    // There is a parent, but we cannot go to its positive x sibling as it is at the border.
-    None
+  pub fn subdivide_array(&self) -> [AABB; 8] {
+    debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
+    let code = self.0 << 3;
+    [
+      AABB(code | 0),
+      AABB(code | 1),
+      AABB(code | 2),
+      AABB(code | 3),
+      AABB(code | 4),
+      AABB(code | 5),
+      AABB(code | 6),
+      AABB(code | 7),
+    ]
   }
+  
   #[inline]
-  pub fn sibling_positive_y(&self) -> Option<Self> {
-    let depth = self.depth();
-    if depth == 0 { return None; }
-    let first_y_bit = 1 << 1;
-    if self.0 & first_y_bit != 0 { // Is Y bit set on the first octant?
-      let code = self.0 & !first_y_bit; // Unset Y bit on the first octant.
-      return Some(Self(code));
-    }
-    if depth == 1 { return None; } // Cannot go to parent.
-    let second_y_bit = 1 << 4;
-    if self.0 & second_y_bit != 0 { // Is Y bit set on the second octant?
-      let code = self.0 & !second_y_bit; // Unset Y bit on the second octant.
-      return Some(Self(code));
-    }
-    // There is a parent, but we cannot go to its positive Y sibling as it is at the border.
-    None
-  }
+  pub fn sibling_positive_x(&self) -> Option<Self> { self.positive_sibling::<0>() }
   #[inline]
-  pub fn sibling_positive_z(&self) -> Option<Self> {
+  pub fn sibling_positive_y(&self) -> Option<Self> { self.positive_sibling::<1>() }
+  #[inline]
+  pub fn sibling_positive_z(&self) -> Option<Self> { self.positive_sibling::<2>() }
+  #[inline]
+  pub fn sibling_positive_xy(&self) -> Option<Self> { self.sibling_positive_x().and_then(|aabb| aabb.sibling_positive_y()) }
+  #[inline]
+  pub fn sibling_positive_yz(&self) -> Option<Self> { self.sibling_positive_y().and_then(|aabb| aabb.sibling_positive_z()) }
+  #[inline]
+  pub fn sibling_positive_xz(&self) -> Option<Self> { self.sibling_positive_x().and_then(|aabb| aabb.sibling_positive_z()) }
+  #[inline]
+  fn positive_sibling<const O: u8>(&self) -> Option<Self> {
     let depth = self.depth();
-    if depth == 0 { return None; }
-    let first_z_bit = 1 << 2;
-    if self.0 & first_z_bit != 0 { // Is Z bit set on the first octant?
-      let code = self.0 & !first_z_bit; // Unset Z bit on the first octant.
-      return Some(Self(code));
+    let mut code = self.0;
+    for d in 0..depth {
+      let bit = 1 << ((d * 3) + O);
+      if code & bit != 0 { // If bit is set, unset it to go to the positive sibling; and we're done.
+        return Some(Self(code & !bit));
+      } else { // Otherwise set the bit to go to the negative sibling and continue.
+        code = code | bit;
+      }
     }
-    if depth == 1 { return None; } // Cannot go to parent.
-    let second_z_bit = 1 << 5;
-    if self.0 & second_z_bit != 0 { // Is Z bit set on the second octant?
-      let code = self.0 & !second_z_bit; // Unset Z bit on the second octant.
-      return Some(Self(code));
-    }
-    // There is a parent, but we cannot go to its positive Z sibling as it is at the border.
-    None
+    None // No parent was found with the bit set, so we couldn't go to a positive sibling anywhere.
   }
 
-
   #[inline]
-  fn half_size_internal(max_half_size: u32, depth: u8) -> u32 {
-    debug_assert!(max_half_size.is_power_of_two(), "Max half size {} is not a power of 2", max_half_size);
-    max_half_size >> depth // Right shift is divide by 2 for powers of 2.
+  fn size_internal(root_half_size: u32, depth: u8) -> u32 {
+    debug_assert!(root_half_size.is_power_of_two(), "Root half size {} is not a power of 2", root_half_size);
+    (root_half_size << 1) >> depth // Left shift is multiply by 2, right shift is divide by 2; for powers of 2.
   }
   #[inline]
-  fn octant_to_min(octant: u8, half_size: u32) -> UVec3 {
+  fn half_size_internal(root_half_size: u32, depth: u8) -> u32 {
+    debug_assert!(root_half_size.is_power_of_two(), "Root half size {} is not a power of 2", root_half_size);
+    root_half_size >> depth // Right shift is divide by 2 for powers of 2.
+  }
+  #[inline]
+  fn minimum_point_internal(depth: u8, mut size: u32, mut code: u32) -> UVec3 {
+    let mut minimum_point = UVec3::zero();
+    for _ in 0..depth {
+      let octant = code as u8 & 0b00000111;
+      minimum_point += Self::octant_to_minimum_point(octant, size);
+      code = code >> 3;
+      size = size << 1;
+    }
+    minimum_point
+  }
+  #[inline]
+  fn center_point_internal(minimum_point: UVec3, half_size: u32) -> UVec3 {
+    minimum_point + UVec3::broadcast(half_size)
+  }
+  #[inline]
+  fn maximum_point_internal(minimum_point: UVec3, size: u32) -> UVec3 {
+    minimum_point + UVec3::broadcast(size)
+  }
+  #[inline]
+  fn octant_to_minimum_point(octant: u8, size: u32) -> UVec3 {
     match octant {
-      0 => UVec3::new(half_size, half_size, half_size),
-      1 => UVec3::new(0, half_size, half_size),
-      2 => UVec3::new(half_size, 0, half_size),
-      3 => UVec3::new(0, 0, half_size),
-      4 => UVec3::new(half_size, half_size, 0),
-      5 => UVec3::new(0, half_size, 0),
-      6 => UVec3::new(half_size, 0, 0),
+      0 => UVec3::new(size, size, size),
+      1 => UVec3::new(0, size, size),
+      2 => UVec3::new(size, 0, size),
+      3 => UVec3::new(0, 0, size),
+      4 => UVec3::new(size, size, 0),
+      5 => UVec3::new(0, size, 0),
+      6 => UVec3::new(size, 0, 0),
       7 => UVec3::new(0, 0, 0),
       _ => unreachable!(),
     }
   }
 }
 
-pub struct Aabb32Subdivide {
+
+// Sized AABB
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct AABBSized {
+  pub root_half_size: u32,
+  pub inner: AABB,
+}
+
+impl AABBSized {
+  #[inline]
+  pub fn depth(&self) -> u8 { self.inner.depth() }
+
+  #[inline]
+  pub fn half_size(&self) -> u32 { self.inner.half_size(self.root_half_size) }
+  #[inline]
+  pub fn size(&self) -> u32 { self.inner.size(self.root_half_size) }
+  #[inline]
+  pub fn minimum_point(&self) -> UVec3 { self.inner.minimum_point(self.root_half_size) }
+  #[inline]
+  pub fn center_point(&self) -> UVec3 { self.inner.center_point(self.root_half_size) }
+  #[inline]
+  pub fn maximum_point(&self) -> UVec3 { self.inner.maximum_point(self.root_half_size) }
+  #[inline]
+  pub fn step<C: ChunkSize>(&self) -> u32 { self.inner.step::<C>(self.root_half_size) }
+  #[inline]
+  pub fn closest_point(&self, point: Vec3) -> Vec3 { self.inner.closest_point(self.root_half_size, point) }
+  #[inline]
+  pub fn distance_from(&self, point: Vec3) -> f32 { self.inner.distance_from(self.root_half_size, point) }
+
+  #[inline]
+  pub fn subdivide(&self) -> AABBIter { self.inner.subdivide() }
+  #[inline]
+  pub fn subdivide_array(&self) -> [AABB; 8] { self.inner.subdivide_array() }
+  #[inline]
+  pub fn sibling_positive_x(&self) -> Option<Self> { self.inner.sibling_positive_x().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  #[inline]
+  pub fn sibling_positive_y(&self) -> Option<Self> { self.inner.sibling_positive_y().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  #[inline]
+  pub fn sibling_positive_z(&self) -> Option<Self> { self.inner.sibling_positive_z().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  #[inline]
+  pub fn sibling_positive_xy(&self) -> Option<Self> { self.inner.sibling_positive_xy().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  #[inline]
+  pub fn sibling_positive_yz(&self) -> Option<Self> { self.inner.sibling_positive_yz().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  #[inline]
+  pub fn sibling_positive_xz(&self) -> Option<Self> { self.inner.sibling_positive_xz().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+}
+
+
+// Iterator
+
+pub struct AABBIter {
   code: u32,
   octant: u8,
 }
 
-impl Aabb32Subdivide {
+impl AABBIter {
   #[inline]
-  fn new(aabb: &Aabb32) -> Self { Self { code: aabb.0 << 3, octant: 0 } }
+  fn new(aabb: &AABB) -> Self { Self { code: aabb.0 << 3, octant: 0 } }
 }
 
-impl Iterator for Aabb32Subdivide {
-  type Item = Aabb32;
+impl Iterator for AABBIter {
+  type Item = AABB;
   #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     if self.octant > 7 { return None; }
-    let aabb = Aabb32(self.code | self.octant as u32);
+    let aabb = AABB(self.code | self.octant as u32);
     self.octant += 1;
     Some(aabb)
   }
 }
 
+
+// Tests
+
 #[cfg(test)]
 mod tests {
   use ultraviolet::UVec3;
 
-  use crate::lod::aabb::Aabb32;
+  use crate::lod::aabb::AABB;
 
   #[test]
   fn root() {
-    let max_half_size = 2048;
-    let root = Aabb32::root();
-    assert_eq!(root.depth(), 0);
-    assert_eq!(root.half_size(max_half_size), 2048);
-    assert_eq!(root.minimum_point(max_half_size), UVec3::zero());
+    let root_half_size = 2048;
+    let size = root_half_size * 2;
+    let root = AABB::root().as_sized(root_half_size);
+    assert_eq!(0, root.depth());
+    assert_eq!(root_half_size, root.half_size());
+    assert_eq!(size, root.size()); // TODO: test for subdivide
+    assert_eq!(UVec3::zero(), root.minimum_point());
+    assert_eq!(UVec3::broadcast(root_half_size), root.center_point()); // TODO: test for subdivide
+    assert_eq!(UVec3::broadcast(size), root.maximum_point()); // TODO: test for subdivide
+    assert_eq!(None, root.sibling_positive_x());
+    assert_eq!(None, root.sibling_positive_y());
+    assert_eq!(None, root.sibling_positive_z());
+    assert_eq!(None, root.sibling_positive_xy());
+    assert_eq!(None, root.sibling_positive_yz());
+    assert_eq!(None, root.sibling_positive_xz());
+  }
+
+  fn test_subdivided(root_half_size: u32, depth: u8, half_size: u32, offset: UVec3, subdivided: [AABB; 8]) {
+    let size = half_size * 2;
+
+    let front = {
+      let sub = subdivided[0].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, size, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size * 2, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.sibling_positive_x());
+        assert_eq!(None, sub.sibling_positive_y());
+        assert_eq!(None, sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let front_x = {
+      let sub = subdivided[1].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, size, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, size + half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size * 2, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(front), sub.sibling_positive_x());
+        assert_eq!(None, sub.sibling_positive_y());
+        assert_eq!(None, sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let front_y = {
+      let sub = subdivided[2].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, 0, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.sibling_positive_x());
+        assert_eq!(Some(front), sub.sibling_positive_y());
+        assert_eq!(None, sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let front_xy = {
+      let sub = subdivided[3].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, 0, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(front_y), sub.sibling_positive_x());
+        assert_eq!(Some(front_x), sub.sibling_positive_y());
+        assert_eq!(None, sub.sibling_positive_z());
+        assert_eq!(Some(front), sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+
+    let back = {
+      let sub = subdivided[4].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, size, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size * 2, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.sibling_positive_x());
+        assert_eq!(None, sub.sibling_positive_y());
+        assert_eq!(Some(front), sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let back_x = {
+      let sub = subdivided[5].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, size, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, size + half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size * 2, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(back), sub.sibling_positive_x());
+        assert_eq!(None, sub.sibling_positive_y());
+        assert_eq!(Some(front_x), sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(None, sub.sibling_positive_yz());
+        assert_eq!(Some(front), sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let back_y = {
+      let sub = subdivided[6].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, 0, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.sibling_positive_x());
+        assert_eq!(Some(back), sub.sibling_positive_y());
+        assert_eq!(Some(front_y), sub.sibling_positive_z());
+        assert_eq!(None, sub.sibling_positive_xy());
+        assert_eq!(Some(front), sub.sibling_positive_yz());
+        assert_eq!(None, sub.sibling_positive_xz());
+      }
+      sub
+    };
+    let _back_xy = {
+      let sub = subdivided[7].as_sized(root_half_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, 0, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(back_y), sub.sibling_positive_x());
+        assert_eq!(Some(back_x), sub.sibling_positive_y());
+        assert_eq!(Some(front_xy), sub.sibling_positive_z());
+        assert_eq!(Some(back), sub.sibling_positive_xy());
+        assert_eq!(Some(front_x), sub.sibling_positive_yz());
+        assert_eq!(Some(front_y), sub.sibling_positive_xz());
+      }
+      sub
+    };
   }
 
   #[test]
   fn subdivide_once() {
-    let max_half_size = 2048;
-    let root = Aabb32::root();
-    let subdivided: Vec<_> = root.subdivide().collect();
-    {
-      let sub = subdivided[0];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(1024, 1024, 1024));
-    }
-    {
-      let sub = subdivided[1];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(0, 1024, 1024));
-    }
-    {
-      let sub = subdivided[2];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(1024, 0, 1024));
-    }
-    {
-      let sub = subdivided[3];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(0, 0, 1024));
-    }
-    {
-      let sub = subdivided[4];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(1024, 1024, 0));
-    }
-    {
-      let sub = subdivided[5];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(0, 1024, 0));
-    }
-    {
-      let sub = subdivided[6];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(1024, 0, 0));
-    }
-    {
-      let sub = subdivided[7];
-      assert_eq!(sub.depth(), 1);
-      assert_eq!(sub.half_size(max_half_size), 1024);
-      assert_eq!(sub.minimum_point(max_half_size), UVec3::new(0, 0, 0));
+    let root_half_size = 2048;
+    test_subdivided(root_half_size, 1, 1024, UVec3::zero(), AABB::root().subdivide_array());
+  }
+
+  #[test]
+  fn subdivide_twice() {
+    let root_half_size = 2048;
+    for sub in AABB::root().subdivide_array() {
+      test_subdivided(root_half_size, 2, 512, sub.minimum_point(root_half_size), sub.subdivide_array());
     }
   }
-}
 
-
-/// Square axis-aligned bounding box, always in powers of 2, and with size always larger than 1.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct AABB {
-  pub min: UVec3,
-  pub size: u32,
-}
-
-impl AABB {
-  #[inline]
-  pub fn from_size(size: u32) -> Self {
-    assert_ne!(size, 0, "Size may not be 0");
-    assert_ne!(size, 1, "Size may not be 1");
-    assert!(size.is_power_of_two(), "Size {} must be a power of 2", size);
-    let min = UVec3::new(0, 0, 0);
-    Self { min, size }
+  #[test]
+  fn subdivide_trice() {
+    let root_half_size = 2048;
+    for sub_1 in AABB::root().subdivide_array() {
+      for sub_2 in sub_1.subdivide_array() {
+        test_subdivided(root_half_size, 3, 256, sub_2.minimum_point(root_half_size), sub_2.subdivide_array());
+      }
+    }
   }
 
-  #[inline(always)]
-  pub fn step<C: ChunkSize>(&self) -> u32 { self.size / C::CELLS_IN_CHUNK_ROW }
-
-  #[inline(always)]
-  pub fn size_3d(&self) -> UVec3 { UVec3::new(self.size, self.size, self.size) }
-
-  #[inline(always)]
-  pub fn max_point(&self) -> UVec3 { self.min + self.size_3d() }
-
-  #[inline]
-  pub fn extends(&self) -> u32 {
-    self.size / 2 // Note: no rounding needed because AABB is always size of 2 and > 1.
+  #[test]
+  fn twice_nested_siblings() {
+    let subdivided_1 = AABB::root().subdivide_array();
+    let front_1 = subdivided_1[0];
+    let front_x_1 = subdivided_1[1];
+    let subdivided_2_in_front_1 = front_1.subdivide_array();
+    let subdivided_2_in_front_x_1 = front_x_1.subdivide_array();
+    assert_eq!(Some(subdivided_2_in_front_1[1]), subdivided_2_in_front_x_1[0].sibling_positive_x());
   }
 
-  #[inline]
-  pub fn extends_3d(&self) -> UVec3 {
-    let extends = self.extends();
-    UVec3::new(extends, extends, extends)
+  #[test]
+  fn trice_nested_siblings_1() {
+    let root = AABB::root();
+    let sub_1 = root.subdivide_array();
+    let front_depth_1 = sub_1[0];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_000_000_001_000), front_depth_1);
+    let sub_2_front_1 = front_depth_1.subdivide_array();
+    let front_2_front_1 = sub_2_front_1[0];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_000_001_000_000), front_2_front_1);
+    let front_x_2_front_1 = sub_2_front_1[1];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_000_001_000_001), front_x_2_front_1);
+    let sub_3_front_2_front_1 = front_2_front_1.subdivide_array();
+    let sub_3_front_x_2_front_1 = front_x_2_front_1.subdivide_array();
+    let front_x_3_front_2_front_1 = sub_3_front_2_front_1[1];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_001_000_000_001), front_x_3_front_2_front_1);
+    let front_3_front_x_2_front_1 = sub_3_front_x_2_front_1[0];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_001_000_001_000), front_3_front_x_2_front_1);
+    assert_eq!(Some(front_x_3_front_2_front_1), front_3_front_x_2_front_1.sibling_positive_x());
   }
 
-  #[inline]
-  pub fn center(&self) -> UVec3 {
-    self.min + self.extends_3d()
-  }
-
-  #[inline]
-  pub fn distance_from(&self, point: Vec3) -> f32 {
-    // TODO: copied from voxel-planets, check if this is correct and efficient?
-    let distance_to_center = (point - self.center().into()).abs();
-    let extends = self.extends_3d().into();
-    let v = Vec3::zero().max_by_component(distance_to_center - extends).map(|f| f.powf(2.0));
-    let distance = (v.x + v.y + v.z).sqrt();
-    distance
-  }
-
-  #[inline]
-  pub fn subdivide(&self) -> [AABB; 8] {
-    let min = self.min;
-    let cen = self.center();
-    let extends = self.extends();
-    [
-      Self::new_unchecked(cen, extends),
-      Self::new_unchecked(UVec3::new(min.x, cen.y, cen.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, min.y, cen.z), extends),
-      Self::new_unchecked(UVec3::new(min.x, min.y, cen.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(min.x, cen.y, min.z), extends),
-      Self::new_unchecked(UVec3::new(cen.x, min.y, min.z), extends),
-      Self::new_unchecked(min, extends),
-    ]
-  }
-
-
-  #[inline(always)]
-  pub fn new_unchecked(min: UVec3, size: u32) -> Self {
-    Self { min, size }
-  }
-}
-
-impl PartialOrd<AABB> for AABB {
-  fn partial_cmp(&self, other: &AABB) -> Option<Ordering> {
-    (self.min.x, self.min.y, self.min.z, self.size).partial_cmp(&(other.min.x, other.min.y, other.min.z, other.size))
-  }
-}
-
-impl Ord for AABB {
-  fn cmp(&self, other: &Self) -> Ordering {
-    (self.min.x, self.min.y, self.min.z, self.size).cmp(&(other.min.x, other.min.y, other.min.z, other.size))
+  #[test]
+  fn trice_nested_siblings_2() {
+    let root_half_size = 2048;
+    let root = AABB::root();
+    let sub_1 = root.subdivide_array();
+    let front_x_1 = sub_1[1];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_000_000_001_001), front_x_1);
+    let sub_2_front_x_1 = front_x_1.subdivide_array();
+    let front_2_front_x_1 = sub_2_front_x_1[0];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_000_001_001_000), front_2_front_x_1);
+    let sub_3_front_2_front_x_1 = front_2_front_x_1.subdivide_array();
+    let front_3_front_2_front_x_1 = sub_3_front_2_front_x_1[0];
+    assert_eq!(AABB(0b00_000_000_000_000_000_000_001_001_000_000), front_3_front_2_front_x_1);
+    assert_eq!(AABB(576), front_3_front_2_front_x_1);
+    assert_eq!(UVec3::new(root_half_size, root_half_size * 2, root_half_size * 2), front_3_front_2_front_x_1.maximum_point(root_half_size));
+    assert!(front_3_front_2_front_x_1.sibling_positive_x().is_some());
+    assert_eq!(Some(AABB(0b00_000_000_000_000_000_000_001_000_001_001)), front_3_front_2_front_x_1.sibling_positive_x());
   }
 }

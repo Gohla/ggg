@@ -3,7 +3,7 @@ use job_queue::{DepKey, In};
 use crate::chunk::mesh::Vertex;
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::AABBSized;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::octmap::{LodJob, LodJobOutput};
 use crate::lod::render::LodDraw;
@@ -18,8 +18,8 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
 
   fn create_job<V: Volume>(
     &self,
-    total_size: u32,
-    aabb: AABB,
+    root_size: u32,
+    aabb: AABBSized,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>);

@@ -164,22 +164,22 @@ pub fn octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-Sphere-Transvoxel");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octmap::<C16, _, _>(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap::<C16, _, _>(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-2.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 2.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 2.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-3.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 3.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 3.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-4.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { total_size, lod_factor: 4.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 4.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));

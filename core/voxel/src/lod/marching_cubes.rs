@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::{AABB, AABBSized};
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodJob, LodJobOutput};
@@ -35,13 +35,13 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    _total_size: u32,
-    aabb: AABB,
+    _root_size: u32,
+    aabb: AABBSized,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let input = MarchingCubesJobInput { aabb, empty_lod_chunk_mesh };
-    let dependencies = MarchingCubesJobDependenciesIterator::new(aabb, volume);
+    let dependencies = MarchingCubesJobDependenciesIterator::new(aabb.inner, volume);
     (input, dependencies)
   }
 
@@ -53,7 +53,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   ) -> Self::Chunk {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
       let MarchingCubesJobInput { aabb, empty_lod_chunk_mesh: mut chunk } = input;
-      self.marching_cubes.extract_chunk(aabb.min, aabb.step::<C>(), chunk_samples, &mut chunk.regular);
+      self.marching_cubes.extract_chunk(aabb.minimum_point(), aabb.step::<C>(), chunk_samples, &mut chunk.regular);
       chunk
     } else {
       panic!("Missing sample dependency output");
@@ -77,7 +77,7 @@ impl<C: ChunkSize> MarchingCubesExtractor<C> {
 // Job input
 
 pub struct MarchingCubesJobInput {
-  aabb: AABB,
+  aabb: AABBSized,
   empty_lod_chunk_mesh: MarchingCubesLodChunkMesh,
 }
 

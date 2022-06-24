@@ -101,7 +101,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     self.draws.clear();
 
     let extractor = self.chunk_mesh_manager.get_extractor().clone();
-    let (transform, lod_chunk_meshes) = self.chunk_mesh_manager.update(position);
+    let (root_half_size, transform, lod_chunk_meshes) = self.chunk_mesh_manager.update(position);
 
     for (aabb, lod_chunk_mesh) in lod_chunk_meshes {
       let is_empty = lod_chunk_mesh.is_empty();
@@ -109,10 +109,12 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         extractor.update_render_data(&lod_chunk_mesh, &mut self.vertices, &mut self.indices, &mut self.draws);
       }
       if settings.debug_render_octree_nodes {
+        let min = aabb.minimum_point(root_half_size).into();
+        let size = aabb.size(root_half_size) as f32;
         if is_empty {
-          debug_renderer.draw_cube_lines(aabb.min.into(), aabb.size as f32, settings.debug_render_octree_node_empty_color);
+          debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_empty_color);
         } else {
-          debug_renderer.draw_cube_lines(aabb.min.into(), aabb.size as f32, settings.debug_render_octree_node_color);
+          debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_color);
         }
       }
     }

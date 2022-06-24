@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::{AABB, AABBSized};
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodJob, LodJobOutput};
@@ -60,13 +60,13 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    total_size: u32,
-    aabb: AABB,
+    root_size: u32,
+    aabb: AABBSized,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
-    let input = TransvoxelJobInput { total_size, aabb, empty_lod_chunk_mesh };
-    let dependencies = TransvoxelJobDependenciesIterator::new(aabb, volume);
+    let input = TransvoxelJobInput { root_size, aabb, empty_lod_chunk_mesh };
+    let dependencies = TransvoxelJobDependenciesIterator::new(aabb.inner, volume);
     (input, dependencies)
   }
 
@@ -77,9 +77,9 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
     dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
   ) -> Self::Chunk {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
-      let TransvoxelJobInput { total_size, aabb, empty_lod_chunk_mesh: mut chunk } = input;
-      let lores_min = aabb.min;
-      let lores_max = aabb.max_point();
+      let TransvoxelJobInput { root_size, aabb, empty_lod_chunk_mesh: mut chunk } = input;
+      let lores_min = aabb.minimum_point();
+      let lores_max = aabb.maximum_point();
       let lores_step = aabb.step::<C>();
       if self.settings.extract_regular_chunks {
         self.marching_cubes.extract_chunk(lores_min, lores_step, &chunk_samples, &mut chunk.regular);
@@ -90,19 +90,19 @@ impl<C: ChunkSize> LodExtractor<C> for TransvoxelExtractor<C> {
         if self.settings.extract_transition_lo_x_chunks && lores_min.x > 0 {
           self.extract_transvoxel_chunk(aabb, TransitionSide::LoX, &volume, hires_step, lores_step, &mut chunk.transition_lo_x_chunk);
         }
-        if self.settings.extract_transition_hi_x_chunks && lores_max.x < total_size {
+        if self.settings.extract_transition_hi_x_chunks && lores_max.x < root_size {
           self.extract_transvoxel_chunk(aabb, TransitionSide::HiX, &volume, hires_step, lores_step, &mut chunk.transition_hi_x_chunk);
         }
         if self.settings.extract_transition_lo_y_chunks && lores_min.y > 0 {
           self.extract_transvoxel_chunk(aabb, TransitionSide::LoY, &volume, hires_step, lores_step, &mut chunk.transition_lo_y_chunk);
         }
-        if self.settings.extract_transition_hi_y_chunks && lores_max.y < total_size {
+        if self.settings.extract_transition_hi_y_chunks && lores_max.y < root_size {
           self.extract_transvoxel_chunk(aabb, TransitionSide::HiY, &volume, hires_step, lores_step, &mut chunk.transition_hi_y_chunk);
         }
         if self.settings.extract_transition_lo_z_chunks && lores_min.z > 0 {
           self.extract_transvoxel_chunk(aabb, TransitionSide::LoZ, &volume, hires_step, lores_step, &mut chunk.transition_lo_z_chunk);
         }
-        if self.settings.extract_transition_hi_z_chunks && lores_max.z < total_size {
+        if self.settings.extract_transition_hi_z_chunks && lores_max.z < root_size {
           self.extract_transvoxel_chunk(aabb, TransitionSide::HiZ, &volume, hires_step, lores_step, &mut chunk.transition_hi_z_chunk);
         }
       }
@@ -147,7 +147,7 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
   #[inline]
   fn extract_transvoxel_chunk<V: Volume>(
     &self,
-    aabb: AABB,
+    aabb: AABBSized,
     side: TransitionSide,
     volume: &V,
     hires_step: u32,
@@ -166,7 +166,7 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
       &hires_chunk_mins,
       &hires_chunk_samples,
       hires_step,
-      aabb.min,
+      aabb.minimum_point(),
       lores_step,
       chunk_vertices,
     );
@@ -177,8 +177,8 @@ impl<C: ChunkSize> TransvoxelExtractor<C> {
 // Job input
 
 pub struct TransvoxelJobInput {
-  total_size: u32,
-  aabb: AABB,
+  root_size: u32,
+  aabb: AABBSized,
   empty_lod_chunk_mesh: TransvoxelLodChunkMesh,
 }
 

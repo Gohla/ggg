@@ -20,7 +20,7 @@ use crate::volume::Volume;
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LodOctmapSettings {
-  pub total_size: u32,
+  pub root_half_size: u32,
   pub lod_factor: f32,
   pub fixed_lod_level: Option<u8>,
   pub job_queue_worker_threads: usize,
@@ -30,15 +30,15 @@ pub struct LodOctmapSettings {
 impl LodOctmapSettings {
   #[inline]
   pub fn check(&self) {
-    assert_ne!(self.total_size, 0, "Total size may not be 0");
-    assert!(self.total_size.is_power_of_two(), "Total size {} must be a power of 2", self.total_size);
+    assert_ne!(self.root_half_size, 0, "Root half size may not be 0");
+    assert!(self.root_half_size.is_power_of_two(), "Root half size {} must be a power of 2", self.root_half_size);
   }
 }
 
 impl Default for LodOctmapSettings {
   fn default() -> Self {
     Self {
-      total_size: 4096,
+      root_half_size: 2048,
       lod_factor: 1.0,
       fixed_lod_level: None,
       job_queue_worker_threads: std::thread::available_parallelism().ok().and_then(|p| NonZeroUsize::new(p.get().saturating_sub(1))).unwrap_or(NonZeroUsize::new(7).unwrap()).get(),
@@ -50,7 +50,8 @@ impl Default for LodOctmapSettings {
 // LOD octmap
 
 pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
-  total_size: u32,
+  root_half_size: u32,
+  root_size: u32,
   lod_factor: f32,
   fixed_lod_level: Option<u8>,
 
@@ -76,10 +77,13 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
-    let lod_0_step = settings.total_size / C::CELLS_IN_CHUNK_ROW;
+    let root_half_size = settings.root_half_size;
+    let root_size = settings.root_half_size * 2;
+    let lod_0_step = root_size / C::CELLS_IN_CHUNK_ROW;
     let max_lod_level = lod_0_step.log2() as u8;
     Self {
-      total_size: settings.total_size,
+      root_half_size,
+      root_size,
       lod_factor: settings.lod_factor,
       fixed_lod_level: settings.fixed_lod_level,
 
@@ -106,7 +110,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
         move |job_key: LodJobKey, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match (job_key, input) {
             (LodJobKey::Sample(aabb), LodJobInput::Sample(volume)) => {
-              LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.min, aabb.step::<C>())))
+              LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.minimum_point(root_half_size), aabb.step::<C>(root_half_size))))
             }
             (LodJobKey::Mesh(_), LodJobInput::Mesh(input)) => {
               let lod_chunk_mesh = extractor.run_job(input, dependency_outputs);
@@ -122,7 +126,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   pub fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
 
   #[profiling::function]
-  pub fn update(&mut self, position: Vec3) -> (Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
+  pub fn update(&mut self, position: Vec3) -> (u32, Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
     let position = self.transform_inversed.transform_vec(position);
 
     {
@@ -182,7 +186,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     }
 
     let chunks = self.lod_chunk_meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
-    (self.transform, chunks)
+    (self.root_half_size, self.transform, chunks)
   }
 
   pub fn clear(&mut self) {
@@ -203,7 +207,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
 
   #[profiling::function]
   fn update_root_node(&mut self, position: Vec3) {
-    let root = AABB::from_size(self.total_size);
+    let root = AABB::root();
     let lod_level = 0;
     let neighbor_lods = NeighborLods::from_single_lod_level(lod_level);
     let NodeResult { filled, activated, .. } = self.update_nodes(root, lod_level, neighbor_lods, position);
@@ -219,7 +223,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     if self.is_terminal(aabb, lod_level, neighbor_lods.minimum_lod_level(), position) {
       NodeResult::new(self_filled, false, NeighborLods::from_single_lod_level(lod_level))
     } else { // Subdivide
-      let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy] = aabb.subdivide();
+      let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy]: [AABB; 8] = aabb.subdivide_array();
       let mut all_filled = true;
       let mut activated = [false; 8];
       let lod_level_plus_one = lod_level + 1;
@@ -333,7 +337,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       lod_level >= self.max_lod_level.min(fixed_lod_level)
     } else {
-      (lod_level >= minimum_lod_level) && (lod_level >= self.max_lod_level || aabb.distance_from(position) > self.lod_factor * aabb.size as f32)
+      (lod_level >= minimum_lod_level) && (lod_level >= self.max_lod_level || aabb.distance_from(self.root_half_size, position) > self.lod_factor * aabb.size(self.root_half_size) as f32)
     }
   }
 
@@ -342,7 +346,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_meshing.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-      let (input, dependencies) = self.extractor.create_job(self.total_size, aabb, self.volume.clone(), empty_lod_chunk_mesh);
+      let (input, dependencies) = self.extractor.create_job(self.root_size, aabb.as_sized(self.root_half_size), self.volume.clone(), empty_lod_chunk_mesh);
       let job = LodJob { key: LodJobKey::Mesh(aabb), input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_meshing.insert(aabb);
@@ -514,9 +518,9 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
   }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> (Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<E::Chunk>)> + '_>) {
-    let (transform, chunks) = self.update(position);
-    (transform, Box::new(chunks))
+  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<E::Chunk>)> + '_>) {
+    let (root_half_size, transform, chunks) = self.update(position);
+    (root_half_size, transform, Box::new(chunks))
   }
 }
 

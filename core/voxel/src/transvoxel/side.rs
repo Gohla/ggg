@@ -1,7 +1,7 @@
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::AABBSized;
 
 flagset::flags! {
    pub enum TransitionSide: u8 {
@@ -17,12 +17,12 @@ pub type TransitionSides = flagset::FlagSet<TransitionSide>;
 
 impl TransitionSide {
   #[inline]
-  pub fn subdivided_face_of_side_minimums(&self, aabb: AABB) -> [UVec3; 4] {
+  pub fn subdivided_face_of_side_minimums(&self, aabb: AABBSized) -> [UVec3; 4] {
     match self {
       TransitionSide::LoX => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let extends = aabb.extends();
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let extends = aabb.half_size();
         let x = min.x - extends;
         [
           UVec3::new(x, min.y, min.z),
@@ -32,9 +32,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiX => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let x = min.x + aabb.size;
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let x = min.x + aabb.size();
         [
           UVec3::new(x, min.y, min.z),
           UVec3::new(x, min.y, cen.z),
@@ -43,9 +43,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::LoY => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let extends = aabb.extends();
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let extends = aabb.half_size();
         let y = min.y - extends;
         [
           UVec3::new(min.x, y, min.z),
@@ -55,9 +55,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiY => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let y = min.y + aabb.size;
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let y = min.y + aabb.half_size();
         [
           UVec3::new(min.x, y, min.z),
           UVec3::new(cen.x, y, min.z),
@@ -66,9 +66,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::LoZ => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let extends = aabb.extends();
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let extends = aabb.half_size();
         let z = min.z - extends;
         [
           UVec3::new(min.x, min.y, z),
@@ -78,9 +78,9 @@ impl TransitionSide {
         ]
       }
       TransitionSide::HiZ => {
-        let min = aabb.min;
-        let cen = aabb.center();
-        let z = min.z + aabb.size;
+        let min = aabb.minimum_point();
+        let cen = aabb.center_point();
+        let z = min.z + aabb.half_size();
         [
           UVec3::new(min.x, min.y, z),
           UVec3::new(cen.x, min.y, z),

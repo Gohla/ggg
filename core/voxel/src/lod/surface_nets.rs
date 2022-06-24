@@ -1,12 +1,10 @@
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 
-use ultraviolet::UVec3;
-
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::{AABB, AABBSized};
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodJob, LodJobOutput};
@@ -63,14 +61,13 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    total_size: u32,
-    aabb: AABB,
+    root_size: u32,
+    aabb: AABBSized,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
-    let aabb = AABBWithMax::new(aabb);
     let input = SurfaceNetsJobInput { aabb, empty_lod_chunk_mesh };
-    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(total_size, aabb, volume, self.settings);
+    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(root_size, aabb, volume, self.settings);
     (input, dependencies_iterator)
   }
 
@@ -107,47 +104,50 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     if let LodJobOutput::Sample(chunk_samples) = chunk_samples.borrow() {
       // Extract
       let aabb = input.aabb;
-      let min = aabb.inner.min;
-      let step = aabb.inner.step::<C>();
-      let min_x = aabb.min_x();
-      let min_y = aabb.min_y();
-      let min_z = aabb.min_z();
+      let min = aabb.minimum_point();
+      let step = aabb.step::<C>();
+      let min_x = aabb.sibling_positive_x().map(|aabb| aabb.minimum_point());
+      let min_y = aabb.sibling_positive_y().map(|aabb| aabb.minimum_point());
+      let min_z = aabb.sibling_positive_z().map(|aabb| aabb.minimum_point());
       // Regular
       self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
       // Positive X border
       if let Some(chunk_samples_x) = &chunk_samples_x {
         if let LodJobOutput::Sample(chunk_samples_x) = chunk_samples_x.borrow() {
-          self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x, chunk_samples_x, &mut chunk.border_x_chunk);
+          self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x.unwrap(), chunk_samples_x, &mut chunk.border_x_chunk);
         }
       }
       // Positive Y border
       if let Some(chunk_samples_y) = &chunk_samples_y {
         if let LodJobOutput::Sample(chunk_samples_y) = chunk_samples_y.borrow() {
-          self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y, chunk_samples_y, &mut chunk.border_y_chunk);
+          self.surface_nets_lod.extract_border_y(step, min, &chunk_samples, min_y.unwrap(), chunk_samples_y, &mut chunk.border_y_chunk);
         }
       }
       // Positive Z border
       if let Some(chunk_samples_z) = &chunk_samples_z {
         if let LodJobOutput::Sample(chunk_samples_z) = chunk_samples_z.borrow() {
-          self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z, chunk_samples_z, &mut chunk.border_z_chunk);
+          self.surface_nets_lod.extract_border_z(step, min, &chunk_samples, min_z.unwrap(), chunk_samples_z, &mut chunk.border_z_chunk);
         }
       }
       // Positive XY border
       if let (Some(chunk_samples_x), Some(chunk_samples_y), Some(chunk_samples_xy)) = (&chunk_samples_x, &chunk_samples_y, &chunk_samples_xy) {
         if let (LodJobOutput::Sample(chunk_samples_x), LodJobOutput::Sample(chunk_samples_y), LodJobOutput::Sample(chunk_samples_xy)) = (chunk_samples_x.borrow(), chunk_samples_y.borrow(), chunk_samples_xy.borrow()) {
-          self.surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x, chunk_samples_x, min_y, chunk_samples_y, aabb.min_xy(), chunk_samples_xy, &mut chunk.border_xy_chunk);
+          let min_xy = aabb.sibling_positive_xy().unwrap().minimum_point();
+          self.surface_nets_lod.extract_border_xy(step, min, &chunk_samples, min_x.unwrap(), chunk_samples_x, min_y.unwrap(), chunk_samples_y, min_xy, chunk_samples_xy, &mut chunk.border_xy_chunk);
         }
       }
       // Positive YZ border
       if let (Some(chunk_samples_y), Some(chunk_samples_z), Some(chunk_samples_yz)) = (&chunk_samples_y, &chunk_samples_z, &chunk_samples_yz) {
         if let (LodJobOutput::Sample(chunk_samples_y), LodJobOutput::Sample(chunk_samples_z), LodJobOutput::Sample(chunk_samples_yz)) = (chunk_samples_y.borrow(), chunk_samples_z.borrow(), chunk_samples_yz.borrow()) {
-          self.surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y, chunk_samples_y, min_z, chunk_samples_z, aabb.min_yz(), chunk_samples_yz, &mut chunk.border_yz_chunk);
+          let min_yz = aabb.sibling_positive_yz().unwrap().minimum_point();
+          self.surface_nets_lod.extract_border_yz(step, min, &chunk_samples, min_y.unwrap(), chunk_samples_y, min_z.unwrap(), chunk_samples_z, min_yz, chunk_samples_yz, &mut chunk.border_yz_chunk);
         }
       }
       // Positive XZ border
       if let (Some(chunk_samples_x), Some(chunk_samples_z), Some(chunk_samples_xz)) = (&chunk_samples_x, &chunk_samples_z, &chunk_samples_xz) {
         if let (LodJobOutput::Sample(chunk_samples_x), LodJobOutput::Sample(chunk_samples_z), LodJobOutput::Sample(chunk_samples_xz)) = (chunk_samples_x.borrow(), chunk_samples_z.borrow(), chunk_samples_xz.borrow()) {
-          self.surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x, chunk_samples_x, min_z, chunk_samples_z, aabb.min_xz(), chunk_samples_xz, &mut chunk.border_xz_chunk);
+          let min_xz = aabb.sibling_positive_xz().unwrap().minimum_point();
+          self.surface_nets_lod.extract_border_xz(step, min, &chunk_samples, min_x.unwrap(), chunk_samples_x, min_z.unwrap(), chunk_samples_z, min_xz, chunk_samples_xz, &mut chunk.border_xz_chunk);
         }
       }
     }
@@ -190,7 +190,7 @@ impl<C: ChunkSize> SurfaceNetsExtractor<C> {
 // Job input
 
 pub struct SurfaceNetsJobInput {
-  aabb: AABBWithMax,
+  aabb: AABBSized,
   empty_lod_chunk_mesh: SurfaceNetsLodChunkMesh,
 }
 
@@ -205,26 +205,31 @@ pub struct SurfaceNetsJobDependenciesIterator<C, V> {
   sample_xy: bool,
   sample_yz: bool,
   sample_xz: bool,
-  aabb: AABBWithMax,
+  aabb: AABB,
   volume: V,
   _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
-  fn new(total_size: u32, aabb: AABBWithMax, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
-    let has_x_neighbor = aabb.max.x < total_size;
-    let has_y_neighbor = aabb.max.y < total_size;
-    let has_z_neighbor = aabb.max.z < total_size;
+  fn new(root_size: u32, aabb: AABBSized, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+    let maximum_point = aabb.maximum_point();
+    let has_x_sibling = maximum_point.x < root_size;
+    let has_y_sibling = maximum_point.y < root_size;
+    let has_z_sibling = maximum_point.z < root_size;
+    if has_x_sibling && !aabb.sibling_positive_x().is_some() {
+      dbg!(root_size, aabb,maximum_point, has_x_sibling, has_y_sibling, has_z_sibling);
+      panic!();
+    }
     Self {
       sample_regular: settings.extract_regular_chunks,
-      sample_x: has_x_neighbor && (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks),
-      sample_y: has_y_neighbor && (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks),
-      sample_z: has_z_neighbor && (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks),
-      sample_xy: has_x_neighbor && has_y_neighbor && settings.extract_border_xy_chunks,
-      sample_yz: has_y_neighbor && has_z_neighbor && settings.extract_border_yz_chunks,
-      sample_xz: has_x_neighbor && has_z_neighbor && settings.extract_border_xz_chunks,
-      aabb,
+      sample_x: has_x_sibling && (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks),
+      sample_y: has_y_sibling && (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks),
+      sample_z: has_z_sibling && (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks),
+      sample_xy: has_x_sibling && has_y_sibling && settings.extract_border_xy_chunks,
+      sample_yz: has_y_sibling && has_z_sibling && settings.extract_border_yz_chunks,
+      sample_xz: has_x_sibling && has_z_sibling && settings.extract_border_xz_chunks,
+      aabb: aabb.inner,
       volume,
       _chunk_size_phantom: PhantomData::default(),
     }
@@ -248,41 +253,40 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
   #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
-    let size = self.aabb.inner.size;
     // Regular
     if self.sample_regular {
       self.sample_regular = false;
-      return Some((Regular, LodJob::new_sample(self.aabb.inner, self.volume.clone())))
+      return Some((Regular, LodJob::new_sample(self.aabb, self.volume.clone())))
     }
     // Positive X
     if self.sample_x {
       self.sample_x = false;
-      return Some((X, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_x(), size), self.volume.clone())));
+      return Some((X, LodJob::new_sample(self.aabb.sibling_positive_x().unwrap_or_else(||panic!("Expected positive X sibling to exist in {:?}", self.aabb)), self.volume.clone())));
     }
     // Positive Y
     if self.sample_y {
       self.sample_y = false;
-      return Some((Y, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_y(), size), self.volume.clone())));
+      return Some((Y, LodJob::new_sample(self.aabb.sibling_positive_y().unwrap(), self.volume.clone())));
     }
     // Positive Z
     if self.sample_z {
       self.sample_z = false;
-      return Some((Z, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_z(), size), self.volume.clone())));
+      return Some((Z, LodJob::new_sample(self.aabb.sibling_positive_z().unwrap(), self.volume.clone())));
     }
     // Positive XY
     if self.sample_xy {
       self.sample_xy = false;
-      return Some((XY, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xy(), size), self.volume.clone())));
+      return Some((XY, LodJob::new_sample(self.aabb.sibling_positive_xy().unwrap(), self.volume.clone())));
     }
     // Positive YZ
     if self.sample_yz {
       self.sample_yz = false;
-      return Some((YZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_yz(), size), self.volume.clone())));
+      return Some((YZ, LodJob::new_sample(self.aabb.sibling_positive_yz().unwrap(), self.volume.clone())));
     }
     // Positive XZ
     if self.sample_xz {
       self.sample_xz = false;
-      return Some((XZ, LodJob::new_sample(AABB::new_unchecked(self.aabb.min_xz(), size), self.volume.clone())));
+      return Some((XZ, LodJob::new_sample(self.aabb.sibling_positive_xz().unwrap(), self.volume.clone())));
     }
     None
   }
@@ -373,67 +377,6 @@ impl LodChunkMesh for SurfaceNetsLodChunkMesh {
     self.border_xy_chunk.clear();
     self.border_yz_chunk.clear();
     self.border_xz_chunk.clear();
-  }
-}
-
-
-// AABB extensions
-
-#[derive(Copy, Clone)]
-struct AABBWithMax {
-  inner: AABB,
-  max: UVec3,
-}
-
-impl AABBWithMax {
-  #[inline]
-  fn new(aabb: AABB) -> Self {
-    Self { inner: aabb, max: aabb.max_point() }
-  }
-
-  #[inline]
-  fn min_x(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.x = self.max.x;
-    min
-  }
-
-  #[inline]
-  fn min_y(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.y = self.max.y;
-    min
-  }
-
-  #[inline]
-  fn min_z(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.z = self.max.z;
-    min
-  }
-
-  #[inline]
-  fn min_xy(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.x = self.max.x;
-    min.y = self.max.y;
-    min
-  }
-
-  #[inline]
-  fn min_yz(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.y = self.max.y;
-    min.z = self.max.z;
-    min
-  }
-
-  #[inline]
-  fn min_xz(&self) -> UVec3 {
-    let mut min = self.inner.min;
-    min.x = self.max.x;
-    min.z = self.max.z;
-    min
   }
 }
 
