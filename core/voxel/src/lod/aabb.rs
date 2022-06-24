@@ -10,10 +10,10 @@ pub struct AABB(NonZeroU32);
 
 impl AABB {
   #[inline]
-  pub fn root() -> Self { unsafe { Self(NonZeroU32::new_unchecked(1)) } }
+  pub fn root() -> Self { Self(unsafe { NonZeroU32::new_unchecked(2) }) }
 
   #[inline]
-  pub fn depth(&self) -> u8 { ((32 - self.0.leading_zeros()) / 3) as u8 }
+  pub fn depth(&self) -> u8 { ((31 - self.0.leading_zeros()) / 3) as u8 }
 
   #[inline]
   pub fn half_size(&self, root_half_size: u32) -> u32 { Self::half_size_internal(root_half_size, self.depth()) }
@@ -74,27 +74,29 @@ impl AABB {
   #[inline]
   pub fn subdivide_array(&self) -> [AABB; 8] {
     debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
-    let code = self.0.get() << 3;
+    let code = self.0.get();
+    let user_bit_set = code & 1 != 0;
+    let code = (code << 3) | user_bit_set as u32;
     unsafe {
       [
-        Self::new_unchecked(code | 0),
-        Self::new_unchecked(code | 1),
-        Self::new_unchecked(code | 2),
-        Self::new_unchecked(code | 3),
-        Self::new_unchecked(code | 4),
-        Self::new_unchecked(code | 5),
-        Self::new_unchecked(code | 6),
-        Self::new_unchecked(code | 7),
+        Self::new_unchecked(code | 0b00000000),
+        Self::new_unchecked(code | 0b00000010),
+        Self::new_unchecked(code | 0b00000100),
+        Self::new_unchecked(code | 0b00000110),
+        Self::new_unchecked(code | 0b00001000),
+        Self::new_unchecked(code | 0b00001010),
+        Self::new_unchecked(code | 0b00001100),
+        Self::new_unchecked(code | 0b00001110),
       ]
     }
   }
 
   #[inline]
-  pub fn sibling_positive_x(&self) -> Option<Self> { self.positive_sibling::<0>() }
+  pub fn sibling_positive_x(&self) -> Option<Self> { self.positive_sibling::<1>() }
   #[inline]
-  pub fn sibling_positive_y(&self) -> Option<Self> { self.positive_sibling::<1>() }
+  pub fn sibling_positive_y(&self) -> Option<Self> { self.positive_sibling::<2>() }
   #[inline]
-  pub fn sibling_positive_z(&self) -> Option<Self> { self.positive_sibling::<2>() }
+  pub fn sibling_positive_z(&self) -> Option<Self> { self.positive_sibling::<3>() }
   #[inline]
   pub fn sibling_positive_xy(&self) -> Option<Self> { self.sibling_positive_x().and_then(|aabb| aabb.sibling_positive_y()) }
   #[inline]
@@ -108,7 +110,7 @@ impl AABB {
     for d in 0..depth {
       let bit = 1 << ((d * 3) + O);
       if code & bit != 0 { // If bit is set, unset it to go to the positive sibling; and we're done.
-        unsafe { return Some(Self::new_unchecked(code & !bit)); }
+        unsafe { return Some(Self::new_unchecked(code & !bit)); }  // TODO: preserve user bit and test this
       } else { // Otherwise set the bit to go to the negative sibling and continue.
         code = code | bit;
       }
@@ -135,7 +137,7 @@ impl AABB {
   fn minimum_point_internal(depth: u8, mut size: u32, mut code: u32) -> UVec3 {
     let mut minimum_point = UVec3::zero();
     for _ in 0..depth {
-      let octant = code as u8 & 0b00000111;
+      let octant = code as u8 & 0b00001110;
       minimum_point += Self::octant_to_minimum_point(octant, size);
       code = code >> 3;
       size = size << 1;
@@ -153,14 +155,14 @@ impl AABB {
   #[inline]
   fn octant_to_minimum_point(octant: u8, size: u32) -> UVec3 {
     match octant {
-      0 => UVec3::new(size, size, size),
-      1 => UVec3::new(0, size, size),
-      2 => UVec3::new(size, 0, size),
-      3 => UVec3::new(0, 0, size),
-      4 => UVec3::new(size, size, 0),
-      5 => UVec3::new(0, size, 0),
-      6 => UVec3::new(size, 0, 0),
-      7 => UVec3::new(0, 0, 0),
+      0b00000000 => UVec3::new(size, size, size),
+      0b00000010 => UVec3::new(0, size, size),
+      0b00000100 => UVec3::new(size, 0, size),
+      0b00000110 => UVec3::new(0, 0, size),
+      0b00001000 => UVec3::new(size, size, 0),
+      0b00001010 => UVec3::new(0, size, 0),
+      0b00001100 => UVec3::new(size, 0, 0),
+      0b00001110 => UVec3::new(0, 0, 0),
       _ => unreachable!(),
     }
   }
@@ -224,15 +226,15 @@ pub struct AABBIter {
 
 impl AABBIter {
   #[inline]
-  fn new(aabb: &AABB) -> Self { Self { code: aabb.0.get() << 3, octant: 0 } }
+  fn new(aabb: &AABB) -> Self { Self { code: aabb.0.get() << 3, octant: 1 } }
 }
 
 impl Iterator for AABBIter {
   type Item = AABB;
   #[inline]
-  fn next(&mut self) -> Option<Self::Item> {
-    if self.octant > 7 { return None; }
-    let aabb = unsafe { AABB::new_unchecked(self.code | self.octant as u32) };
+  fn next(&mut self) -> Option<Self::Item> { // TODO: walk over the correct octants and test this. (i.e., test that both subdivide methods return the same things)
+    if self.octant > 8 { return None; } 
+    let aabb = unsafe { AABB::new_unchecked(self.code | self.octant as u32) };  // TODO: preserve user bit and test this
     self.octant += 1;
     Some(aabb)
   }
@@ -244,6 +246,7 @@ impl Iterator for AABBIter {
 #[cfg(test)]
 mod tests {
   use std::mem::size_of;
+
   use ultraviolet::UVec3;
 
   use crate::lod::aabb::AABB;
