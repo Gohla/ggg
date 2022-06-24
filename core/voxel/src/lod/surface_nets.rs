@@ -61,13 +61,13 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    root_size: u32,
+    _root_size: u32,
     aabb: AABBSized,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let input = SurfaceNetsJobInput { aabb, empty_lod_chunk_mesh };
-    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(root_size, aabb, volume, self.settings);
+    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(aabb.inner, volume, self.settings);
     (input, dependencies_iterator)
   }
 
@@ -198,34 +198,34 @@ pub struct SurfaceNetsJobInput {
 // Job dependencies iterator
 
 pub struct SurfaceNetsJobDependenciesIterator<C, V> {
-  sample_regular: bool,
-  sample_x: bool,
-  sample_y: bool,
-  sample_z: bool,
-  sample_xy: bool,
-  sample_yz: bool,
-  sample_xz: bool,
-  aabb: AABB,
+  regular_aabb: Option<AABB>,
+  x_aabb: Option<AABB>,
+  y_aabb: Option<AABB>,
+  z_aabb: Option<AABB>,
+  xy_aabb: Option<AABB>,
+  yz_aabb: Option<AABB>,
+  xz_aabb: Option<AABB>,
   volume: V,
   _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
-  fn new(root_size: u32, aabb: AABBSized, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
-    let maximum_point = aabb.maximum_point();
-    let has_x_sibling = maximum_point.x < root_size;
-    let has_y_sibling = maximum_point.y < root_size;
-    let has_z_sibling = maximum_point.z < root_size;
+  fn new(aabb: AABB, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+    let x_aabb = aabb.sibling_positive_x();
+    let has_x_sibling = x_aabb.is_some();
+    let y_aabb = aabb.sibling_positive_y();
+    let has_y_sibling = y_aabb.is_some();
+    let z_aabb = aabb.sibling_positive_z();
+    let has_z_sibling = z_aabb.is_some();
     Self {
-      sample_regular: settings.extract_regular_chunks,
-      sample_x: has_x_sibling && (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks),
-      sample_y: has_y_sibling && (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks),
-      sample_z: has_z_sibling && (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks),
-      sample_xy: has_x_sibling && has_y_sibling && settings.extract_border_xy_chunks,
-      sample_yz: has_y_sibling && has_z_sibling && settings.extract_border_yz_chunks,
-      sample_xz: has_x_sibling && has_z_sibling && settings.extract_border_xz_chunks,
-      aabb: aabb.inner,
+      regular_aabb: settings.extract_regular_chunks.then_some(aabb),
+      x_aabb: (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks).then_some(x_aabb).flatten(),
+      y_aabb: (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks).then_some(y_aabb).flatten(),
+      z_aabb: (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks).then_some(z_aabb).flatten(),
+      xy_aabb: (has_x_sibling && has_y_sibling && settings.extract_border_xy_chunks).then(|| aabb.sibling_positive_xy()).flatten(),
+      yz_aabb: (has_y_sibling && has_z_sibling && settings.extract_border_yz_chunks).then(|| aabb.sibling_positive_yz()).flatten(),
+      xz_aabb: (has_x_sibling && has_z_sibling && settings.extract_border_xz_chunks).then(|| aabb.sibling_positive_xz()).flatten(),
       volume,
       _chunk_size_phantom: PhantomData::default(),
     }
@@ -233,13 +233,13 @@ impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
 
   #[inline]
   fn count(&self) -> usize {
-    self.sample_regular as usize
-      + self.sample_x as usize
-      + self.sample_y as usize
-      + self.sample_z as usize
-      + self.sample_xy as usize
-      + self.sample_yz as usize
-      + self.sample_xz as usize
+    self.regular_aabb.is_some() as usize
+      + self.x_aabb.is_some() as usize
+      + self.y_aabb.is_some() as usize
+      + self.z_aabb.is_some() as usize
+      + self.xy_aabb.is_some() as usize
+      + self.yz_aabb.is_some() as usize
+      + self.xz_aabb.is_some() as usize
   }
 }
 
@@ -249,40 +249,26 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
   #[inline]
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
-    // Regular
-    if self.sample_regular {
-      self.sample_regular = false;
-      return Some((Regular, LodJob::new_sample(self.aabb, self.volume.clone())))
+    if let Some(aabb) = self.regular_aabb.take() {
+      return Some((Regular, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive X
-    if self.sample_x {
-      self.sample_x = false;
-      return Some((X, LodJob::new_sample(self.aabb.sibling_positive_x().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.x_aabb.take() {
+      return Some((X, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive Y
-    if self.sample_y {
-      self.sample_y = false;
-      return Some((Y, LodJob::new_sample(self.aabb.sibling_positive_y().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.y_aabb.take() {
+      return Some((Y, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive Z
-    if self.sample_z {
-      self.sample_z = false;
-      return Some((Z, LodJob::new_sample(self.aabb.sibling_positive_z().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.z_aabb.take() {
+      return Some((Z, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive XY
-    if self.sample_xy {
-      self.sample_xy = false;
-      return Some((XY, LodJob::new_sample(self.aabb.sibling_positive_xy().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.xy_aabb.take() {
+      return Some((XY, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive YZ
-    if self.sample_yz {
-      self.sample_yz = false;
-      return Some((YZ, LodJob::new_sample(self.aabb.sibling_positive_yz().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.yz_aabb.take() {
+      return Some((YZ, LodJob::new_sample(aabb, self.volume.clone())))
     }
-    // Positive XZ
-    if self.sample_xz {
-      self.sample_xz = false;
-      return Some((XZ, LodJob::new_sample(self.aabb.sibling_positive_xz().unwrap(), self.volume.clone())));
+    if let Some(aabb) = self.xz_aabb.take() {
+      return Some((XZ, LodJob::new_sample(aabb, self.volume.clone())))
     }
     None
   }
