@@ -217,10 +217,6 @@ impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
     let has_x_sibling = maximum_point.x < root_size;
     let has_y_sibling = maximum_point.y < root_size;
     let has_z_sibling = maximum_point.z < root_size;
-    if has_x_sibling && !aabb.sibling_positive_x().is_some() {
-      dbg!(root_size, aabb,maximum_point, has_x_sibling, has_y_sibling, has_z_sibling);
-      panic!();
-    }
     Self {
       sample_regular: settings.extract_regular_chunks,
       sample_x: has_x_sibling && (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks),
@@ -261,7 +257,7 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
     // Positive X
     if self.sample_x {
       self.sample_x = false;
-      return Some((X, LodJob::new_sample(self.aabb.sibling_positive_x().unwrap_or_else(||panic!("Expected positive X sibling to exist in {:?}", self.aabb)), self.volume.clone())));
+      return Some((X, LodJob::new_sample(self.aabb.sibling_positive_x().unwrap(), self.volume.clone())));
     }
     // Positive Y
     if self.sample_y {
