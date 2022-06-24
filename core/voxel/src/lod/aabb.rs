@@ -243,6 +243,7 @@ impl Iterator for AABBIter {
 
 #[cfg(test)]
 mod tests {
+  use std::mem::size_of;
   use ultraviolet::UVec3;
 
   use crate::lod::aabb::AABB;
@@ -479,5 +480,11 @@ mod tests {
     assert!(front_3_front_2_front_x_1.sibling_positive_x().is_some());
     let front_3_x_front_2_x_front_1 = sub_1[0].subdivide_array()[1].subdivide_array()[1];
     assert_eq!(Some(front_3_x_front_2_x_front_1), front_3_front_2_front_x_1.sibling_positive_x());
+  }
+
+  #[test]
+  fn size() {
+    assert_eq!(4, size_of::<AABB>());
+    assert_eq!(4, size_of::<Option<AABB>>());
   }
 }
