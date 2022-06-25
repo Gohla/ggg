@@ -219,7 +219,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     }
   }
 
-  #[profiling::function]
+  #[inline]
   fn update_nodes(&mut self, aabb: AABB, lod_level: u8, neighbor_lods: NeighborLods, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
@@ -344,13 +344,12 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     }
   }
 
-  #[profiling::function]
   fn update_chunk(&mut self, aabb: AABB) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_meshing.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
       let (input, dependencies) = self.extractor.create_job(self.root_size, aabb.as_sized(self.root_half_size), self.volume.clone(), empty_lod_chunk_mesh);
-      let job = LodJob { aabb: aabb, input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
+      let job = LodJob { aabb, input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_meshing.insert(aabb);
       self.requested_removal.remove(&aabb); // TODO: is this needed?
