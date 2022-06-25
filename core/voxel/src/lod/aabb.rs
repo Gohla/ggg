@@ -74,19 +74,17 @@ impl AABB {
   #[inline]
   pub fn subdivide_array(&self) -> [AABB; 8] {
     debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
-    let code = self.0.get();
-    let user_bit_set = code & 1 != 0;
-    let code = (code << 3) | user_bit_set as u32;
+    let code = self.child_code();
     unsafe {
       [
-        Self::new_unchecked(code | 0b00000000),
-        Self::new_unchecked(code | 0b00000010),
-        Self::new_unchecked(code | 0b00000100),
-        Self::new_unchecked(code | 0b00000110),
-        Self::new_unchecked(code | 0b00001000),
-        Self::new_unchecked(code | 0b00001010),
-        Self::new_unchecked(code | 0b00001100),
-        Self::new_unchecked(code | 0b00001110),
+        Self::new_unchecked(code | 0b000_0),
+        Self::new_unchecked(code | 0b001_0),
+        Self::new_unchecked(code | 0b010_0),
+        Self::new_unchecked(code | 0b011_0),
+        Self::new_unchecked(code | 0b100_0),
+        Self::new_unchecked(code | 0b101_0),
+        Self::new_unchecked(code | 0b110_0),
+        Self::new_unchecked(code | 0b111_0),
       ]
     }
   }
@@ -110,7 +108,7 @@ impl AABB {
     for d in 0..depth {
       let bit = 1 << ((d * 3) + O);
       if code & bit != 0 { // If bit is set, unset it to go to the positive sibling; and we're done.
-        unsafe { return Some(Self::new_unchecked(code & !bit)); }  // TODO: preserve user bit and test this
+        unsafe { return Some(Self::new_unchecked(code & !bit)); }
       } else { // Otherwise set the bit to go to the negative sibling and continue.
         code = code | bit;
       }
@@ -119,10 +117,35 @@ impl AABB {
   }
 
   #[inline]
+  pub fn is_user_bit_set(&self) -> bool { self.0.get() & 1 != 0 }
+  #[inline]
+  pub fn set_user_bit(&mut self) { unsafe { self.update_unchecked(self.0.get() | 1) } }
+  #[inline]
+  pub fn unset_user_bit(&mut self) { unsafe { self.update_unchecked(self.0.get() & (!1)) } }
+  #[inline]
+  pub fn with_user_bit_set(&self) -> Self { unsafe { Self::new_unchecked(self.0.get() | 1) } }
+  #[inline]
+  pub fn with_user_bit_unset(&self) -> Self { unsafe { Self::new_unchecked(self.0.get() & (!1)) } }
+
+  #[inline]
   unsafe fn new_unchecked(code: u32) -> Self {
     debug_assert!(code != 0);
     Self(NonZeroU32::new_unchecked(code))
   }
+  #[inline]
+  unsafe fn update_unchecked(&mut self, code: u32) {
+    debug_assert!(code != 0);
+    self.0 = NonZeroU32::new_unchecked(code);
+  }
+  #[inline]
+  fn child_code(&self) -> u32 {
+    let code = self.0.get();
+    let user_bit_set = code & 1 != 0;
+    let code = code & (!1); // Unset user bit to prevent it from shifting.
+    let code = code << 3;
+    code | user_bit_set as u32 // Set the user bit again if it was set.
+  }
+
   #[inline]
   fn size_internal(root_half_size: u32, depth: u8) -> u32 {
     debug_assert!(root_half_size.is_power_of_two(), "Root half size {} is not a power of 2", root_half_size);
@@ -133,11 +156,12 @@ impl AABB {
     debug_assert!(root_half_size.is_power_of_two(), "Root half size {} is not a power of 2", root_half_size);
     root_half_size >> depth // Right shift is divide by 2 for powers of 2.
   }
+
   #[inline]
   fn minimum_point_internal(depth: u8, mut size: u32, mut code: u32) -> UVec3 {
     let mut minimum_point = UVec3::zero();
     for _ in 0..depth {
-      let octant = code as u8 & 0b00001110;
+      let octant = code as u8 & 0b111_0;
       minimum_point += Self::octant_to_minimum_point(octant, size);
       code = code >> 3;
       size = size << 1;
@@ -152,17 +176,18 @@ impl AABB {
   fn maximum_point_internal(minimum_point: UVec3, size: u32) -> UVec3 {
     minimum_point + UVec3::broadcast(size)
   }
+
   #[inline]
   fn octant_to_minimum_point(octant: u8, size: u32) -> UVec3 {
     match octant {
-      0b00000000 => UVec3::new(size, size, size),
-      0b00000010 => UVec3::new(0, size, size),
-      0b00000100 => UVec3::new(size, 0, size),
-      0b00000110 => UVec3::new(0, 0, size),
-      0b00001000 => UVec3::new(size, size, 0),
-      0b00001010 => UVec3::new(0, size, 0),
-      0b00001100 => UVec3::new(size, 0, 0),
-      0b00001110 => UVec3::new(0, 0, 0),
+      0b000_0 => UVec3::new(size, size, size),
+      0b001_0 => UVec3::new(0, size, size),
+      0b010_0 => UVec3::new(size, 0, size),
+      0b011_0 => UVec3::new(0, 0, size),
+      0b100_0 => UVec3::new(size, size, 0),
+      0b101_0 => UVec3::new(0, size, 0),
+      0b110_0 => UVec3::new(size, 0, 0),
+      0b111_0 => UVec3::new(0, 0, 0),
       _ => unreachable!(),
     }
   }
@@ -202,18 +227,33 @@ impl AABBSized {
   pub fn subdivide(&self) -> AABBIter { self.inner.subdivide() }
   #[inline]
   pub fn subdivide_array(&self) -> [AABB; 8] { self.inner.subdivide_array() }
+
   #[inline]
-  pub fn sibling_positive_x(&self) -> Option<Self> { self.inner.sibling_positive_x().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_x(&self) -> Option<Self> { self.inner.sibling_positive_x().map(|inner| self.wrap(inner)) }
   #[inline]
-  pub fn sibling_positive_y(&self) -> Option<Self> { self.inner.sibling_positive_y().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_y(&self) -> Option<Self> { self.inner.sibling_positive_y().map(|inner| self.wrap(inner)) }
   #[inline]
-  pub fn sibling_positive_z(&self) -> Option<Self> { self.inner.sibling_positive_z().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_z(&self) -> Option<Self> { self.inner.sibling_positive_z().map(|inner| self.wrap(inner)) }
   #[inline]
-  pub fn sibling_positive_xy(&self) -> Option<Self> { self.inner.sibling_positive_xy().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_xy(&self) -> Option<Self> { self.inner.sibling_positive_xy().map(|inner| self.wrap(inner)) }
   #[inline]
-  pub fn sibling_positive_yz(&self) -> Option<Self> { self.inner.sibling_positive_yz().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_yz(&self) -> Option<Self> { self.inner.sibling_positive_yz().map(|inner| self.wrap(inner)) }
   #[inline]
-  pub fn sibling_positive_xz(&self) -> Option<Self> { self.inner.sibling_positive_xz().map(|inner| Self { root_half_size: self.root_half_size, inner }) }
+  pub fn sibling_positive_xz(&self) -> Option<Self> { self.inner.sibling_positive_xz().map(|inner| self.wrap(inner)) }
+
+  #[inline]
+  pub fn is_user_bit_set(&self) -> bool { self.inner.is_user_bit_set() }
+  #[inline]
+  pub fn set_user_bit(&mut self) { self.inner.set_user_bit() }
+  #[inline]
+  pub fn unset_user_bit(&mut self) { self.inner.unset_user_bit() }
+  #[inline]
+  pub fn with_user_bit_set(&self) -> Self { self.wrap(self.inner.with_user_bit_set()) }
+  #[inline]
+  pub fn with_user_bit_unset(&self) -> Self { self.wrap(self.inner.with_user_bit_unset()) }
+
+  #[inline]
+  fn wrap(&self, inner: AABB) -> Self { Self { root_half_size: self.root_half_size, inner } }
 }
 
 
@@ -226,15 +266,15 @@ pub struct AABBIter {
 
 impl AABBIter {
   #[inline]
-  fn new(aabb: &AABB) -> Self { Self { code: aabb.0.get() << 3, octant: 1 } }
+  fn new(aabb: &AABB) -> Self { Self { code: aabb.child_code(), octant: 0 } }
 }
 
 impl Iterator for AABBIter {
   type Item = AABB;
   #[inline]
-  fn next(&mut self) -> Option<Self::Item> { // TODO: walk over the correct octants and test this. (i.e., test that both subdivide methods return the same things)
-    if self.octant > 8 { return None; } 
-    let aabb = unsafe { AABB::new_unchecked(self.code | self.octant as u32) };  // TODO: preserve user bit and test this
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.octant > 7 { return None; }
+    let aabb = unsafe { AABB::new_unchecked(self.code | (self.octant as u32) << 1) };
     self.octant += 1;
     Some(aabb)
   }
@@ -268,9 +308,10 @@ mod tests {
     assert_eq!(None, root.sibling_positive_xy());
     assert_eq!(None, root.sibling_positive_yz());
     assert_eq!(None, root.sibling_positive_xz());
+    assert_eq!(false, root.is_user_bit_set());
   }
 
-  fn test_subdivided(root_half_size: u32, depth: u8, half_size: u32, offset: UVec3, subdivided: [AABB; 8]) {
+  fn test_subdivided(root_half_size: u32, depth: u8, half_size: u32, offset: UVec3, user_bit_set: bool, subdivided: [AABB; 8]) {
     let size = half_size * 2;
 
     let front = {
@@ -289,6 +330,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let front_x = {
@@ -307,6 +349,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let front_y = {
@@ -325,6 +368,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let front_xy = {
@@ -343,6 +387,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
 
@@ -362,6 +407,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let back_x = {
@@ -380,6 +426,7 @@ mod tests {
         assert_eq!(None, sub.sibling_positive_yz());
         assert_eq!(Some(front), sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let back_y = {
@@ -398,6 +445,7 @@ mod tests {
         assert_eq!(Some(front), sub.sibling_positive_yz());
         assert_eq!(None, sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
     let _back_xy = {
@@ -416,6 +464,7 @@ mod tests {
         assert_eq!(Some(front_x), sub.sibling_positive_yz());
         assert_eq!(Some(front_y), sub.sibling_positive_xz());
       }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
       sub
     };
   }
@@ -423,14 +472,14 @@ mod tests {
   #[test]
   fn subdivide_once() {
     let root_half_size = 2048;
-    test_subdivided(root_half_size, 1, 1024, UVec3::zero(), AABB::root().subdivide_array());
+    test_subdivided(root_half_size, 1, 1024, UVec3::zero(), false, AABB::root().subdivide_array());
   }
 
   #[test]
   fn subdivide_twice() {
     let root_half_size = 2048;
     for sub in AABB::root().subdivide_array() {
-      test_subdivided(root_half_size, 2, 512, sub.minimum_point(root_half_size), sub.subdivide_array());
+      test_subdivided(root_half_size, 2, 512, sub.minimum_point(root_half_size), false, sub.subdivide_array());
     }
   }
 
@@ -439,7 +488,19 @@ mod tests {
     let root_half_size = 2048;
     for sub_1 in AABB::root().subdivide_array() {
       for sub_2 in sub_1.subdivide_array() {
-        test_subdivided(root_half_size, 3, 256, sub_2.minimum_point(root_half_size), sub_2.subdivide_array());
+        test_subdivided(root_half_size, 3, 256, sub_2.minimum_point(root_half_size), false, sub_2.subdivide_array());
+      }
+    }
+  }
+
+  #[test]
+  fn subdivide_iter() {
+    let root = AABB::root();
+    assert_eq!(root.subdivide_array().into_iter().collect::<Vec<_>>(), root.subdivide().collect::<Vec<_>>());
+    for sub_1 in root.subdivide() {
+      assert_eq!(sub_1.subdivide_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide().collect::<Vec<_>>());
+      for sub_2 in sub_1.subdivide() {
+        assert_eq!(sub_2.subdivide_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide().collect::<Vec<_>>());
       }
     }
   }
@@ -483,6 +544,32 @@ mod tests {
     assert!(front_3_front_2_front_x_1.sibling_positive_x().is_some());
     let front_3_x_front_2_x_front_1 = sub_1[0].subdivide_array()[1].subdivide_array()[1];
     assert_eq!(Some(front_3_x_front_2_x_front_1), front_3_front_2_front_x_1.sibling_positive_x());
+  }
+
+  #[test]
+  fn user_bit() {
+    let mut root = AABB::root();
+    assert_eq!(false, root.is_user_bit_set());
+    assert_eq!(true, root.with_user_bit_set().is_user_bit_set());
+    root.set_user_bit();
+    assert_eq!(true, root.is_user_bit_set());
+    assert_eq!(false, root.with_user_bit_unset().is_user_bit_set());
+    root.unset_user_bit();
+    assert_eq!(false, root.is_user_bit_set());
+
+    let root_half_size = 2048;
+    let sub_1_false = root.subdivide_array();
+    test_subdivided(root_half_size, 1, 1024, UVec3::zero(), false, sub_1_false);
+    for i in 0..7 {
+      test_subdivided(root_half_size, 2, 512, sub_1_false[i].minimum_point(root_half_size), false, sub_1_false[i].subdivide_array());
+    }
+    
+    root.set_user_bit();
+    let sub_1_true = root.subdivide_array();
+    test_subdivided(root_half_size, 1, 1024, UVec3::zero(), true, sub_1_true);
+    for i in 0..7 {
+      test_subdivided(root_half_size, 2, 512, sub_1_true[i].minimum_point(root_half_size), true, sub_1_true[i].subdivide_array());
+    }
   }
 
   #[test]
