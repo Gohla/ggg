@@ -149,7 +149,7 @@ impl<JK: JobKey, DK: DepKey, I: In, J: Job<JK, DK, I>, O: Out> JobQueue<JK, DK, 
 pub trait Job<JK: JobKey, DK: DepKey, I: In>: Send + 'static {
   fn key(&self) -> &JK;
 
-  type DependencyIterator: Iterator<Item=(DK, Self)> + ExactSizeIterator;
+  type DependencyIterator: Iterator<Item=(DK, Self)>;
   fn into(self) -> (I, Self::DependencyIterator);
 }
 

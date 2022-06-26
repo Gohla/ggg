@@ -479,7 +479,9 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Iterator for LodJobDependencyI
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> ExactSizeIterator for LodJobDependencyIterator<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> ExactSizeIterator for LodJobDependencyIterator<C, V, E> where
+  E::DependenciesIterator<V>: ExactSizeIterator
+{
   fn len(&self) -> usize {
     match &self.0 {
       Some(i) => i.len(),
