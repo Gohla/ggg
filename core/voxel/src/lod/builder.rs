@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use ultraviolet::Isometry3;
+use ultraviolet::{Isometry3, Mat4};
+
+use gfx::Gfx;
 
 use crate::chunk::size::ChunkSize;
 use crate::lod::extract::LodExtractor;
@@ -33,18 +35,22 @@ impl<C: ChunkSize, V, E> LodManagerBuilder<C, V, E> {
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodManagerBuilder<C, V, E> {
   pub fn build(
     self,
+    gfx: &Gfx,
     lod_octmap_settings: LodOctmapSettings,
     transform: Isometry3,
+    view_projection_matrix: Mat4,
   ) -> SimpleLodRenderDataManager<LodOctmap<C, V, E>> {
     let lod_octmap = LodOctmap::new(lod_octmap_settings, transform, self.volume, self.extractor);
-    SimpleLodRenderDataManager::new(lod_octmap)
+    SimpleLodRenderDataManager::new(gfx, lod_octmap, view_projection_matrix)
   }
 
   pub fn build_boxed(
     self,
+    gfx: &Gfx,
     lod_octmap_settings: LodOctmapSettings,
     transform: Isometry3,
+    view_projection_matrix: Mat4,
   ) -> Box<dyn LodRenderDataManager<C>> {
-    Box::new(self.build(lod_octmap_settings, transform))
+    Box::new(self.build(gfx, lod_octmap_settings, transform, view_projection_matrix))
   }
 }

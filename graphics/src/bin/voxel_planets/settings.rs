@@ -1,9 +1,10 @@
 use egui::{Align2, ComboBox, Ui};
 use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
-use ultraviolet::Isometry3;
+use ultraviolet::{Isometry3, Mat4};
 
 use gfx::camera::{Camera, CameraDebugging, CameraSettings};
+use gfx::Gfx;
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
 use voxel::lod::builder::LodManagerBuilder;
@@ -109,31 +110,35 @@ type C16 = ChunkSize16;
 impl Settings {
   pub fn create_lod_render_data_manager(
     &self,
+    gfx: &Gfx,
     transform: Isometry3,
+    view_projection_matrix: Mat4,
   ) -> Box<dyn LodRenderDataManager<C16>> {
     let builder = LodManagerBuilder::new::<C16>();
     match self.volume_type {
-      VolumeType::Sphere => self.build_lod_render_data_manager(builder.with_volume(Sphere::new(self.sphere_settings)), transform),
-      VolumeType::Noise => self.build_lod_render_data_manager(builder.with_volume(Noise::new(self.noise_settings)), transform),
-      VolumeType::SpherePlusNoise => self.build_lod_render_data_manager(builder.with_volume(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings))), transform),
+      VolumeType::Sphere => self.build_lod_render_data_manager(gfx, builder.with_volume(Sphere::new(self.sphere_settings)), transform, view_projection_matrix),
+      VolumeType::Noise => self.build_lod_render_data_manager(gfx, builder.with_volume(Noise::new(self.noise_settings)), transform, view_projection_matrix),
+      VolumeType::SpherePlusNoise => self.build_lod_render_data_manager(gfx, builder.with_volume(Plus::new(Sphere::new(self.sphere_settings), Noise::new(self.noise_settings))), transform, view_projection_matrix),
     }
   }
 
   fn build_lod_render_data_manager<V: Volume, E>(
     &self,
+    gfx: &Gfx,
     builder: LodManagerBuilder<C16, V, E>,
     transform: Isometry3,
+    view_projection_matrix: Mat4,
   ) -> Box<dyn LodRenderDataManager<C16>> {
     match self.extractor_type {
       ExtractorType::MarchingCubes => builder
         .with_extractor(MarchingCubesExtractor::new(MarchingCubes::<C16>::default(), self.marching_cubes_settings))
-        .build_boxed(self.lod_octmap_settings, transform),
+        .build_boxed(gfx, self.lod_octmap_settings, transform, view_projection_matrix),
       ExtractorType::Transvoxel => builder
         .with_extractor(TransvoxelExtractor::new(MarchingCubes::<C16>::default(), Transvoxel::<C16>::default(), self.transvoxel_settings))
-        .build_boxed(self.lod_octmap_settings, transform),
+        .build_boxed(gfx, self.lod_octmap_settings, transform, view_projection_matrix),
       ExtractorType::SurfaceNets => builder
         .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), SurfaceNetsLod::<C16>::default(), self.surface_nets_settings))
-        .build_boxed(self.lod_octmap_settings, transform),
+        .build_boxed(gfx, self.lod_octmap_settings, transform, view_projection_matrix),
     }
   }
 
@@ -312,8 +317,8 @@ impl Settings {
       ui.label("Debug render vertices?");
       ui.horizontal(|ui| {
         ui.checkbox(&mut self.lod_render_data_settings.debug_render_vertices, "");
-        ui.drag_unlabelled_range(&mut self.lod_render_data_settings.debug_render_vertex_point_size, 0.1, 0.0..=10.0);
         ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_vertex_color, Alpha::OnlyBlend);
+        ui.drag_unlabelled_range(&mut self.lod_render_data_settings.debug_render_vertex_point_size, 0.1, 0.0..=10.0);
       });
       ui.end_row();
       ui.label("Debug render edges?");
@@ -327,6 +332,13 @@ impl Settings {
         ui.checkbox(&mut self.lod_render_data_settings.debug_render_octree_nodes, "");
         ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_color, Alpha::OnlyBlend);
         ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_node_empty_color, Alpha::OnlyBlend);
+      });
+      ui.end_row();
+      ui.label("Debug render AABB closest points?");
+      ui.horizontal(|ui| {
+        ui.checkbox(&mut self.lod_render_data_settings.debug_render_octree_aabb_closest_points, "");
+        ui.edit_color_vec4(&mut self.lod_render_data_settings.debug_render_octree_aabb_closest_points_color, Alpha::OnlyBlend);
+        ui.drag_unlabelled_range(&mut self.lod_render_data_settings.debug_render_octree_aabb_closest_points_point_size, 0.1, 0.0..=10.0);
       });
       ui.end_row();
       let mut update = false;

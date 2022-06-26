@@ -3,6 +3,7 @@ use std::ops::Range;
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BufferAddress, Device};
 
+use gfx::{Frame, Gfx};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
 
@@ -18,9 +19,10 @@ pub trait LodRenderDataManager<C: ChunkSize> {
     &mut self,
     position: Vec3,
     settings: &LodRenderDataSettings,
-    debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> LodRenderData;
+
+  fn debug_render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, view_projection_matrix: Mat4, data: &LodRenderData);
 
   fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters;
 }
@@ -36,12 +38,15 @@ pub struct LodRenderDataSettings {
   pub debug_render_octree_nodes: bool,
   pub debug_render_octree_node_color: Vec4,
   pub debug_render_octree_node_empty_color: Vec4,
+  pub debug_render_octree_aabb_closest_points: bool,
+  pub debug_render_octree_aabb_closest_points_color: Vec4,
+  pub debug_render_octree_aabb_closest_points_point_size: f32,
 }
 
 impl Default for LodRenderDataSettings {
   fn default() -> Self {
     Self {
-      debug_render_vertices: true,
+      debug_render_vertices: false,
       debug_render_vertex_color: Vec4::new(0.0, 0.0, 0.5, 0.5),
       debug_render_vertex_point_size: 3.0,
       debug_render_edges: false,
@@ -49,6 +54,9 @@ impl Default for LodRenderDataSettings {
       debug_render_octree_nodes: true,
       debug_render_octree_node_color: Vec4::new(0.0, 0.1, 0.0, 0.1),
       debug_render_octree_node_empty_color: Vec4::new(0.1, 0.0, 0.0, 0.1),
+      debug_render_octree_aabb_closest_points: false,
+      debug_render_octree_aabb_closest_points_color: Vec4::new(0.0, 0.0, 0.1, 0.1),
+      debug_render_octree_aabb_closest_points_point_size: 3.0,
     }
   }
 }
@@ -68,20 +76,21 @@ pub struct LodDraw {
 
 // Implementation
 
-#[derive(Default, Debug)]
 pub struct SimpleLodRenderDataManager<MM> {
   chunk_mesh_manager: MM,
+  debug_renderer: DebugRenderer,
   vertices: Vec<Vertex>,
   indices: Vec<u16>,
   draws: Vec<LodDraw>,
 }
 
 impl<MM> SimpleLodRenderDataManager<MM> {
-  pub fn new(chunk_mesh_manager: MM) -> Self {
+  pub fn new(gfx: &Gfx, chunk_mesh_manager: MM, view_projection_matrix: Mat4) -> Self {
+    let debug_renderer = DebugRenderer::new(gfx, view_projection_matrix);
     let vertices = Vec::new();
     let indices = Vec::new();
     let draws = Vec::new();
-    Self { chunk_mesh_manager, vertices, indices, draws }
+    Self { chunk_mesh_manager, debug_renderer, vertices, indices, draws }
   }
 }
 
@@ -93,9 +102,9 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     &mut self,
     position: Vec3,
     settings: &LodRenderDataSettings,
-    debug_renderer: &mut DebugRenderer,
     device: &Device,
   ) -> LodRenderData {
+    self.debug_renderer.clear();
     self.vertices.clear();
     self.indices.clear();
     self.draws.clear();
@@ -112,19 +121,25 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         let min = aabb.minimum_point(root_half_size).into();
         let size = aabb.size(root_half_size) as f32;
         if is_empty {
-          debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_empty_color);
+          self.debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_empty_color);
         } else {
-          debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_color);
+          self.debug_renderer.draw_cube_lines(min, size, settings.debug_render_octree_node_color);
         }
+      }
+      if settings.debug_render_octree_aabb_closest_points {
+        let closest_point = aabb.closest_point(root_half_size, position);
+        let color = settings.debug_render_octree_aabb_closest_points_color;
+        self.debug_renderer.draw_point(closest_point, color, settings.debug_render_octree_aabb_closest_points_point_size);
+        self.debug_renderer.draw_line(position, closest_point, color, color);
       }
     }
 
     if settings.debug_render_vertices {
-      debug_renderer.draw_points(self.vertices.iter().map(|v| v.position), settings.debug_render_vertex_color, settings.debug_render_vertex_point_size)
+      self.debug_renderer.draw_points(self.vertices.iter().map(|v| v.position), settings.debug_render_vertex_color, settings.debug_render_vertex_point_size)
     }
     if settings.debug_render_edges {
       for draw in &self.draws {
-        debug_renderer.draw_triangles_wireframe_indexed(
+        self.debug_renderer.draw_triangles_wireframe_indexed(
           self.vertices.iter().map(|v| v.position),
           self.indices[draw.indices.start as usize..draw.indices.end as usize].iter().map(|i| draw.base_vertex as u32 + *i as u32),
           settings.debug_render_edge_color,
@@ -140,8 +155,15 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
       .with_index_usage()
       .with_label("Voxel meshing index buffer")
       .build_with_data(device, &self.indices);
+    let draws = std::mem::take(&mut self.draws);
+    let model = transform.into_homogeneous_matrix();
 
-    LodRenderData { vertex_buffer, index_buffer, draws: self.draws.clone(), model: transform.into_homogeneous_matrix() }
+    LodRenderData { vertex_buffer, index_buffer, draws, model }
+  }
+
+  #[inline]
+  fn debug_render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, view_projection_matrix: Mat4, data: &LodRenderData) {
+    self.debug_renderer.render(gfx, frame, view_projection_matrix * data.model);
   }
 
   #[inline]
