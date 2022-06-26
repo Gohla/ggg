@@ -42,24 +42,16 @@ impl AABB {
   #[inline]
   pub fn closest_point(&self, root_half_size: u32, mut point: Vec3) -> Vec3 {
     let depth = self.depth();
-    let half_size = Self::half_size_internal(root_half_size, depth);
-    let minimum_point = Self::minimum_point_internal(depth, half_size, self.0.get());
-    let maximum_point = Self::maximum_point_internal(minimum_point, half_size * 2);
+    let size = Self::size_internal(root_half_size, depth);
+    let minimum_point = Self::minimum_point_internal(depth, size, self.0.get());
+    let maximum_point = Self::maximum_point_internal(minimum_point, size);
     point.clamp(minimum_point.into(), maximum_point.into());
     point
   }
   #[inline]
   pub fn distance_from(&self, root_half_size: u32, point: Vec3) -> f32 {
-    let depth = self.depth();
-    let half_size = Self::half_size_internal(root_half_size, depth);
-    let minimum_point = Self::minimum_point_internal(depth, half_size, self.0.get());
-    let maximum_point = Self::maximum_point_internal(minimum_point, half_size * 2);
-    let minimum_point: Vec3 = minimum_point.into();
-    let maximum_point: Vec3 = maximum_point.into();
-    let dx = (minimum_point.x - point.x).max(point.x - maximum_point.x).max(0.0);
-    let dy = (minimum_point.y - point.y).max(point.y - maximum_point.y).max(0.0);
-    let dz = (minimum_point.z - point.z).max(point.z - maximum_point.z).max(0.0);
-    (dx * dx + dy * dy + dz * dz).sqrt()
+    let closest_point = self.closest_point(root_half_size, point);
+    (closest_point - point).mag()
   }
   #[inline]
   pub fn as_sized(&self, root_half_size: u32) -> AABBSized {
@@ -287,9 +279,9 @@ impl Iterator for AABBIter {
 mod tests {
   use std::mem::size_of;
 
-  use ultraviolet::UVec3;
+  use ultraviolet::{UVec3, Vec3};
 
-  use crate::lod::aabb::AABB;
+  use crate::lod::aabb::{AABB, AABBSized};
 
   #[test]
   fn root() {
@@ -563,13 +555,69 @@ mod tests {
     for i in 0..7 {
       test_subdivided(root_half_size, 2, 512, sub_1_false[i].minimum_point(root_half_size), false, sub_1_false[i].subdivide_array());
     }
-    
+
     root.set_user_bit();
     let sub_1_true = root.subdivide_array();
     test_subdivided(root_half_size, 1, 1024, UVec3::zero(), true, sub_1_true);
     for i in 0..7 {
       test_subdivided(root_half_size, 2, 512, sub_1_true[i].minimum_point(root_half_size), true, sub_1_true[i].subdivide_array());
     }
+  }
+
+  fn test_points(aabb: AABB, root_half_size: u32, ) {
+    { // Closest point to minimum point is always the minimum point itself.
+      let point = aabb.minimum_point(root_half_size).into();
+      assert_eq!(point, aabb.closest_point(root_half_size, point));
+      assert_eq!(0.0, aabb.distance_from(root_half_size, point));
+    }
+    { // Closest point to center point is always the center point itself.
+      let point = aabb.center_point(root_half_size).into();
+      assert_eq!(point, aabb.closest_point(root_half_size, point));
+      assert_eq!(0.0, aabb.distance_from(root_half_size, point));
+    }
+    { // Closest point to maximum point is always the maximum point itself.
+      let point = aabb.maximum_point(root_half_size).into();
+      assert_eq!(point, aabb.closest_point(root_half_size, point));
+      assert_eq!(0.0, aabb.distance_from(root_half_size, point));
+    }
+  }
+
+  fn test_point(aabb: AABBSized, point: Vec3, expected_point: Vec3, expected_distance: f32) {
+    assert_eq!(expected_point, aabb.closest_point(point));
+    assert_eq!(expected_distance, aabb.distance_from(point));
+  }
+
+  fn p2(d1: f32, d2: f32) -> f32 {
+    (d1.powf(2.0) + d2.powf(2.0)).sqrt()
+  }
+
+  fn p3(d1: f32, d2: f32, d3: f32) -> f32 {
+    (d1.powf(2.0) + d2.powf(2.0) + d3.powf(2.0)).sqrt()
+  }
+
+  #[test]
+  fn closest_point_and_distance() {
+    let root_half_size = 2048;
+    let root = AABB::root().as_sized(root_half_size);
+    test_points(root.inner, root_half_size);
+    for sub_1 in root.subdivide() {
+      test_points(sub_1, root_half_size);
+      for sub_2 in sub_1.subdivide() {
+        test_points(sub_2, root_half_size);
+      }
+    }
+
+    let minimum_point = root.minimum_point().into();
+    test_point(root, Vec3::new(-5000.0, 0.0, 0.0), minimum_point, 5000.0);
+    test_point(root, Vec3::new(-5000.0, -6000.0, 0.0), minimum_point, p2(5000.0, 6000.0));
+    test_point(root, Vec3::new(-5000.0, -6000.0, -7000.0), minimum_point, p3(5000.0, 6000.0, 7000.0));
+    let size = (root_half_size * 2) as f32;
+    test_point(root, Vec3::new(5000.0, 0.0, 0.0), Vec3::new(size, 0.0, 0.0), 5000.0-size);
+    test_point(root, Vec3::new(5000.0, 6000.0, 0.0), Vec3::new(size, size, 0.0), p2(5000.0-size, 6000.0-size));
+    test_point(root, Vec3::new(5000.0, 6000.0, 7000.0), Vec3::new(size, size, size), p3(5000.0-size, 6000.0-size, 7000.0-size));
+    let half_size = root_half_size as f32;
+    test_point(root, Vec3::new(half_size, half_size, -half_size), Vec3::new(half_size, half_size, 0.0), half_size);
+    test_point(root, Vec3::new(half_size, half_size, size*2.0), Vec3::new(half_size, half_size, size), size);
   }
 
   #[test]

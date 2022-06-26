@@ -340,7 +340,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       lod_level >= self.max_lod_level.min(fixed_lod_level)
     } else {
-      (lod_level >= minimum_lod_level) && (lod_level >= self.max_lod_level || aabb.distance_from(self.root_half_size, position) > self.lod_factor * aabb.size(self.root_half_size) as f32)
+      (lod_level >= minimum_lod_level) && (lod_level >= self.max_lod_level || aabb.distance_from(self.root_half_size, position).abs() > self.lod_factor * aabb.size(self.root_half_size) as f32)
     }
   }
 
@@ -398,7 +398,7 @@ impl NeighborLods {
   #[inline]
   fn max(&self) -> u8 { self.x.max(self.y).max(self.z).max(self.xy).max(self.yz).max(self.xz) }
   #[inline]
-  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(2) }
+  fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(1) }
 }
 
 impl NodeResult {

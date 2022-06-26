@@ -112,6 +112,10 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     let extractor = self.chunk_mesh_manager.get_extractor().clone();
     let (root_half_size, transform, lod_chunk_meshes) = self.chunk_mesh_manager.update(position);
 
+    // Transform the position into one local to AABBs, used when `debug_render_octree_aabb_closest_points` is true.
+    let transform_inverse = transform.inversed();
+    let aabb_local_position = transform_inverse.transform_vec(position);
+
     for (aabb, lod_chunk_mesh) in lod_chunk_meshes {
       let is_empty = lod_chunk_mesh.is_empty();
       if !is_empty {
@@ -127,10 +131,13 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         }
       }
       if settings.debug_render_octree_aabb_closest_points {
-        let closest_point = aabb.closest_point(root_half_size, position);
+        // Use `aabb_local_position` here because AABBs are in their own local space. Afterwards, we do not have to 
+        // transform back because the debug renderer will transform everything into world space using the 
+        // (non-inverse) transform.
+        let aabb_local_closest_point = aabb.closest_point(root_half_size, aabb_local_position);
         let color = settings.debug_render_octree_aabb_closest_points_color;
-        self.debug_renderer.draw_point(closest_point, color, settings.debug_render_octree_aabb_closest_points_point_size);
-        self.debug_renderer.draw_line(position, closest_point, color, color);
+        self.debug_renderer.draw_point(aabb_local_closest_point, color, settings.debug_render_octree_aabb_closest_points_point_size);
+        self.debug_renderer.draw_line(aabb_local_position, aabb_local_closest_point, color, color);
       }
     }
 
