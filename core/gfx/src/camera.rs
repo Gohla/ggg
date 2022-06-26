@@ -93,9 +93,13 @@ impl CameraSettings {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Arcball {
+  pub mouse_movement_panning_speed: f32,
+  pub debug_gui_panning_speed: f32,
+
   pub mouse_scroll_distance_speed: f32,
   pub debug_gui_distance_speed: f32,
   pub distance: f32,
+
   pub mouse_movement_rotation_speed: f32,
   pub debug_gui_rotation_speed: f32,
   pub rotation_around_x: f32,
@@ -105,9 +109,13 @@ pub struct Arcball {
 impl Default for Arcball {
   fn default() -> Self {
     Self {
+      mouse_movement_panning_speed: 5.0,
+      debug_gui_panning_speed: 1.0,
+
       mouse_scroll_distance_speed: 5.0,
       debug_gui_distance_speed: 1.0,
       distance: -1.0,
+
       mouse_movement_rotation_speed: 0.5,
       debug_gui_rotation_speed: 0.01,
       rotation_around_x: 0.0,
@@ -254,12 +262,27 @@ impl Camera {
     let width = width as f32;
     let height = height as f32;
 
+    match settings.movement_type {
+      MovementType::Arcball => {
+        let frame_delta = frame_delta.as_s() as f32;
+        let panning_speed = settings.arcball.mouse_movement_panning_speed * frame_delta;
+        if input.mouse_buttons.contains(&MouseButton::Right) {
+          if input.mouse_buttons.contains(&MouseButton::Left) {
+            settings.target.z += input.mouse_position_delta.logical.y as f32 * panning_speed;
+          } else {
+            settings.target.x += input.mouse_position_delta.logical.x as f32 * panning_speed;
+            settings.target.y += input.mouse_position_delta.logical.y as f32 * panning_speed;
+          }
+        }
+      }
+      MovementType::Fly => {}
+    }
     self.position = match settings.movement_type {
       MovementType::Arcball => {
         let frame_delta = frame_delta.as_s() as f32;
         let distance_speed = settings.arcball.mouse_scroll_distance_speed * frame_delta;
         settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
-        if input.mouse_buttons.contains(&MouseButton::Left) {
+        if input.mouse_buttons.contains(&MouseButton::Left) && !input.mouse_buttons.contains(&MouseButton::Right) {
           let rotation_speed = settings.arcball.mouse_movement_rotation_speed * frame_delta;
           settings.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
           settings.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
@@ -271,7 +294,7 @@ impl Camera {
           position.z += settings.arcball.distance;
           position
         };
-        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).rotate_vec(&mut position);
+        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized().rotate_vec(&mut position);
         position
       }
       MovementType::Fly => Vec3::zero(),
@@ -428,6 +451,12 @@ impl CameraDebugging {
       ui.end_row();
       match settings.movement_type {
         MovementType::Arcball => {
+          ui.label("Panning change");
+          ui.horizontal(|ui| {
+            ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_panning_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("drag: ", &mut settings.arcball.debug_gui_panning_speed, 1.0, 0.0..=f32::INFINITY);
+          });
+          ui.end_row();
           ui.label("Distance");
           ui.drag_unlabelled(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed);
           ui.end_row();
