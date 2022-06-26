@@ -1,9 +1,9 @@
 use egui::{Align2, ComboBox, Ui};
 use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
-use ultraviolet::{Isometry3, Mat4};
+use ultraviolet::{Isometry3, Mat4, Vec3};
 
-use gfx::camera::{Camera, CameraDebugging, CameraSettings};
+use gfx::camera::{CameraDebugging, CameraSettings};
 use gfx::Gfx;
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
@@ -46,9 +46,9 @@ impl Default for ExtractorType {
   fn default() -> Self { Self::MarchingCubes }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
-  pub camera_settings: CameraSettings,
+  pub camera_settings: Vec<CameraSettings>,
   pub camera_debugging: CameraDebugging,
 
   pub light: LightSettings,
@@ -82,7 +82,7 @@ pub fn default_camera_settings() -> CameraSettings {
 impl Default for Settings {
   fn default() -> Self {
     Self {
-      camera_settings: default_camera_settings(),
+      camera_settings: vec![default_camera_settings(), default_camera_settings()],
       camera_debugging: CameraDebugging {
         show_window: true,
         window_anchor: Some(Align2::LEFT_BOTTOM),
@@ -150,7 +150,7 @@ impl Settings {
   pub fn draw_reset_to_defaults_button(&mut self, ui: &mut Ui) -> bool {
     if ui.button("Reset to defaults (double click)").double_clicked() {
       *self = Self {
-        camera_settings: self.camera_settings,
+        camera_settings: self.camera_settings.clone(),
         camera_debugging: self.camera_debugging,
         ..Self::default()
       };
@@ -159,8 +159,8 @@ impl Settings {
     return false;
   }
 
-  pub fn draw_light_gui(&mut self, ui: &mut Ui, camera: &Camera) {
-    self.light.render_gui(ui, camera);
+  pub fn draw_light_gui(&mut self, ui: &mut Ui, camera_direction_inverse: Vec3) {
+    self.light.render_gui(ui, camera_direction_inverse);
   }
 
   /// Returns true if update button was pressed.

@@ -7,7 +7,6 @@ use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::Camera;
 use gfx::full_screen_triangle::FullScreenTriangle;
 use gfx::render_pass::RenderPassBuilder;
 
@@ -45,10 +44,10 @@ impl Default for StarsRendererSettings {
 }
 
 impl StarsRenderer {
-  pub fn new(gfx: &Gfx, camera: &Camera) -> Self {
+  pub fn new(gfx: &Gfx, view_inverse_matrix: Mat4) -> Self {
     let mut uniform = Uniform::default();
     uniform.update_screen_size(gfx.surface.get_size());
-    uniform.update_view_projection(camera);
+    uniform.view_inverse_matrix = view_inverse_matrix;
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Stars uniform buffer")
@@ -88,10 +87,10 @@ impl StarsRenderer {
     &mut self,
     gfx: &Gfx,
     frame: &mut Frame,
-    camera: &Camera,
+    view_inverse_matrix: Mat4,
     settings: &StarsRendererSettings,
   ) {
-    self.uniform.update_view_projection(camera);
+    self.uniform.view_inverse_matrix = view_inverse_matrix;
     self.uniform.update_settings(settings);
     self.uniform_buffer.write_whole_data(&gfx.queue, &[self.uniform]);
 
@@ -110,7 +109,7 @@ impl StarsRenderer {
 #[derive(Default, Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Uniform {
   screen_size: Vec4,
-  view_inverse: Mat4,
+  view_inverse_matrix: Mat4,
 
   stars_threshold: f32,
   stars_exposure: f32,
@@ -128,11 +127,6 @@ impl Uniform {
   pub fn update_screen_size(&mut self, screen_size: ScreenSize) {
     let screen_size = screen_size.physical;
     self.screen_size = Vec4::new(screen_size.width as f32, screen_size.height as f32, 0.0, 0.0);
-  }
-
-  #[inline]
-  pub fn update_view_projection(&mut self, camera: &Camera) {
-    self.view_inverse = camera.get_view_inverse_matrix();
   }
 
   #[inline]

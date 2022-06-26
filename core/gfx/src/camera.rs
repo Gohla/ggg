@@ -334,6 +334,7 @@ impl From<&RawInput> for CameraInput {
 pub struct CameraDebugging {
   pub show_window: bool,
   pub window_anchor: Option<egui::Align2>,
+  pub selected_camera: usize,
   #[cfg_attr(feature = "serde", serde(skip))]
   pub default_settings: CameraSettings,
 }
@@ -347,7 +348,11 @@ impl CameraDebugging {
     }
   }
 
-  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &Camera, camera_settings: &mut CameraSettings) {
+  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &Camera, settings: &mut CameraSettings) {
+    self.show_debugging_gui_window_multiple_cameras(ctx, std::slice::from_ref(camera), std::slice::from_mut(settings));
+  }
+
+  pub fn show_debugging_gui_window_multiple_cameras(&mut self, ctx: &egui::Context, cameras: &[Camera], settings: &mut [CameraSettings]) {
     if !self.show_window { return; }
     let mut window = egui::Window::new("Camera");
     if let Some(anchor) = self.window_anchor {
@@ -356,69 +361,99 @@ impl CameraDebugging {
     window
       .open(&mut self.show_window)
       .auto_sized()
-      .show(ctx, |ui| camera_settings.draw_debugging_gui(ui, camera, &mut self.window_anchor, &self.default_settings));
+      .show(ctx, |ui| Self::draw_debugging_gui(ui, &mut self.window_anchor, &mut self.selected_camera, &self.default_settings, cameras, settings));
   }
 
   pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {
     ui.checkbox(&mut self.show_window, "Camera");
   }
-}
 
-#[cfg(feature = "debugging_gui")]
-impl CameraSettings {
-  pub fn draw_debugging_gui(
-    &mut self,
+  pub fn get_selected_camera<'c>(&self, cameras: &'c [Camera]) -> &'c Camera {
+    &cameras[self.selected_camera]
+  }
+
+  pub fn get_selected_camera_mut<'c>(&self, cameras: &'c mut [Camera]) -> &'c mut Camera {
+    &mut cameras[self.selected_camera]
+  }
+
+  pub fn get_selected_camera_and_settings<'c>(&self, cameras: &'c mut [Camera], settings: &'c mut [CameraSettings]) -> (&'c mut Camera, &'c mut CameraSettings) {
+    let camera = &mut cameras[self.selected_camera];
+    let settings = &mut settings[self.selected_camera];
+    (camera, settings)
+  }
+
+  fn draw_debugging_gui(
     ui: &mut egui::Ui,
-    camera: &Camera,
     window_anchor: &mut Option<egui::Align2>,
+    selected_camera: &mut usize,
     default_settings: &CameraSettings,
+    cameras: &[Camera],
+    settings: &mut [CameraSettings]
   ) {
     use egui::ComboBox;
     use gui_widget::*;
     ui.horizontal(|ui| {
-      ui.label("Anchor");
+      ComboBox::from_id_source("Camera")
+        .selected_text(format!("Camera #{}", selected_camera))
+        .show_ui(ui, |ui| {
+          for i in 0..cameras.len() {
+            ui.selectable_value(selected_camera, i, format!("Camera #{}", i));
+          }
+        });
       ui.select_align2(window_anchor);
       if ui.button("Reset to defaults (double click)").double_clicked() {
-        *self = *default_settings;
+        settings[*selected_camera] = *default_settings;
       }
     });
+    let camera = &cameras[*selected_camera];
+    let settings = &mut settings[*selected_camera];
+    Self::draw_debugging_gui_for_camera(ui, camera, settings);
+  }
+
+  fn draw_debugging_gui_for_camera(
+    ui: &mut egui::Ui,
+    camera: &Camera,
+    settings: &mut CameraSettings,
+  ) {
+    use egui::ComboBox;
+    use gui_widget::*;
     ui.collapsing_open_with_grid("View", "Grid", |ui| {
       ui.label("Movement mode");
       ComboBox::from_id_source("Movement mode")
-        .selected_text(format!("{:?}", self.movement_type))
+        .selected_text(format!("{:?}", settings.movement_type))
         .show_ui(ui, |ui| {
-          ui.selectable_value(&mut self.movement_type, MovementType::Arcball, "Arcball");
-          ui.selectable_value(&mut self.movement_type, MovementType::Fly, "Fly");
+          ui.selectable_value(&mut settings.movement_type, MovementType::Arcball, "Arcball");
+          ui.selectable_value(&mut settings.movement_type, MovementType::Fly, "Fly");
         });
       ui.end_row();
-      match self.movement_type {
+      match settings.movement_type {
         MovementType::Arcball => {
           ui.label("Distance");
-          ui.drag_unlabelled(&mut self.arcball.distance, self.arcball.debug_gui_distance_speed);
+          ui.drag_unlabelled(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed);
           ui.end_row();
           ui.label("Distance change");
           ui.horizontal(|ui| {
-            ui.drag_range("mouse: ", &mut self.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
-            ui.drag_range("drag: ", &mut self.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("mouse: ", &mut settings.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("drag: ", &mut settings.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
           });
           ui.end_row();
           ui.label("Rotation");
           ui.horizontal(|ui| {
-            ui.drag("x: ", &mut self.arcball.rotation_around_x, 0.01);
-            ui.drag("y: ", &mut self.arcball.rotation_around_y, 0.01);
+            ui.drag("x: ", &mut settings.arcball.rotation_around_x, 0.01);
+            ui.drag("y: ", &mut settings.arcball.rotation_around_y, 0.01);
           });
           ui.end_row();
           ui.label("Rotation change");
           ui.horizontal(|ui| {
-            ui.drag_range("mouse: ", &mut self.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
-            ui.drag_range("drag: ", &mut self.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
+            ui.drag_range("drag: ", &mut settings.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
           });
           ui.end_row();
         }
         MovementType::Fly => {}
       }
       ui.label("Target");
-      ui.drag_vec3(0.1, &mut self.target);
+      ui.drag_vec3(0.1, &mut settings.target);
       ui.end_row();
       ui.label("Position");
       ui.show_vec3(&camera.position);
@@ -427,16 +462,16 @@ impl CameraSettings {
     ui.collapsing_open_with_grid("Projection", "Grid", |ui| {
       ui.label("Projection mode");
       ComboBox::from_id_source("Projection mode")
-        .selected_text(format!("{:?}", self.projection_type))
+        .selected_text(format!("{:?}", settings.projection_type))
         .show_ui(ui, |ui| {
-          ui.selectable_value(&mut self.projection_type, ProjectionType::Perspective, "Perspective");
-          ui.selectable_value(&mut self.projection_type, ProjectionType::Orthographic, "Orthographic");
+          ui.selectable_value(&mut settings.projection_type, ProjectionType::Perspective, "Perspective");
+          ui.selectable_value(&mut settings.projection_type, ProjectionType::Orthographic, "Orthographic");
         });
       ui.end_row();
-      match self.projection_type {
+      match settings.projection_type {
         ProjectionType::Perspective => {
           ui.label("Vertical FOV");
-          ui.drag_angle(&mut self.perspective.vertical_fov_radians);
+          ui.drag_angle(&mut settings.perspective.vertical_fov_radians);
           ui.end_row();
         }
         ProjectionType::Orthographic => {}
@@ -446,8 +481,8 @@ impl CameraSettings {
       ui.end_row();
       ui.label("Frustum");
       ui.horizontal(|ui| {
-        ui.drag("near: ", &mut self.near, 0.001);
-        ui.drag("far: ", &mut self.far, 1.0);
+        ui.drag("near: ", &mut settings.near, 0.001);
+        ui.drag("far: ", &mut settings.far, 1.0);
       });
       ui.end_row();
     });

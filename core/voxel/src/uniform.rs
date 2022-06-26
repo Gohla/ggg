@@ -76,7 +76,7 @@ impl Default for LightSettings {
 }
 
 impl LightSettings {
-  pub fn render_gui(&mut self, ui: &mut Ui, camera: &Camera) {
+  pub fn render_gui(&mut self, ui: &mut Ui, camera_direction_inverse: Vec3) {
     ui.collapsing_open_with_grid("Directional Light", "Grid", |mut ui| {
       ui.label("Color");
       let mut color = Rgba::from_rgba_premultiplied(self.uniform.color.x, self.uniform.color.y, self.uniform.color.z, 0.0).into();
@@ -100,7 +100,7 @@ impl LightSettings {
       ui.end_row();
     });
     if self.follow_camera {
-      self.uniform.direction = camera.get_direction_inverse();
+      self.uniform.direction = camera_direction_inverse;
     }
   }
 }

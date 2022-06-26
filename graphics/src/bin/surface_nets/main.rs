@@ -116,7 +116,7 @@ impl app::Application for SurfaceNetsDemo {
     egui::Window::new("Demo")
       .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
       .show(&gui_frame, |ui| {
-        self.light_settings.render_gui(ui, &self.camera);
+        self.light_settings.render_gui(ui, self.camera.get_direction_inverse());
       });
 
     // Write uniforms, run SN to create vertices from voxels, and render them.
