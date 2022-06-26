@@ -39,6 +39,7 @@ pub enum ExtractorType {
   MarchingCubes,
   Transvoxel,
   SurfaceNets,
+  Noop,
 }
 
 impl Default for ExtractorType {
@@ -139,6 +140,9 @@ impl Settings {
       ExtractorType::SurfaceNets => builder
         .with_extractor(SurfaceNetsExtractor::new(SurfaceNets::<C16>::default(), SurfaceNetsLod::<C16>::default(), self.surface_nets_settings))
         .build_boxed(gfx, self.lod_octmap_settings, transform, view_projection_matrix),
+      ExtractorType::Noop => builder
+        .with_extractor(())
+        .build_boxed(gfx, self.lod_octmap_settings, transform, view_projection_matrix),
     }
   }
 
@@ -217,6 +221,7 @@ impl Settings {
           ui.selectable_value(&mut self.extractor_type, ExtractorType::MarchingCubes, "Marching Cubes");
           ui.selectable_value(&mut self.extractor_type, ExtractorType::Transvoxel, "Transvoxel");
           ui.selectable_value(&mut self.extractor_type, ExtractorType::SurfaceNets, "Surface Nets");
+          ui.selectable_value(&mut self.extractor_type, ExtractorType::Noop, "No-op");
         });
       ui.end_row();
       match self.extractor_type {
@@ -256,6 +261,7 @@ impl Settings {
           });
           ui.end_row();
         }
+        ExtractorType::Noop => {}
       }
       return ui.button("Update").clicked();
     }).body_returned.map(|i| i.inner).unwrap_or(false)

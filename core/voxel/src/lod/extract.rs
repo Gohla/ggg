@@ -38,3 +38,23 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
     draws: &mut Vec<LodDraw>,
   );
 }
+
+impl<C: ChunkSize> LodExtractor<C> for () {
+  type Chunk = ();
+  type JobInput = ();
+  type DependencyKey = ();
+  type DependenciesIterator<V: Volume> = std::iter::Empty<(Self::DependencyKey, LodJob<C, V, Self>)>;
+  #[inline]
+  fn create_job<V: Volume>(&self, _root_size: u32, _aabb: AABBSized, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
+  #[inline]
+  fn run_job(&self, _input: Self::JobInput, _dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)]) -> Self::Chunk { () }
+  #[inline]
+  fn update_render_data(&self, _chunk: &Self::Chunk, _vertices: &mut Vec<Vertex>, _indices: &mut Vec<u16>, _draws: &mut Vec<LodDraw>) {}
+}
+
+impl LodChunkMesh for () {
+  #[inline]
+  fn is_empty(&self) -> bool { false }
+  #[inline]
+  fn clear(&mut self) {}
+}
