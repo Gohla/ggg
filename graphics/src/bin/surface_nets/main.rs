@@ -47,6 +47,7 @@ impl app::Application for SurfaceNetsDemo {
 
   fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
+    camera_settings.arcball.distance = 3.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;

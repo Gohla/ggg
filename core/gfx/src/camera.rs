@@ -1,9 +1,8 @@
-use std::collections::HashSet;
 use std::f32::consts::{FRAC_PI_2, PI};
 
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
 
-use common::input::{MouseButton, RawInput};
+use common::input::{KeyboardButton, MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
 use common::timing::Duration;
 
@@ -94,6 +93,7 @@ impl CameraSettings {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Arcball {
   pub mouse_movement_panning_speed: f32,
+  pub keyboard_panning_speed: f32,
   pub debug_gui_panning_speed: f32,
 
   pub mouse_scroll_distance_speed: f32,
@@ -109,14 +109,15 @@ pub struct Arcball {
 impl Default for Arcball {
   fn default() -> Self {
     Self {
-      mouse_movement_panning_speed: 5.0,
+      mouse_movement_panning_speed: 0.0025,
+      keyboard_panning_speed: 1.0,
       debug_gui_panning_speed: 1.0,
 
-      mouse_scroll_distance_speed: 5.0,
-      debug_gui_distance_speed: 1.0,
+      mouse_scroll_distance_speed: 0.1,
+      debug_gui_distance_speed: 0.1,
       distance: 1.0,
 
-      mouse_movement_rotation_speed: 0.5,
+      mouse_movement_rotation_speed: 0.0025,
       debug_gui_rotation_speed: 0.01,
       rotation_around_x: 0.0,
       rotation_around_y: 0.0,
@@ -264,28 +265,45 @@ impl Camera {
 
     self.position = match settings.movement_type {
       MovementType::Arcball => {
-        let frame_delta = frame_delta.as_s() as f32;
         // Rotation
-        let distance_speed = settings.arcball.mouse_scroll_distance_speed;
-        settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed * -1.0; // Scrolling up should zoom in, decreasing distance, so multiply by -1.0.
+        settings.arcball.distance += input.mouse_wheel_scroll_delta * settings.arcball.mouse_scroll_distance_speed * -1.0; // Scrolling up should zoom in, decreasing distance, so multiply by -1.0.
         if settings.arcball.distance < 0.1 { settings.arcball.distance = 0.1; }
-        if input.mouse_buttons.contains(&MouseButton::Left) && !input.mouse_buttons.contains(&MouseButton::Right) {
-          let rotation_speed = settings.arcball.mouse_movement_rotation_speed * frame_delta;
-          settings.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
-          settings.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * rotation_speed;
+        if input.primary_mouse_button_down && !input.secondary_mouse_button_down {
+          settings.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_rotation_speed;
+          settings.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_rotation_speed;
         }
         settings.arcball.rotation_around_x = settings.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
         settings.arcball.rotation_around_y = settings.arcball.rotation_around_y % (PI * 2.0);
         let rotor = Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized();
-        // Panning
-        let panning_speed = settings.arcball.mouse_movement_panning_speed * frame_delta;
-        if input.mouse_buttons.contains(&MouseButton::Right) {
-          if input.mouse_buttons.contains(&MouseButton::Left) {
-            settings.target += Vec3::unit_z().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
+        // Panning (mouse)
+        if input.secondary_mouse_button_down {
+          if input.primary_mouse_button_down {
+            settings.target += Vec3::unit_z().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
           } else {
-            settings.target += Vec3::unit_x().rotated_by(rotor) * input.mouse_position_delta.logical.x as f32 * panning_speed;
-            settings.target += Vec3::unit_y().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
+            settings.target += Vec3::unit_x().rotated_by(rotor) * input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_panning_speed;
+            settings.target += Vec3::unit_y().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
           }
+        }
+        // Panning (keyboard)
+        let frame_delta = frame_delta.as_s() as f32;
+        let keyboard_panning_speed = settings.arcball.keyboard_panning_speed * frame_delta;
+        if input.forward_key_down {
+          settings.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed;
+        }
+        if input.left_key_down {
+          settings.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed * -1.0;
+        }
+        if input.backward_key_down {
+          settings.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed * -1.0;
+        }
+        if input.right_key_down {
+          settings.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed;
+        }
+        if input.up_key_down {
+          settings.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed;
+        }
+        if input.down_key_down {
+          settings.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed * -1.0;
         }
         // Camera position
         settings.target + Vec3::unit_z().rotated_by(rotor) * settings.arcball.distance * -1.0 // Distance is positive, but moving backwards is negative-Z, so multiply by -1.0.
@@ -327,17 +345,31 @@ impl Camera {
 
 #[derive(Default, Clone, Debug)]
 pub struct CameraInput {
-  mouse_buttons: HashSet<MouseButton>,
+  primary_mouse_button_down: bool,
+  secondary_mouse_button_down: bool,
   mouse_position_delta: ScreenDelta,
   mouse_wheel_scroll_delta: f32,
+  forward_key_down: bool,
+  left_key_down: bool,
+  backward_key_down: bool,
+  right_key_down: bool,
+  up_key_down: bool,
+  down_key_down: bool,
 }
 
 impl From<&RawInput> for CameraInput {
   fn from(input: &RawInput) -> Self {
     CameraInput {
-      mouse_buttons: input.mouse_buttons.clone(),
+      primary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Left),
+      secondary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Right),
       mouse_position_delta: input.mouse_position_delta,
       mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
+      forward_key_down: input.keyboard_buttons.contains(&KeyboardButton::W),
+      left_key_down: input.keyboard_buttons.contains(&KeyboardButton::A),
+      backward_key_down: input.keyboard_buttons.contains(&KeyboardButton::S),
+      right_key_down: input.keyboard_buttons.contains(&KeyboardButton::D),
+      up_key_down: input.keyboard_buttons.contains(&KeyboardButton::Space),
+      down_key_down: input.keyboard_buttons.contains(&KeyboardButton::C)
     }
   }
 }
@@ -446,9 +478,14 @@ impl CameraDebugging {
           ui.label("Panning change");
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_panning_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("key: ", &mut settings.arcball.keyboard_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_panning_speed, 1.0, 0.0..=f32::INFINITY);
-            if ui.reset_button_response(settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed || settings.arcball.debug_gui_panning_speed != default_settings.arcball.debug_gui_panning_speed).clicked() {
+            let can_reset = settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed 
+              || settings.arcball.keyboard_panning_speed != default_settings.arcball.keyboard_panning_speed
+              || settings.arcball.debug_gui_panning_speed != default_settings.arcball.debug_gui_panning_speed;
+            if ui.reset_button_response(can_reset).clicked() {
               settings.arcball.mouse_movement_panning_speed = default_settings.arcball.mouse_movement_panning_speed;
+              settings.arcball.keyboard_panning_speed = default_settings.arcball.keyboard_panning_speed;
               settings.arcball.debug_gui_panning_speed = default_settings.arcball.debug_gui_panning_speed;
             }
           });
@@ -458,7 +495,7 @@ impl CameraDebugging {
           ui.end_row();
           ui.label("Distance change");
           ui.horizontal(|ui| {
-            ui.drag_range("mouse: ", &mut settings.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            ui.drag_range("mouse: ", &mut settings.arcball.mouse_scroll_distance_speed, 0.1, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
             if ui.reset_button_response(settings.arcball.mouse_scroll_distance_speed != default_settings.arcball.mouse_scroll_distance_speed || settings.arcball.debug_gui_distance_speed != default_settings.arcball.debug_gui_distance_speed).clicked() {
               settings.arcball.mouse_scroll_distance_speed = default_settings.arcball.mouse_scroll_distance_speed;
@@ -490,7 +527,7 @@ impl CameraDebugging {
         MovementType::Fly => {}
       }
       ui.label("Target");
-      ui.drag_vec3_with_reset(0.1, &mut settings.target, default_settings.target);
+      ui.drag_vec3_with_reset(settings.arcball.debug_gui_panning_speed, &mut settings.target, default_settings.target);
       ui.end_row();
       ui.label("Position");
       ui.show_vec3(&camera.position);
