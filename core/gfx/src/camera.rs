@@ -266,8 +266,9 @@ impl Camera {
       MovementType::Arcball => {
         let frame_delta = frame_delta.as_s() as f32;
         // Rotation
-        let distance_speed = settings.arcball.mouse_scroll_distance_speed * frame_delta;
-        settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
+        let distance_speed = settings.arcball.mouse_scroll_distance_speed;
+        settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed * -1.0; // Scrolling up should zoom in, decreasing distance, so multiply by -1.0.
+        if settings.arcball.distance < 0.1 { settings.arcball.distance = 0.1; }
         if input.mouse_buttons.contains(&MouseButton::Left) && !input.mouse_buttons.contains(&MouseButton::Right) {
           let rotation_speed = settings.arcball.mouse_movement_rotation_speed * frame_delta;
           settings.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * rotation_speed;
@@ -453,7 +454,7 @@ impl CameraDebugging {
           });
           ui.end_row();
           ui.label("Distance");
-          ui.drag_unlabelled_range_with_reset(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.0..=f32::INFINITY, default_settings.arcball.distance);
+          ui.drag_unlabelled_range_with_reset(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.1..=f32::INFINITY, default_settings.arcball.distance);
           ui.end_row();
           ui.label("Distance change");
           ui.horizontal(|ui| {
