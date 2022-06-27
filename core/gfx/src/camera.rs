@@ -114,7 +114,7 @@ impl Default for Arcball {
 
       mouse_scroll_distance_speed: 5.0,
       debug_gui_distance_speed: 1.0,
-      distance: -1.0,
+      distance: 1.0,
 
       mouse_movement_rotation_speed: 0.5,
       debug_gui_rotation_speed: 0.01,
@@ -268,10 +268,10 @@ impl Camera {
         let panning_speed = settings.arcball.mouse_movement_panning_speed * frame_delta;
         if input.mouse_buttons.contains(&MouseButton::Right) {
           if input.mouse_buttons.contains(&MouseButton::Left) {
-            settings.target.z += input.mouse_position_delta.logical.y as f32 * panning_speed;
+            settings.target.z -= input.mouse_position_delta.logical.y as f32 * panning_speed;
           } else {
             settings.target.x += input.mouse_position_delta.logical.x as f32 * panning_speed;
-            settings.target.y += input.mouse_position_delta.logical.y as f32 * panning_speed;
+            settings.target.y -= input.mouse_position_delta.logical.y as f32 * panning_speed;
           }
         }
       }
@@ -289,13 +289,9 @@ impl Camera {
         }
         settings.arcball.rotation_around_x = settings.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
         settings.arcball.rotation_around_y = settings.arcball.rotation_around_y % (PI * 2.0);
-        let mut position = {
-          let mut position = settings.target;
-          position.z += settings.arcball.distance;
-          position
-        };
-        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized().rotate_vec(&mut position);
-        position
+        let mut rotation_vector = Vec3::unit_z();
+        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized().rotate_vec(&mut rotation_vector);
+        settings.target - rotation_vector * settings.arcball.distance
       }
       MovementType::Fly => Vec3::zero(),
     };
