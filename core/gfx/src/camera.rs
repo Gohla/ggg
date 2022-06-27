@@ -262,24 +262,10 @@ impl Camera {
     let width = width as f32;
     let height = height as f32;
 
-    match settings.movement_type {
-      MovementType::Arcball => {
-        let frame_delta = frame_delta.as_s() as f32;
-        let panning_speed = settings.arcball.mouse_movement_panning_speed * frame_delta;
-        if input.mouse_buttons.contains(&MouseButton::Right) {
-          if input.mouse_buttons.contains(&MouseButton::Left) {
-            settings.target.z -= input.mouse_position_delta.logical.y as f32 * panning_speed;
-          } else {
-            settings.target.x += input.mouse_position_delta.logical.x as f32 * panning_speed;
-            settings.target.y -= input.mouse_position_delta.logical.y as f32 * panning_speed;
-          }
-        }
-      }
-      MovementType::Fly => {}
-    }
     self.position = match settings.movement_type {
       MovementType::Arcball => {
         let frame_delta = frame_delta.as_s() as f32;
+        // Rotation
         let distance_speed = settings.arcball.mouse_scroll_distance_speed * frame_delta;
         settings.arcball.distance += input.mouse_wheel_scroll_delta * distance_speed;
         if input.mouse_buttons.contains(&MouseButton::Left) && !input.mouse_buttons.contains(&MouseButton::Right) {
@@ -289,9 +275,19 @@ impl Camera {
         }
         settings.arcball.rotation_around_x = settings.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
         settings.arcball.rotation_around_y = settings.arcball.rotation_around_y % (PI * 2.0);
-        let mut rotation_vector = Vec3::unit_z();
-        Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized().rotate_vec(&mut rotation_vector);
-        settings.target - rotation_vector * settings.arcball.distance
+        let rotor = Rotor3::from_euler_angles(0.0, settings.arcball.rotation_around_x, settings.arcball.rotation_around_y).normalized();
+        // Panning
+        let panning_speed = settings.arcball.mouse_movement_panning_speed * frame_delta;
+        if input.mouse_buttons.contains(&MouseButton::Right) {
+          if input.mouse_buttons.contains(&MouseButton::Left) {
+            settings.target += Vec3::unit_z().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
+          } else {
+            settings.target += Vec3::unit_x().rotated_by(rotor) * input.mouse_position_delta.logical.x as f32 * panning_speed;
+            settings.target += Vec3::unit_y().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * panning_speed * -1.0; // Y-up is negative, so multiply by -1.0.
+          }
+        }
+        // Camera position
+        settings.target + Vec3::unit_z().rotated_by(rotor) * settings.arcball.distance * -1.0 // Distance is positive, but moving backwards is negative-Z, so multiply by -1.0.
       }
       MovementType::Fly => Vec3::zero(),
     };
@@ -454,7 +450,7 @@ impl CameraDebugging {
           });
           ui.end_row();
           ui.label("Distance");
-          ui.drag_unlabelled(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed);
+          ui.drag_unlabelled_range(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.0..=f32::INFINITY);
           ui.end_row();
           ui.label("Distance change");
           ui.horizontal(|ui| {

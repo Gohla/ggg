@@ -73,7 +73,8 @@ pub struct Settings {
 
 pub fn default_camera_settings() -> CameraSettings {
   let mut settings = CameraSettings::with_defaults_arcball_perspective();
-  settings.arcball.distance = -crate::EXTENDS * 2.0;
+  settings.arcball.distance = crate::EXTENDS * 2.0 - 1.0;
+  settings.arcball.mouse_movement_panning_speed = 1000.0;
   settings.arcball.mouse_scroll_distance_speed = 1000.0;
   settings.far = 10000.0;
   settings
