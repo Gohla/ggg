@@ -223,7 +223,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   fn update_nodes(&mut self, aabb: AABB, lod_level: u8, neighbor_lods: NeighborLods, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
-    if self.is_terminal(aabb, lod_level, neighbor_lods.minimum_lod_level(), position) {
+    if self.is_terminal(aabb, lod_level, neighbor_lods.minimum_lod_level(), neighbor_lods.maximum_lod_level(self.max_lod_level), position) {
       NodeResult::new(self_filled, false, NeighborLods::from_single_lod_level(lod_level))
     } else { // Subdivide
       let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy]: [AABB; 8] = aabb.subdivide_array();
@@ -336,11 +336,11 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   }
 
   #[inline]
-  fn is_terminal(&self, aabb: AABB, lod_level: u8, minimum_lod_level: u8, position: Vec3) -> bool {
+  fn is_terminal(&self, aabb: AABB, lod_level: u8, minimum_lod_level: u8, maximum_lod_level: u8, position: Vec3) -> bool {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       lod_level >= self.max_lod_level.min(fixed_lod_level)
     } else {
-      (lod_level >= minimum_lod_level) && (lod_level >= self.max_lod_level || aabb.distance_from(self.root_half_size, position).abs() > self.lod_factor * aabb.size(self.root_half_size) as f32)
+      (lod_level >= minimum_lod_level) && (lod_level >= maximum_lod_level || aabb.distance_from(self.root_half_size, position).abs() > self.lod_factor * aabb.size(self.root_half_size) as f32)
     }
   }
 
@@ -398,7 +398,21 @@ impl NeighborLods {
   #[inline]
   fn max(&self) -> u8 { self.x.max(self.y).max(self.z).max(self.xy).max(self.yz).max(self.xz) }
   #[inline]
+  fn min(&self, maximum_lod_level: u8) -> u8 {
+    let x = if self.x == 0 { maximum_lod_level } else { self.x };
+    let y = if self.y == 0 { maximum_lod_level } else { self.y };
+    let z = if self.z == 0 { maximum_lod_level } else { self.z };
+    let xy = if self.xy == 0 { maximum_lod_level } else { self.xy };
+    let yz = if self.yz == 0 { maximum_lod_level } else { self.yz };
+    let xz = if self.xz == 0 { maximum_lod_level } else { self.xz };
+    x.min(y).min(z).min(xy).min(yz).min(xz)
+  }
+  #[inline]
   fn minimum_lod_level(&self) -> u8 { self.max().saturating_sub(1) }
+  #[inline]
+  fn maximum_lod_level(&self, maximum_lod_level: u8) -> u8 {
+    (self.min(maximum_lod_level) + 1).min(maximum_lod_level)
+  }
 }
 
 impl NodeResult {
