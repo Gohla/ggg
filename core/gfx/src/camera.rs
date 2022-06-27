@@ -9,7 +9,7 @@ use common::timing::Duration;
 
 // Camera settings
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct CameraSettings {
   // View
@@ -90,7 +90,7 @@ impl CameraSettings {
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Arcball {
   pub mouse_movement_panning_speed: f32,
@@ -124,18 +124,18 @@ impl Default for Arcball {
   }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Fly {}
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum MovementType {
   Arcball,
   Fly,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Perspective {
   pub vertical_fov_radians: f32,
@@ -149,7 +149,7 @@ impl Default for Perspective {
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Orthographic {}
 
@@ -159,7 +159,7 @@ impl Default for Orthographic {
   }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ProjectionType {
   Perspective,
@@ -416,17 +416,16 @@ impl CameraDebugging {
           }
         });
       ui.select_align2(window_anchor);
-      if ui.button("Reset to defaults (double click)").double_clicked() {
-        settings[*selected_camera] = *default_settings;
-      }
+      ui.reset_button_double_click_with(&mut settings[*selected_camera], *default_settings);
     });
     let camera = &cameras[*selected_camera];
     let settings = &mut settings[*selected_camera];
-    Self::draw_debugging_gui_for_camera(ui, camera, settings);
+    Self::draw_debugging_gui_for_camera(ui, default_settings, camera, settings);
   }
 
   fn draw_debugging_gui_for_camera(
     ui: &mut egui::Ui,
+    default_settings: &CameraSettings,
     camera: &Camera,
     settings: &mut CameraSettings,
   ) {
@@ -447,34 +446,50 @@ impl CameraDebugging {
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_panning_speed, 1.0, 0.0..=f32::INFINITY);
+            if ui.reset_button_response(settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed || settings.arcball.debug_gui_panning_speed != default_settings.arcball.debug_gui_panning_speed).clicked() {
+              settings.arcball.mouse_movement_panning_speed = default_settings.arcball.mouse_movement_panning_speed;
+              settings.arcball.debug_gui_panning_speed = default_settings.arcball.debug_gui_panning_speed;
+            }
           });
           ui.end_row();
           ui.label("Distance");
-          ui.drag_unlabelled_range(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.0..=f32::INFINITY);
+          ui.drag_unlabelled_range_with_reset(&mut settings.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.0..=f32::INFINITY, default_settings.arcball.distance);
           ui.end_row();
           ui.label("Distance change");
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_scroll_distance_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
+            if ui.reset_button_response(settings.arcball.mouse_scroll_distance_speed != default_settings.arcball.mouse_scroll_distance_speed || settings.arcball.debug_gui_distance_speed != default_settings.arcball.debug_gui_distance_speed).clicked() {
+              settings.arcball.mouse_scroll_distance_speed = default_settings.arcball.mouse_scroll_distance_speed;
+              settings.arcball.debug_gui_distance_speed = default_settings.arcball.debug_gui_distance_speed;
+            }
           });
           ui.end_row();
           ui.label("Rotation");
           ui.horizontal(|ui| {
             ui.drag("x: ", &mut settings.arcball.rotation_around_x, 0.01);
             ui.drag("y: ", &mut settings.arcball.rotation_around_y, 0.01);
+            if ui.reset_button_response(settings.arcball.rotation_around_x != default_settings.arcball.rotation_around_x || settings.arcball.rotation_around_y != default_settings.arcball.rotation_around_y).clicked() {
+              settings.arcball.rotation_around_x = default_settings.arcball.rotation_around_x;
+              settings.arcball.rotation_around_y = default_settings.arcball.rotation_around_y;
+            }
           });
           ui.end_row();
           ui.label("Rotation change");
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
+            if ui.reset_button_response(settings.arcball.mouse_movement_rotation_speed != default_settings.arcball.mouse_movement_rotation_speed || settings.arcball.debug_gui_rotation_speed != default_settings.arcball.debug_gui_rotation_speed).clicked() {
+              settings.arcball.mouse_movement_rotation_speed = default_settings.arcball.mouse_movement_rotation_speed;
+              settings.arcball.debug_gui_rotation_speed = default_settings.arcball.debug_gui_rotation_speed;
+            }
           });
           ui.end_row();
         }
         MovementType::Fly => {}
       }
       ui.label("Target");
-      ui.drag_vec3(0.1, &mut settings.target);
+      ui.drag_vec3_with_reset(0.1, &mut settings.target, default_settings.target);
       ui.end_row();
       ui.label("Position");
       ui.show_vec3(&camera.position);
