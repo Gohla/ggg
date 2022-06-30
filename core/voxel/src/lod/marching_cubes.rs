@@ -5,7 +5,7 @@ use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
-use crate::lod::extract::LodExtractor;
+use crate::lod::extract::{LodExtractor, NeighborDepths};
 use crate::lod::octmap::{LodJob, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::marching_cubes::MarchingCubes;
@@ -36,6 +36,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   fn create_job<V: Volume>(
     &self,
     aabb: AabbWithSize,
+    _neighbor_depths: NeighborDepths,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {

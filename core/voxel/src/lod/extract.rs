@@ -19,6 +19,7 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   fn create_job<V: Volume>(
     &self,
     aabb: AabbWithSize,
+    neighbor_depths: NeighborDepths,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>);
@@ -38,13 +39,27 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   );
 }
 
+/// Maximum depths at positive neighbors. A depth of 0 indicates that there is no neighbor.
+#[derive(Default, Copy, Clone, Debug)]
+pub struct NeighborDepths {
+  pub x: u8,
+  pub y: u8,
+  pub z: u8,
+  pub xy: u8,
+  pub yz: u8,
+  pub xz: u8,
+}
+
+
+// No-op extractor
+
 impl<C: ChunkSize> LodExtractor<C> for () {
   type Chunk = ();
   type JobInput = ();
   type DependencyKey = ();
   type DependenciesIterator<V: Volume> = std::iter::Empty<(Self::DependencyKey, LodJob<C, V, Self>)>;
   #[inline]
-  fn create_job<V: Volume>(&self, _aabb: AabbWithSize, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
+  fn create_job<V: Volume>(&self, _aabb: AabbWithSize, _neighbor_depths: NeighborDepths, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
   #[inline]
   fn run_job(&self, _input: Self::JobInput, _dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)]) -> Self::Chunk { () }
   #[inline]

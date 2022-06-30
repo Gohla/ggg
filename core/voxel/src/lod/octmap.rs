@@ -12,7 +12,7 @@ use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::Aabb;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
-use crate::lod::extract::LodExtractor;
+use crate::lod::extract::{LodExtractor, NeighborDepths};
 use crate::volume::Volume;
 
 // Settings
@@ -209,95 +209,117 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   fn update_root_node(&mut self, position: Vec3) {
     let root = Aabb::root().with_user_bit_set();
     let depth = 0;
-    let NodeResult { filled, activated, .. } = self.update_nodes(root, depth, position);
+    let neighbor_depths = NeighborDepths::default();
+    let NodeResult { filled, activated, .. } = self.update_nodes(root, depth, neighbor_depths, position);
     if filled && !activated {
       self.active_aabbs.insert(root);
     }
   }
 
   #[inline]
-  fn update_nodes(&mut self, aabb: Aabb, depth: u8, position: Vec3) -> NodeResult {
+  fn update_nodes(&mut self, aabb: Aabb, depth: u8, neighbor_depths: NeighborDepths, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
-    let self_filled = self.update_chunk(aabb);
+    let self_filled = self.update_chunk(aabb, neighbor_depths);
     if self.is_terminal(aabb, depth, position) {
-      NodeResult::new(self_filled, false, NodeKind::Terminal(aabb))
+      NodeResult::new(self_filled, false, depth)
     } else { // Subdivide
       let mut all_filled = true;
       let mut activated = [false; 8];
       let depth_plus_one = depth + 1;
+      let mut maximum_depth = depth_plus_one;
       let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy] = aabb.subdivide_array();
 
       let front_result = {
-        let result = self.update_nodes(front, depth_plus_one, position);
+        let result = self.update_nodes(front, depth_plus_one, neighbor_depths, position);
         activated[0] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let front_x_result = {
-        // TODO: collect x neighbors
-        let result = self.update_nodes(front_x, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.x = front_result.maximum_depth;
+        let result = self.update_nodes(front_x, depth_plus_one, neighbor_depths, position);
         activated[1] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let front_y_result = {
-        // TODO: collect y neighbors
-        let result = self.update_nodes(front_y, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.y = front_result.maximum_depth;
+        let result = self.update_nodes(front_y, depth_plus_one, neighbor_depths, position);
         activated[2] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let front_xy_result = {
-        // TODO: collect x+y+xy neighbors
-        let result = self.update_nodes(front_xy, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.x = front_y_result.maximum_depth;
+        neighbor_depths.y = front_x_result.maximum_depth;
+        neighbor_depths.xy = front_result.maximum_depth;
+        let result = self.update_nodes(front_xy, depth_plus_one, neighbor_depths, position);
         activated[3] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let back_result = {
-        let result = self.update_nodes(back, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.z = front_result.maximum_depth;
+        let result = self.update_nodes(back, depth_plus_one, neighbor_depths, position);
         activated[4] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let back_x_result = {
-        let result = self.update_nodes(back_x, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.x = back_result.maximum_depth;
+        neighbor_depths.z = front_x_result.maximum_depth;
+        neighbor_depths.xz = front_result.maximum_depth;
+        let result = self.update_nodes(back_x, depth_plus_one, neighbor_depths, position);
         activated[5] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
       let back_y_result = {
-        let result = self.update_nodes(back_y, depth_plus_one, position);
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.y = back_result.maximum_depth;
+        neighbor_depths.z = front_y_result.maximum_depth;
+        neighbor_depths.yz = front_result.maximum_depth;
+        let result = self.update_nodes(back_y, depth_plus_one, neighbor_depths, position);
         activated[6] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let back_xy_result = {
-        let result = self.update_nodes(back_xy, depth_plus_one, position);
+      let _back_xy_result = {
+        let mut neighbor_depths = neighbor_depths;
+        neighbor_depths.x = back_y_result.maximum_depth;
+        neighbor_depths.y = back_x_result.maximum_depth;
+        neighbor_depths.z = front_xy_result.maximum_depth;
+        neighbor_depths.xy = back_result.maximum_depth;
+        neighbor_depths.yz = front_x_result.maximum_depth;
+        neighbor_depths.xz = front_y_result.maximum_depth;
+        let result = self.update_nodes(back_xy, depth_plus_one, neighbor_depths, position);
         activated[7] = result.activated;
         all_filled &= result.filled;
+        maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
 
-      let kind = NodeKind::Subdivided(Box::new(NodeSubdivided {
-        front: front_result.kind,
-        front_x: front_x_result.kind,
-        front_y: front_y_result.kind,
-        front_xy: front_xy_result.kind,
-        back: back_result.kind,
-        back_x: back_x_result.kind,
-        back_y: back_y_result.kind,
-        back_xy: back_xy_result.kind,
-      }));
       if all_filled { // All subdivided nodes are filled, activate each non-activated node.
         for (i, sub_aabb) in subdivided.into_iter().enumerate() {
           if !activated[i] {
             self.active_aabbs.insert(sub_aabb);
           }
         }
-        NodeResult::new(true, true, kind) // Act as is filled and activated, because all sub-nodes are filled and activated.
+        NodeResult::new(true, true, maximum_depth) // Act as is filled and activated, because all sub-nodes are filled and activated.
       } else {
-        NodeResult::new(self_filled, false, kind) // Not all subdivided nodes are filled, we might be filled. Our parent should activate us if possible.
+        NodeResult::new(self_filled, false, maximum_depth) // Not all subdivided nodes are filled, we might be filled. Our parent should activate us if possible.
       }
     }
   }
@@ -311,11 +333,11 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     }
   }
 
-  fn update_chunk(&mut self, aabb: Aabb) -> bool {
+  fn update_chunk(&mut self, aabb: Aabb, neighbor_depths: NeighborDepths) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_meshing.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-      let (input, dependencies) = self.extractor.create_job(aabb.with_size(self.root_size), self.volume.clone(), empty_lod_chunk_mesh);
+      let (input, dependencies) = self.extractor.create_job(aabb.with_size(self.root_size), neighbor_depths, self.volume.clone(), empty_lod_chunk_mesh);
       let job = LodJob { aabb, input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_meshing.insert(aabb);
@@ -340,30 +362,14 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
 struct NodeResult {
   filled: bool,
   activated: bool,
-  kind: NodeKind,
+  maximum_depth: u8,
 }
 
 impl NodeResult {
   #[inline]
-  fn new(filled: bool, activated: bool, kind: NodeKind) -> Self {
-    Self { filled, activated, kind }
+  fn new(filled: bool, activated: bool, maximum_depth: u8) -> Self {
+    Self { filled, activated, maximum_depth }
   }
-}
-
-enum NodeKind {
-  Terminal(Aabb),
-  Subdivided(Box<NodeSubdivided>)
-}
-
-struct NodeSubdivided {
-  front: NodeKind,
-  front_x: NodeKind,
-  front_y: NodeKind,
-  front_xy: NodeKind,
-  back: NodeKind,
-  back_x: NodeKind,
-  back_y: NodeKind,
-  back_xy: NodeKind,
 }
 
 

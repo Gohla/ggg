@@ -6,7 +6,7 @@ use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
-use crate::lod::extract::LodExtractor;
+use crate::lod::extract::{LodExtractor, NeighborDepths};
 use crate::lod::octmap::{LodJob, LodJobOutput};
 use crate::lod::render::{copy_chunk_vertices, LodDraw};
 use crate::surface_nets::lod::SurfaceNetsLod;
@@ -62,11 +62,12 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   fn create_job<V: Volume>(
     &self,
     aabb: AabbWithSize,
+    neighbor_depths: NeighborDepths,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
     let input = SurfaceNetsJobInput { aabb, empty_lod_chunk_mesh };
-    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(aabb.inner, volume, self.settings);
+    let dependencies_iterator = SurfaceNetsJobDependenciesIterator::new(aabb.inner, neighbor_depths, volume, self.settings);
     (input, dependencies_iterator)
   }
 
@@ -210,13 +211,14 @@ pub struct SurfaceNetsJobDependenciesIterator<C, V> {
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
-  fn new(aabb: Aabb, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+  fn new(aabb: Aabb, neighbor_depths: NeighborDepths, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+    // let depth = aabb.depth();
     let x_aabb = aabb.sibling_positive_x();
-    let has_x_sibling = x_aabb.is_some();
+    let has_x_sibling = neighbor_depths.x != 0;
     let y_aabb = aabb.sibling_positive_y();
-    let has_y_sibling = y_aabb.is_some();
+    let has_y_sibling = neighbor_depths.y != 0;
     let z_aabb = aabb.sibling_positive_z();
-    let has_z_sibling = z_aabb.is_some();
+    let has_z_sibling = neighbor_depths.z != 0;
     Self {
       regular_aabb: settings.extract_regular_chunks.then_some(aabb),
       x_aabb: (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks).then_some(x_aabb).flatten(),
