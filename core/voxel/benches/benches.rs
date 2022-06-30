@@ -49,19 +49,19 @@ pub fn marching_cubes_benchmark(c: &mut Criterion) {
 }
 
 pub fn transvoxel_benchmark(c: &mut Criterion) {
-  let size = 64;
-  let sphere = Sphere::new(SphereSettings { radius: size as f32 });
+  let root_size = 64;
+  let sphere = Sphere::new(SphereSettings { radius: root_size as f32 });
   let transvoxel = Transvoxel::<C16>::new();
 
-  let aabb = Aabb::from_size(size);
-  let aabbs = aabb.subdivide();
+  let aabb = Aabb::root();
+  let aabbs = aabb.subdivide_array();
   let lores_aabb = aabbs[4]; // 4th subdivision is at 0,0 with z as center.
-  let lores_min = lores_aabb.min;
-  let lores_step = lores_aabb.step::<C16>();
+  let lores_min = lores_aabb.minimum_point(root_size);
+  let lores_step = lores_aabb.step::<C16>(root_size);
 
   let side = TransitionSide::LoZ;
   let hires_step = 1;
-  let hires_chunk_mins = side.subdivided_face_of_side_minimums(lores_aabb);
+  let hires_chunk_mins = side.subdivided_face_of_side_minimums(lores_aabb.with_size(root_size));
   let hires_chunk_samples = [
     sphere.sample_chunk(hires_chunk_mins[0], hires_step),
     sphere.sample_chunk(hires_chunk_mins[1], hires_step),
