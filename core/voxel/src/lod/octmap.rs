@@ -58,7 +58,7 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   transform: Isometry3,
   transform_inversed: Isometry3,
 
-  max_lod_level: u8,
+  max_depth: u8,
   volume: V,
   extractor: E,
 
@@ -80,7 +80,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     let root_half_size = settings.root_half_size;
     let root_size = settings.root_half_size * 2;
     let lod_0_step = root_size / C::CELLS_IN_CHUNK_ROW;
-    let max_lod_level = lod_0_step.log2() as u8;
+    let max_depth = lod_0_step.log2() as u8;
     Self {
       root_half_size,
       root_size,
@@ -90,7 +90,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       transform,
       transform_inversed: transform.inversed(),
 
-      max_lod_level,
+      max_depth,
       volume,
       extractor: extractor.clone(),
 
@@ -122,7 +122,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   }
 
   #[inline]
-  pub fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
+  pub fn get_max_lod_level(&self) -> u8 { self.max_depth }
 
   #[profiling::function]
   pub fn update(&mut self, position: Vec3) -> (u32, Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
@@ -211,29 +211,28 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   #[profiling::function]
   fn update_root_node(&mut self, position: Vec3) {
     let root = AABB::root().with_user_bit_set();
-    let lod_level = 0;
-    let NodeResult { filled, activated, .. } = self.update_nodes(root, lod_level, position);
+    let depth = 0;
+    let NodeResult { filled, activated, .. } = self.update_nodes(root, depth, position);
     if filled && !activated {
       self.active_aabbs.insert(root);
     }
   }
 
   #[inline]
-  fn update_nodes(&mut self, aabb: AABB, lod_level: u8, position: Vec3) -> NodeResult {
+  fn update_nodes(&mut self, aabb: AABB, depth: u8, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
-    if self.is_terminal(aabb, lod_level, position) {
-      NodeResult::new(self_filled, false)
+    if self.is_terminal(aabb, depth, position) {
+      NodeResult::new(self_filled, false, NodeKind::Terminal(aabb))
     } else { // Subdivide
       let mut all_filled = true;
       let subdivided = aabb.subdivide_array();
       let mut activated = [false; 8];
       for (i, sub_aabb) in subdivided.into_iter().enumerate() {
-        let NodeResult { filled: sub_filled, activated: sub_activated } = self.update_nodes(sub_aabb, lod_level + 1, position);
+        let NodeResult { filled: sub_filled, activated: sub_activated } = self.update_nodes(sub_aabb, depth + 1, position);
         activated[i] = sub_activated;
         all_filled &= sub_filled;
       }
-
       if all_filled { // All subdivided nodes are filled, activate each non-activated node.
         for (i, sub_aabb) in subdivided.into_iter().enumerate() {
           if !activated[i] {
@@ -248,11 +247,11 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   }
 
   #[inline]
-  fn is_terminal(&self, aabb: AABB, lod_level: u8, position: Vec3) -> bool {
+  fn is_terminal(&self, aabb: AABB, depth: u8, position: Vec3) -> bool {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
-      lod_level >= self.max_lod_level.min(fixed_lod_level)
+      depth >= self.max_depth.min(fixed_lod_level)
     } else {
-      lod_level >= self.max_lod_level || aabb.distance_from(self.root_half_size, position) > self.lod_factor * aabb.size(self.root_half_size) as f32
+      depth >= self.max_depth || aabb.distance_from(self.root_half_size, position) > self.lod_factor * aabb.size(self.root_half_size) as f32
     }
   }
 
@@ -285,13 +284,30 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
 struct NodeResult {
   filled: bool,
   activated: bool,
+  kind: NodeKind,
 }
 
 impl NodeResult {
   #[inline]
-  fn new(filled: bool, activated: bool) -> Self {
-    Self { filled, activated }
+  fn new(filled: bool, activated: bool, kind: NodeKind) -> Self {
+    Self { filled, activated, kind }
   }
+}
+
+enum NodeKind {
+  Terminal(AABB),
+  Subdivided(Box<NodeSubdivided>)
+}
+
+struct NodeSubdivided {
+  front: NodeKind,
+  front_x: NodeKind,
+  front_y: NodeKind,
+  front_xy: NodeKind,
+  back: NodeKind,
+  back_x: NodeKind,
+  back_y: NodeKind,
+  back_xy: NodeKind,
 }
 
 
@@ -410,7 +426,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManagerParameters for LodOctmap<C, V, E> {
   #[inline]
-  fn get_max_lod_level(&self) -> u8 { self.max_lod_level }
+  fn get_max_lod_level(&self) -> u8 { self.max_depth }
 
   #[inline]
   fn get_lod_factor(&self) -> f32 { self.lod_factor }
