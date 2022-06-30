@@ -1,7 +1,7 @@
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABBSized;
+use crate::lod::aabb::AabbWithSize;
 
 flagset::flags! {
    pub enum TransitionSide: u8 {
@@ -17,7 +17,7 @@ pub type TransitionSides = flagset::FlagSet<TransitionSide>;
 
 impl TransitionSide {
   #[inline]
-  pub fn subdivided_face_of_side_minimums(&self, aabb: AABBSized) -> [UVec3; 4] {
+  pub fn subdivided_face_of_side_minimums(&self, aabb: AabbWithSize) -> [UVec3; 4] {
     match self {
       TransitionSide::LoX => {
         let min = aabb.minimum_point();

@@ -10,7 +10,7 @@ use job_queue::{Job, JobQueue, JobQueueMessage};
 
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::Aabb;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::LodExtractor;
 use crate::volume::Volume;
@@ -20,7 +20,7 @@ use crate::volume::Volume;
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct LodOctmapSettings {
-  pub root_half_size: u32,
+  pub root_size: u32,
   pub lod_factor: f32,
   pub fixed_lod_level: Option<u8>,
   pub job_queue_worker_threads: usize,
@@ -30,15 +30,15 @@ pub struct LodOctmapSettings {
 impl LodOctmapSettings {
   #[inline]
   pub fn check(&self) {
-    assert_ne!(self.root_half_size, 0, "Root half size may not be 0");
-    assert!(self.root_half_size.is_power_of_two(), "Root half size {} must be a power of 2", self.root_half_size);
+    assert_ne!(self.root_size, 0, "Root size may not be 0");
+    assert!(self.root_size.is_power_of_two(), "Root size {} must be a power of 2", self.root_size);
   }
 }
 
 impl Default for LodOctmapSettings {
   fn default() -> Self {
     Self {
-      root_half_size: 2048,
+      root_size: 4096,
       lod_factor: 1.0,
       fixed_lod_level: None,
       job_queue_worker_threads: std::thread::available_parallelism().ok().and_then(|p| NonZeroUsize::new(p.get().saturating_sub(1))).unwrap_or(NonZeroUsize::new(7).unwrap()).get(),
@@ -50,7 +50,6 @@ impl Default for LodOctmapSettings {
 // LOD octmap
 
 pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
-  root_half_size: u32,
   root_size: u32,
   lod_factor: f32,
   fixed_lod_level: Option<u8>,
@@ -62,27 +61,25 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
   volume: V,
   extractor: E,
 
-  active_aabbs: FxHashSet<AABB>,
-  keep_aabbs: FxHashSet<AABB>,
-  prev_keep_aabbs: FxHashSet<AABB>,
-  lod_chunk_meshes: FxHashMap<AABB, Arc<E::Chunk>>,
+  active_aabbs: FxHashSet<Aabb>,
+  keep_aabbs: FxHashSet<Aabb>,
+  prev_keep_aabbs: FxHashSet<Aabb>,
+  lod_chunk_meshes: FxHashMap<Aabb, Arc<E::Chunk>>,
   empty_lod_chunk_mesh_cache: VecDeque<E::Chunk>,
   empty_lod_chunk_mesh_cache_size: usize,
 
-  requested_meshing: FxHashSet<AABB>,
-  requested_removal: FxHashSet<AABB>,
-  job_queue: JobQueue<AABB, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
+  requested_meshing: FxHashSet<Aabb>,
+  requested_removal: FxHashSet<Aabb>,
+  job_queue: JobQueue<Aabb, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
 }
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   pub fn new(settings: LodOctmapSettings, transform: Isometry3, volume: V, extractor: E) -> Self {
     settings.check();
-    let root_half_size = settings.root_half_size;
-    let root_size = settings.root_half_size * 2;
+    let root_size = settings.root_size;
     let lod_0_step = root_size / C::CELLS_IN_CHUNK_ROW;
     let max_depth = lod_0_step.log2() as u8;
     Self {
-      root_half_size,
       root_size,
       lod_factor: settings.lod_factor,
       fixed_lod_level: settings.fixed_lod_level,
@@ -107,10 +104,10 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
         settings.job_queue_worker_threads,
         settings.job_queue_worker_threads * 2,
         4096,
-        move |aabb: AABB, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
+        move |aabb: Aabb, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
           match input {
             LodJobInput::Sample(volume) => {
-              LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.minimum_point(root_half_size), aabb.step::<C>(root_half_size))))
+              LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.minimum_point(root_size), aabb.step::<C>(root_size))))
             }
             LodJobInput::Mesh(input) => {
               let lod_chunk_mesh = extractor.run_job(input, dependency_outputs);
@@ -125,7 +122,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   pub fn get_max_lod_level(&self) -> u8 { self.max_depth }
 
   #[profiling::function]
-  pub fn update(&mut self, position: Vec3) -> (u32, Isometry3, impl Iterator<Item=(&AABB, &Arc<E::Chunk>)>) {
+  pub fn update(&mut self, position: Vec3) -> (u32, Isometry3, impl Iterator<Item=(&Aabb, &Arc<E::Chunk>)>) {
     let position = self.transform_inversed.transform_vec(position);
 
     {
@@ -189,7 +186,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     }
 
     let chunks = self.lod_chunk_meshes.iter().filter(|(aabb, _)| self.active_aabbs.contains(*aabb));
-    (self.root_half_size, self.transform, chunks)
+    (self.root_size, self.transform, chunks)
   }
 
   pub fn clear(&mut self) {
@@ -210,7 +207,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
 
   #[profiling::function]
   fn update_root_node(&mut self, position: Vec3) {
-    let root = AABB::root().with_user_bit_set();
+    let root = Aabb::root().with_user_bit_set();
     let depth = 0;
     let NodeResult { filled, activated, .. } = self.update_nodes(root, depth, position);
     if filled && !activated {
@@ -219,47 +216,106 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
   }
 
   #[inline]
-  fn update_nodes(&mut self, aabb: AABB, depth: u8, position: Vec3) -> NodeResult {
+  fn update_nodes(&mut self, aabb: Aabb, depth: u8, position: Vec3) -> NodeResult {
     self.keep_aabbs.insert(aabb);
     let self_filled = self.update_chunk(aabb);
     if self.is_terminal(aabb, depth, position) {
       NodeResult::new(self_filled, false, NodeKind::Terminal(aabb))
     } else { // Subdivide
       let mut all_filled = true;
-      let subdivided = aabb.subdivide_array();
       let mut activated = [false; 8];
-      for (i, sub_aabb) in subdivided.into_iter().enumerate() {
-        let NodeResult { filled: sub_filled, activated: sub_activated } = self.update_nodes(sub_aabb, depth + 1, position);
-        activated[i] = sub_activated;
-        all_filled &= sub_filled;
-      }
+      let depth_plus_one = depth + 1;
+      let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy] = aabb.subdivide_array();
+
+      let front_result = {
+        let result = self.update_nodes(front, depth_plus_one, position);
+        activated[0] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let front_x_result = {
+        // TODO: collect x neighbors
+        let result = self.update_nodes(front_x, depth_plus_one, position);
+        activated[1] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let front_y_result = {
+        // TODO: collect y neighbors
+        let result = self.update_nodes(front_y, depth_plus_one, position);
+        activated[2] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let front_xy_result = {
+        // TODO: collect x+y+xy neighbors
+        let result = self.update_nodes(front_xy, depth_plus_one, position);
+        activated[3] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let back_result = {
+        let result = self.update_nodes(back, depth_plus_one, position);
+        activated[4] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let back_x_result = {
+        let result = self.update_nodes(back_x, depth_plus_one, position);
+        activated[5] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let back_y_result = {
+        let result = self.update_nodes(back_y, depth_plus_one, position);
+        activated[6] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+      let back_xy_result = {
+        let result = self.update_nodes(back_xy, depth_plus_one, position);
+        activated[7] = result.activated;
+        all_filled &= result.filled;
+        result
+      };
+
+      let kind = NodeKind::Subdivided(Box::new(NodeSubdivided {
+        front: front_result.kind,
+        front_x: front_x_result.kind,
+        front_y: front_y_result.kind,
+        front_xy: front_xy_result.kind,
+        back: back_result.kind,
+        back_x: back_x_result.kind,
+        back_y: back_y_result.kind,
+        back_xy: back_xy_result.kind,
+      }));
       if all_filled { // All subdivided nodes are filled, activate each non-activated node.
         for (i, sub_aabb) in subdivided.into_iter().enumerate() {
           if !activated[i] {
             self.active_aabbs.insert(sub_aabb);
           }
         }
-        NodeResult::new(true, true) // Act as is filled and activated, because all sub-nodes are filled and activated.
+        NodeResult::new(true, true, kind) // Act as is filled and activated, because all sub-nodes are filled and activated.
       } else {
-        NodeResult::new(self_filled, false) // Not all subdivided nodes are filled, we might be filled. Our parent should activate us if possible.
+        NodeResult::new(self_filled, false, kind) // Not all subdivided nodes are filled, we might be filled. Our parent should activate us if possible.
       }
     }
   }
 
   #[inline]
-  fn is_terminal(&self, aabb: AABB, depth: u8, position: Vec3) -> bool {
+  fn is_terminal(&self, aabb: Aabb, depth: u8, position: Vec3) -> bool {
     if let Some(fixed_lod_level) = self.fixed_lod_level {
       depth >= self.max_depth.min(fixed_lod_level)
     } else {
-      depth >= self.max_depth || aabb.distance_from(self.root_half_size, position) > self.lod_factor * aabb.size(self.root_half_size) as f32
+      depth >= self.max_depth || aabb.distance_from(self.root_size, position) > self.lod_factor * aabb.size(self.root_size) as f32
     }
   }
 
-  fn update_chunk(&mut self, aabb: AABB) -> bool {
+  fn update_chunk(&mut self, aabb: Aabb) -> bool {
     if self.lod_chunk_meshes.contains_key(&aabb) { return true; }
     if !self.requested_meshing.contains(&aabb) {
       let empty_lod_chunk_mesh = self.empty_lod_chunk_mesh_cache.pop_front().unwrap_or_else(|| E::Chunk::default());
-      let (input, dependencies) = self.extractor.create_job(self.root_size, aabb.as_sized(self.root_half_size), self.volume.clone(), empty_lod_chunk_mesh);
+      let (input, dependencies) = self.extractor.create_job(aabb.with_size(self.root_size), self.volume.clone(), empty_lod_chunk_mesh);
       let job = LodJob { aabb, input: LodJobInput::Mesh(input), dependencies: Some(dependencies) };
       self.job_queue.try_add_job(job).unwrap_or_else(|_| self.handle_send_error());
       self.requested_meshing.insert(aabb);
@@ -295,7 +351,7 @@ impl NodeResult {
 }
 
 enum NodeKind {
-  Terminal(AABB),
+  Terminal(Aabb),
   Subdivided(Box<NodeSubdivided>)
 }
 
@@ -319,14 +375,14 @@ pub enum LodJobInput<V, JI> {
 }
 
 pub struct LodJob<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
-  aabb: AABB,
+  aabb: Aabb,
   input: LodJobInput<V, E::JobInput>,
   dependencies: Option<E::DependenciesIterator<V>>,
 }
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
   #[inline]
-  pub fn new_sample(aabb: AABB, volume: V) -> Self {
+  pub fn new_sample(aabb: Aabb, volume: V) -> Self {
     Self {
       aabb: aabb.with_user_bit_unset(),
       input: LodJobInput::Sample(volume),
@@ -335,7 +391,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
   }
 
   #[inline]
-  pub fn new_mesh(aabb: AABB, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIterator<V>) -> Self {
+  pub fn new_mesh(aabb: Aabb, extractor_job_input: E::JobInput, extractor_dependencies_iterator: E::DependenciesIterator<V>) -> Self {
     Self {
       aabb: aabb.with_user_bit_set(),
       input: LodJobInput::Mesh(extractor_job_input),
@@ -344,9 +400,9 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodJob<C, V, E> {
   }
 }
 
-impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Job<AABB, E::DependencyKey, LodJobInput<V, E::JobInput>> for LodJob<C, V, E> {
+impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> Job<Aabb, E::DependencyKey, LodJobInput<V, E::JobInput>> for LodJob<C, V, E> {
   #[inline]
-  fn key(&self) -> &AABB { &self.aabb }
+  fn key(&self) -> &Aabb { &self.aabb }
 
   type DependencyIterator = LodJobDependencyIterator<C, V, E>;
 
@@ -418,7 +474,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodChunkMeshManager<C> for Lod
   }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<E::Chunk>)> + '_>) {
+  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&Aabb, &Arc<E::Chunk>)> + '_>) {
     let (root_half_size, transform, chunks) = self.update(position);
     (root_half_size, transform, Box::new(chunks))
   }

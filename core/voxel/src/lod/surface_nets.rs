@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::{AABB, AABBSized};
+use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodJob, LodJobOutput};
@@ -61,8 +61,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    _root_size: u32,
-    aabb: AABBSized,
+    aabb: AabbWithSize,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
@@ -190,7 +189,7 @@ impl<C: ChunkSize> SurfaceNetsExtractor<C> {
 // Job input
 
 pub struct SurfaceNetsJobInput {
-  aabb: AABBSized,
+  aabb: AabbWithSize,
   empty_lod_chunk_mesh: SurfaceNetsLodChunkMesh,
 }
 
@@ -198,20 +197,20 @@ pub struct SurfaceNetsJobInput {
 // Job dependencies iterator
 
 pub struct SurfaceNetsJobDependenciesIterator<C, V> {
-  regular_aabb: Option<AABB>,
-  x_aabb: Option<AABB>,
-  y_aabb: Option<AABB>,
-  z_aabb: Option<AABB>,
-  xy_aabb: Option<AABB>,
-  yz_aabb: Option<AABB>,
-  xz_aabb: Option<AABB>,
+  regular_aabb: Option<Aabb>,
+  x_aabb: Option<Aabb>,
+  y_aabb: Option<Aabb>,
+  z_aabb: Option<Aabb>,
+  xy_aabb: Option<Aabb>,
+  yz_aabb: Option<Aabb>,
+  xz_aabb: Option<Aabb>,
   volume: V,
   _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
-  fn new(aabb: AABB, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
+  fn new(aabb: Aabb, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
     let x_aabb = aabb.sibling_positive_x();
     let has_x_sibling = x_aabb.is_some();
     let y_aabb = aabb.sibling_positive_y();

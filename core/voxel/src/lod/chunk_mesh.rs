@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ultraviolet::{Isometry3, Vec3};
 
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABB;
+use crate::lod::aabb::Aabb;
 use crate::lod::extract::LodExtractor;
 
 /// LOD chunk mesh.
@@ -18,7 +18,7 @@ pub trait LodChunkMeshManager<C: ChunkSize>: LodChunkMeshManagerParameters {
   type Extractor: LodExtractor<C>;
   fn get_extractor(&self) -> &Self::Extractor;
 
-  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk>)> + '_>);
+  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&Aabb, &Arc<<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk>)> + '_>);
 }
 
 /// Parameters for transformation, in a separate trait as they do not depend on the kind of chunks.
@@ -42,7 +42,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, T> LodChunkMeshManager<C> for Box<T> wher
   fn get_extractor(&self) -> &E { (**self).get_extractor() }
 
   #[inline]
-  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&AABB, &Arc<<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk>)> + '_>) { (**self).update(position) }
+  fn update(&mut self, position: Vec3) -> (u32, Isometry3, Box<dyn Iterator<Item=(&Aabb, &Arc<<<Self as LodChunkMeshManager<C>>::Extractor as LodExtractor<C>>::Chunk>)> + '_>) { (**self).update(position) }
 }
 
 impl<T: LodChunkMeshManagerParameters + ?Sized> LodChunkMeshManagerParameters for Box<T> {

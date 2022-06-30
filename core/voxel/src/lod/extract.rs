@@ -3,7 +3,7 @@ use job_queue::{DepKey, In};
 use crate::chunk::mesh::Vertex;
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::AABBSized;
+use crate::lod::aabb::AabbWithSize;
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::octmap::{LodJob, LodJobOutput};
 use crate::lod::render::LodDraw;
@@ -18,8 +18,7 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
 
   fn create_job<V: Volume>(
     &self,
-    root_size: u32,
-    aabb: AABBSized,
+    aabb: AabbWithSize,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>);
@@ -45,7 +44,7 @@ impl<C: ChunkSize> LodExtractor<C> for () {
   type DependencyKey = ();
   type DependenciesIterator<V: Volume> = std::iter::Empty<(Self::DependencyKey, LodJob<C, V, Self>)>;
   #[inline]
-  fn create_job<V: Volume>(&self, _root_size: u32, _aabb: AABBSized, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
+  fn create_job<V: Volume>(&self, _aabb: AabbWithSize, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
   #[inline]
   fn run_job(&self, _input: Self::JobInput, _dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)]) -> Self::Chunk { () }
   #[inline]

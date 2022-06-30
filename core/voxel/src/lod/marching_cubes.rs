@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::ChunkSamples;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::{AABB, AABBSized};
+use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
 use crate::lod::extract::LodExtractor;
 use crate::lod::octmap::{LodJob, LodJobOutput};
@@ -35,8 +35,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   #[inline]
   fn create_job<V: Volume>(
     &self,
-    _root_size: u32,
-    aabb: AABBSized,
+    aabb: AabbWithSize,
     volume: V,
     empty_lod_chunk_mesh: Self::Chunk,
   ) -> (Self::JobInput, Self::DependenciesIterator<V>) {
@@ -77,7 +76,7 @@ impl<C: ChunkSize> MarchingCubesExtractor<C> {
 // Job input
 
 pub struct MarchingCubesJobInput {
-  aabb: AABBSized,
+  aabb: AabbWithSize,
   empty_lod_chunk_mesh: MarchingCubesLodChunkMesh,
 }
 
@@ -85,14 +84,14 @@ pub struct MarchingCubesJobInput {
 // Job dependencies iterator
 
 pub struct MarchingCubesJobDependenciesIterator<C, V> {
-  aabb: AABB,
+  aabb: Aabb,
   volume: Option<V>,
   _chunk_size_phantom: PhantomData<C>,
 }
 
 impl<C: ChunkSize, V: Volume> MarchingCubesJobDependenciesIterator<C, V> {
   #[inline]
-  fn new(aabb: AABB, volume: V) -> Self { Self { aabb, volume: Some(volume), _chunk_size_phantom: PhantomData::default() } }
+  fn new(aabb: Aabb, volume: V) -> Self { Self { aabb, volume: Some(volume), _chunk_size_phantom: PhantomData::default() } }
 }
 
 impl<C: ChunkSize, V: Volume> Iterator for MarchingCubesJobDependenciesIterator<C, V> {

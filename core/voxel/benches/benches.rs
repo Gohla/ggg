@@ -3,7 +3,7 @@ use ultraviolet::{Isometry3, UVec3, Vec3};
 
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::size::{ChunkSize, ChunkSize16, ChunkSize32};
-use voxel::lod::aabb::AABB;
+use voxel::lod::aabb::Aabb;
 use voxel::lod::extract::LodExtractor;
 use voxel::lod::octmap::{LodOctmap, LodOctmapSettings};
 use voxel::lod::transvoxel::TransvoxelExtractor;
@@ -53,7 +53,7 @@ pub fn transvoxel_benchmark(c: &mut Criterion) {
   let sphere = Sphere::new(SphereSettings { radius: size as f32 });
   let transvoxel = Transvoxel::<C16>::new();
 
-  let aabb = AABB::from_size(size);
+  let aabb = Aabb::from_size(size);
   let aabbs = aabb.subdivide();
   let lores_aabb = aabbs[4]; // 4th subdivision is at 0,0 with z as center.
   let lores_min = lores_aabb.min;
@@ -164,22 +164,22 @@ pub fn octree_benchmark(c: &mut Criterion) {
   let mut group = c.benchmark_group("Octree-Sphere-Transvoxel");
   let position = Vec3::zero();
   group.bench_function("4096-1.0", |b| b.iter_batched(
-    || preallocate_octmap::<C16, _, _>(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap::<C16, _, _>(LodOctmap::new(LodOctmapSettings { root_size: total_size, lod_factor: 1.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-2.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 2.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_size: total_size, lod_factor: 2.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-3.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 3.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_size: total_size, lod_factor: 3.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
   group.bench_function("4096-4.0", |b| b.iter_batched(
-    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_half_size: total_size, lod_factor: 4.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
+    || preallocate_octmap(LodOctmap::new(LodOctmapSettings { root_size: total_size, lod_factor: 4.0, ..LodOctmapSettings::default() }, transform, volume, extractor), position),
     |mut octree| drop(black_box(octree.update(position))),
     BatchSize::SmallInput,
   ));
