@@ -147,8 +147,8 @@ impl app::Application for Quads {
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("frag"));
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])

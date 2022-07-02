@@ -4,7 +4,7 @@ use crate::{Frame, Gfx};
 
 pub struct RenderPassBuilder<'a, 'b> {
   pub label: Option<&'a str>,
-  pub color_attachments: &'b [RenderPassColorAttachment<'a>],
+  pub color_attachments: &'b [Option<RenderPassColorAttachment<'a>>],
   pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
 }
 
@@ -25,7 +25,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   }
 
   #[inline]
-  pub fn with_color_attachments(mut self, color_attachments: &'b [RenderPassColorAttachment<'a>]) -> Self {
+  pub fn with_color_attachments(mut self, color_attachments: &'b [Option<RenderPassColorAttachment<'a>>]) -> Self {
     self.color_attachments = color_attachments;
     self
   }
@@ -70,11 +70,11 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
     encoder.begin_render_pass(&RenderPassDescriptor {
       label: self.label,
       color_attachments: &[
-        RenderPassColorAttachment {
+        Some(RenderPassColorAttachment {
           view,
           resolve_target,
           ops,
-        }
+        })
       ],
       depth_stencil_attachment: self.depth_stencil_attachment,
     })

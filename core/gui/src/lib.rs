@@ -47,8 +47,8 @@ impl Gui {
       *context.memory() = memory;
     }
     
-    let vertex_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
-    let fragment_shader_module = device.create_shader_module(&wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
+    let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
+    let fragment_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("GUI uniform buffer")
@@ -83,7 +83,7 @@ impl Gui {
         step_mode: VertexStepMode::Vertex,
         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
       }])
-      .with_fragment_state(&fragment_shader_module, "main", &[ColorTargetState {
+      .with_fragment_state(&fragment_shader_module, "main", &[Some(ColorTargetState {
         format: swap_chain_texture_format,
         blend: Some(BlendState {
           alpha: BlendComponent { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
@@ -98,7 +98,7 @@ impl Gui {
           },
         }),
         write_mask: Default::default(),
-      }])
+      })])
       .with_layout_label("GUI pipeline layout")
       .with_label("GUI render pipeline")
       .build(device);

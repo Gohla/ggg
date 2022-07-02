@@ -10,7 +10,7 @@ pub struct RenderPipelineBuilder<'a> {
   depth_stencil: Option<DepthStencilState>,
   multisample: MultisampleState,
   fragment: Option<FragmentState<'a>>,
-  default_fragment_targets: [ColorTargetState; 1],
+  default_fragment_targets: [Option<ColorTargetState>; 1],
   use_default_fragment_targets: bool,
 }
 
@@ -37,11 +37,11 @@ impl<'a> RenderPipelineBuilder<'a> {
       depth_stencil: None,
       multisample: MultisampleState::default(),
       fragment: None,
-      default_fragment_targets: [ColorTargetState {
+      default_fragment_targets: [Some(ColorTargetState {
         format: TextureFormat::R8Unorm,
         blend: Default::default(),
         write_mask: Default::default(),
-      }],
+      })],
       use_default_fragment_targets: false,
     }
   }
@@ -142,7 +142,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
 
   #[inline]
-  pub fn with_fragment_state(mut self, module: &'a ShaderModule, entry_point: &'a str, targets: &'a [ColorTargetState]) -> Self {
+  pub fn with_fragment_state(mut self, module: &'a ShaderModule, entry_point: &'a str, targets: &'a [Option<ColorTargetState>]) -> Self {
     self.fragment = Some(FragmentState {
       module,
       entry_point,
@@ -159,8 +159,9 @@ impl<'a> RenderPipelineBuilder<'a> {
       entry_point: "main",
       targets: &[],
     });
-    let target = &mut self.default_fragment_targets[0];
-    target.format = surface.get_texture_format();
+    if let Some(target) = &mut self.default_fragment_targets[0] {
+      target.format = surface.get_texture_format();
+    }
     self.use_default_fragment_targets = true;
     self
   }
@@ -172,9 +173,10 @@ impl<'a> RenderPipelineBuilder<'a> {
       entry_point: "main",
       targets: &[],
     });
-    let target = &mut self.default_fragment_targets[0];
-    target.format = surface.get_texture_format();
-    target.blend = Some(BlendState::ALPHA_BLENDING);
+    if let Some(target) = &mut self.default_fragment_targets[0] {
+      target.format = surface.get_texture_format();
+      target.blend = Some(BlendState::ALPHA_BLENDING);
+    }
     self.use_default_fragment_targets = true;
     self
   }
@@ -186,9 +188,10 @@ impl<'a> RenderPipelineBuilder<'a> {
       entry_point: "main",
       targets: &[],
     });
-    let target = &mut self.default_fragment_targets[0];
-    target.format = surface.get_texture_format();
-    target.blend = Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING);
+    if let Some(target) = &mut self.default_fragment_targets[0] {
+      target.format = surface.get_texture_format();
+      target.blend = Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING);
+    }
     self.use_default_fragment_targets = true;
     self
   }

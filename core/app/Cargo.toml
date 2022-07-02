@@ -11,7 +11,7 @@ os = { path = "../os" }
 gfx = { path = "../gfx" }
 gui = { path = "../gui" }
 gui_widget = { path = "../gui_widget" }
-wgpu = "0.12"
+wgpu = "0.13"
 raw-window-handle = "0.4"
 egui = { version = "0.18", features = ["persistence"] }
 pollster = "0.2"
@@ -33,7 +33,7 @@ version = "0.2"
 version = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
-version = "0.12"
+version = "0.13"
 features = ["webgl"]
 
 [features]

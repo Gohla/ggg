@@ -132,8 +132,8 @@ impl app::Application for Cubes {
       .with_label("Cubes static bind group")
       .build(&gfx.device);
 
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("frag"));
 
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout])

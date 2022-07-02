@@ -38,7 +38,7 @@ impl GfxSurface {
   fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, size: ScreenSize) -> SurfaceConfiguration {
     SurfaceConfiguration {
       usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-      format: surface.get_preferred_format(adapter)
+      format: *surface.get_supported_formats(adapter).get(0)
         .unwrap_or_else(|| panic!("Surface is incompatible with the adapter")),
       width: size.physical.width as u32,
       height: size.physical.height as u32,

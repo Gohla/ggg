@@ -46,8 +46,8 @@ impl app::Application for Triangle {
   type Config = ();
 
   fn new(_os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])

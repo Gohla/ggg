@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 common = { path = "../../core/common" }
-wgpu = "0.12"
+wgpu = "0.13"
 raw-window-handle = "0.4"
 egui = { version = "0.18", optional = true }
 gui_widget = { path = "../../core/gui_widget", optional = true }

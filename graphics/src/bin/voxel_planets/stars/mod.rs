@@ -62,7 +62,7 @@ impl StarsRenderer {
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader_for_bin!("stars/frag"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("stars/frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder()
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)

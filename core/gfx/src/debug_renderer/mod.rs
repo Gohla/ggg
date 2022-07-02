@@ -26,9 +26,9 @@ impl DebugRenderer {
   }
 
   pub fn new(gfx: &Gfx, view_projection: Mat4) -> Self {
-    let point_vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/point_vert"));
-    let vertex_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(&include_shader!("debug_renderer/frag"));
+    let point_vertex_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/point_vert"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/frag"));
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
