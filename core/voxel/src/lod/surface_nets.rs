@@ -81,6 +81,10 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
     // Gather samples
     let mut chunk_samples = None;
     let mut chunk_samples_x = None;
+    let mut chunk_samples_x_front = None;
+    let mut chunk_samples_x_front_y = None;
+    let mut chunk_samples_x_back = None;
+    let mut chunk_samples_x_back_y = None;
     let mut chunk_samples_y = None;
     let mut chunk_samples_z = None;
     let mut chunk_samples_xy = None;
@@ -90,6 +94,10 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       match neighbor {
         SampleKind::Regular => chunk_samples = Some(output),
         SampleKind::X => chunk_samples_x = Some(output),
+        SampleKind::XFront => chunk_samples_x_front = Some(output),
+        SampleKind::XFrontY => chunk_samples_x_front_y = Some(output),
+        SampleKind::XBack => chunk_samples_x_back = Some(output),
+        SampleKind::XBackY => chunk_samples_x_back_y = Some(output),
         SampleKind::Y => chunk_samples_y = Some(output),
         SampleKind::Z => chunk_samples_z = Some(output),
         SampleKind::XY => chunk_samples_xy = Some(output),
@@ -112,7 +120,24 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       // Regular
       self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
       // Positive X border
-      if let Some(chunk_samples_x) = &chunk_samples_x {
+      if let (
+        Some(LodJobOutput::Sample(chunk_samples_x_front))
+        , Some(LodJobOutput::Sample(chunk_samples_x_front_y))
+        , Some(LodJobOutput::Sample(chunk_samples_x_back))
+        , Some(LodJobOutput::Sample(chunk_samples_x_back_y))
+      ) = (
+        chunk_samples_x_front.map(|s| s.borrow())
+        , chunk_samples_x_front_y.map(|s| s.borrow())
+        , chunk_samples_x_back.map(|s| s.borrow())
+        , chunk_samples_x_back_y.map(|s| s.borrow())
+      ) {
+        let x_subdivided = aabb.sibling_positive_x().map(|aabb| aabb.subdivide_array());
+        let min_x_front = x_subdivided.map(|subdivided| subdivided[1].minimum_point(aabb.root_size)).unwrap();
+        let min_x_front_y = x_subdivided.map(|subdivided| subdivided[3].minimum_point(aabb.root_size)).unwrap();
+        let min_x_back = x_subdivided.map(|subdivided| subdivided[5].minimum_point(aabb.root_size)).unwrap();
+        let min_x_back_y = x_subdivided.map(|subdivided| subdivided[7].minimum_point(aabb.root_size)).unwrap();
+        self.surface_nets_lod.extract_border_x_hires(step, min, &chunk_samples, min_x_front, chunk_samples_x_front, min_x_front_y, chunk_samples_x_front_y, min_x_back, chunk_samples_x_back, min_x_back_y, chunk_samples_x_back_y, &mut chunk.border_x_chunk);
+      } else if let Some(chunk_samples_x) = &chunk_samples_x {
         if let LodJobOutput::Sample(chunk_samples_x) = chunk_samples_x.borrow() {
           self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x.unwrap(), chunk_samples_x, &mut chunk.border_x_chunk);
         }
@@ -200,6 +225,10 @@ pub struct SurfaceNetsJobInput {
 pub struct SurfaceNetsJobDependenciesIterator<C, V> {
   regular_aabb: Option<Aabb>,
   x_aabb: Option<Aabb>,
+  x_front_aabb: Option<Aabb>,
+  x_front_y_aabb: Option<Aabb>,
+  x_back_aabb: Option<Aabb>,
+  x_back_y_aabb: Option<Aabb>,
   y_aabb: Option<Aabb>,
   z_aabb: Option<Aabb>,
   xy_aabb: Option<Aabb>,
@@ -212,16 +241,26 @@ pub struct SurfaceNetsJobDependenciesIterator<C, V> {
 impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
   #[inline]
   fn new(aabb: Aabb, neighbor_depths: NeighborDepths, volume: V, settings: SurfaceNetsExtractorSettings) -> Self {
-    // let depth = aabb.depth();
+    let depth = aabb.depth();
     let x_aabb = aabb.sibling_positive_x();
     let has_x_sibling = neighbor_depths.x != 0;
+    let x_sibling_hires = neighbor_depths.x > depth;
+    let x_subdivided = x_aabb.map(|aabb| aabb.subdivide_array());
+    let x_front_aabb = x_subdivided.map(|subdivided| subdivided[1]);
+    let x_front_y_aabb = x_subdivided.map(|subdivided| subdivided[3]);
+    let x_back_aabb = x_subdivided.map(|subdivided| subdivided[5]);
+    let x_back_y_aabb = x_subdivided.map(|subdivided| subdivided[7]);
     let y_aabb = aabb.sibling_positive_y();
     let has_y_sibling = neighbor_depths.y != 0;
     let z_aabb = aabb.sibling_positive_z();
     let has_z_sibling = neighbor_depths.z != 0;
     Self {
       regular_aabb: settings.extract_regular_chunks.then_some(aabb),
-      x_aabb: (settings.extract_border_x_chunks || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks).then_some(x_aabb).flatten(),
+      x_aabb: ((!x_sibling_hires && settings.extract_border_x_chunks) || settings.extract_border_xy_chunks || settings.extract_border_xz_chunks).then_some(x_aabb).flatten(),
+      x_front_aabb: (x_sibling_hires && settings.extract_border_x_chunks).then_some(x_front_aabb).flatten(),
+      x_front_y_aabb: (x_sibling_hires && settings.extract_border_x_chunks).then_some(x_front_y_aabb).flatten(),
+      x_back_aabb: (x_sibling_hires && settings.extract_border_x_chunks).then_some(x_back_aabb).flatten(),
+      x_back_y_aabb: (x_sibling_hires && settings.extract_border_x_chunks).then_some(x_back_y_aabb).flatten(),
       y_aabb: (settings.extract_border_y_chunks || settings.extract_border_xy_chunks || settings.extract_border_yz_chunks).then_some(y_aabb).flatten(),
       z_aabb: (settings.extract_border_z_chunks || settings.extract_border_yz_chunks || settings.extract_border_xz_chunks).then_some(z_aabb).flatten(),
       xy_aabb: (has_x_sibling && has_y_sibling && settings.extract_border_xy_chunks).then(|| aabb.sibling_positive_xy()).flatten(),
@@ -255,6 +294,18 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
     }
     if let Some(aabb) = self.x_aabb.take() {
       return Some((X, LodJob::new_sample(aabb, self.volume.clone())))
+    }
+    if let Some(aabb) = self.x_front_aabb.take() {
+      return Some((XFront, LodJob::new_sample(aabb, self.volume.clone())))
+    }
+    if let Some(aabb) = self.x_front_y_aabb.take() {
+      return Some((XFrontY, LodJob::new_sample(aabb, self.volume.clone())))
+    }
+    if let Some(aabb) = self.x_back_aabb.take() {
+      return Some((XBack, LodJob::new_sample(aabb, self.volume.clone())))
+    }
+    if let Some(aabb) = self.x_back_y_aabb.take() {
+      return Some((XBackY, LodJob::new_sample(aabb, self.volume.clone())))
     }
     if let Some(aabb) = self.y_aabb.take() {
       return Some((Y, LodJob::new_sample(aabb, self.volume.clone())))
@@ -290,6 +341,10 @@ impl<C: ChunkSize, V: Volume> ExactSizeIterator for SurfaceNetsJobDependenciesIt
 pub enum SampleKind {
   Regular,
   X,
+  XFront,
+  XFrontY,
+  XBack,
+  XBackY,
   Y,
   Z,
   XY,

@@ -46,6 +46,7 @@ impl<C: ChunkSize> ChunkSamples<C> {
 // Sample array
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ChunkSampleArray<C: ChunkSize> {
   pub array: C::VoxelChunkArray<f32>,
 }

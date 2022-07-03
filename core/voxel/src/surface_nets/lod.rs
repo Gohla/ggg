@@ -55,6 +55,49 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   }
 
   #[profiling::function]
+  pub fn extract_border_x_hires(
+    &self,
+    step: u32,
+    min: UVec3,
+    chunk_samples: &ChunkSamples<C>,
+    min_x_front: UVec3,
+    chunk_samples_x_front: &ChunkSamples<C>,
+    min_x_front_y: UVec3,
+    chunk_samples_x_front_y: &ChunkSamples<C>,
+    min_x_back: UVec3,
+    chunk_samples_x_back: &ChunkSamples<C>,
+    min_x_back_y: UVec3,
+    chunk_samples_x_back_y: &ChunkSamples<C>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
+    let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+      Self::extract_global_positions_border_x(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+    }
+    let mut extracted_positions = false;
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front {
+      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      extracted_positions |= true;
+    }
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front_y {
+      Self::extract_global_positions_border_x_hires(1, 0, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      extracted_positions |= true;
+    }
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back {
+      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, 0, step, min_x_back, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      extracted_positions |= true;
+    }
+    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back_y {
+      Self::extract_global_positions_border_x_hires(1, 0, 0, step, min_x_back_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      extracted_positions |= true;
+    }
+    if extracted_positions {
+      Self::extract_quads_border_x(1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
+    }
+  }
+
+  #[profiling::function]
   pub fn extract_border_y(
     &self,
     step: u32,
@@ -205,6 +248,27 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_x::<C>();
+        let border_cell_index = border_cell.to_index::<ShapeX<C>>();
+        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+      }
+    }
+  }
+
+  fn extract_global_positions_border_x_hires(
+    x: u32,
+    y_start: u32,
+    z_start: u32,
+    step: u32,
+    min: UVec3,
+    chunk_sample_array: &ChunkSampleArray<C>,
+    cell_index_to_vertex_index: &mut DeckVertexIndexArray<C>,
+    cell_index_to_case: &mut DeckCaseArray<C>,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    for z in z_start..(z_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
+      for y in y_start..(y_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
+        let border_cell = BorderCell::new(x, y, z);
+        let cell = border_cell.to_cell_border_x_hires::<C>(y_start, z_start);
         let border_cell_index = border_cell.to_index::<ShapeX<C>>();
         SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
       }
@@ -591,6 +655,12 @@ impl BorderCell {
   pub fn to_cell_border_x<C: ChunkSize>(&self) -> Cell {
     let x = (self.x + C::CELLS_IN_CHUNK_ROW_MINUS_ONE) % C::CELLS_IN_CHUNK_ROW;
     Cell::new(x, self.y, self.z)
+  }
+
+  #[inline]
+  pub fn to_cell_border_x_hires<C: ChunkSize>(&self, y_start: u32, z_start: u32) -> Cell {
+    let x = (self.x + C::CELLS_IN_CHUNK_ROW_MINUS_ONE) % C::CELLS_IN_CHUNK_ROW;
+    Cell::new(x, (self.y - y_start) * 2, (self.z - z_start) * 2)
   }
 
   #[inline]

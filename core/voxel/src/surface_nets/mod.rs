@@ -394,6 +394,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
 /// Position of the minimal corner (left, bottom, back) of a cell, local to the current chunk.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Cell {
   pub x: u32,
   pub y: u32,
@@ -424,6 +425,7 @@ impl Cell {
 
 /// Position of a voxel, local to the current chunk.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Voxel {
   pub x: u32,
   pub y: u32,
@@ -444,6 +446,7 @@ impl Voxel {
 
 #[repr(transparent)]
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Case(pub u8);
 
 impl Case {
