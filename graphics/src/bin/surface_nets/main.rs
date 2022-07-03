@@ -11,7 +11,6 @@ use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::size::{ChunkSize, ChunkSize2};
 use voxel::render::VoxelRenderer;
-use voxel::surface_nets::SurfaceNets;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
 use crate::config::Config;
@@ -30,8 +29,6 @@ pub struct SurfaceNetsDemo {
 
   debug_renderer: DebugRenderer,
   voxel_renderer: VoxelRenderer,
-
-  surface_nets: SurfaceNets<C2>,
 }
 
 #[derive(Default)]
@@ -64,8 +61,6 @@ impl app::Application for SurfaceNetsDemo {
       None,
     );
 
-    let surface_nets = SurfaceNets::new();
-
     Self {
       config,
 
@@ -76,8 +71,6 @@ impl app::Application for SurfaceNetsDemo {
 
       debug_renderer,
       voxel_renderer,
-
-      surface_nets,
     }
   }
 
@@ -118,11 +111,14 @@ impl app::Application for SurfaceNetsDemo {
         self.config.light_settings.render_gui(ui, self.camera.get_direction_inverse());
       });
 
-    // Write uniforms, run SN to create vertices from voxels, and render them.
+    // Write uniforms
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.config.light_settings.uniform);
+
+    // Extract mesh using surface nets and debug draw.
+    self.debug_renderer.clear();
     let mut chunk_vertices = ChunkMesh::new();
-    self.config.surface_nets_debugging.extract_chunk(&self.surface_nets, &mut chunk_vertices);
+    self.config.surface_nets_debugging.extract_chunk_and_debug_draw(&mut chunk_vertices, &mut self.debug_renderer);
     self.voxel_renderer.render_chunk_vertices(
       gfx,
       &mut frame,
@@ -131,9 +127,7 @@ impl app::Application for SurfaceNetsDemo {
     );
 
     // Debug rendering.
-    self.debug_renderer.clear();
     self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
-    self.config.surface_nets_debugging.debug_draw(&mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
       chunk_vertices.indices().into_iter().map(|i| *i as u32),

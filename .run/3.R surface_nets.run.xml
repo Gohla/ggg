@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="3.R surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package graphics --bin surface_nets" />
+  <configuration default="false" name="3.B surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="build --package graphics --bin surface_nets" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
