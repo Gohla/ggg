@@ -98,5 +98,6 @@ macro_rules! impl_chunk_size {
 
 impl_chunk_size!(1, ChunkSize1);
 impl_chunk_size!(2, ChunkSize2);
+impl_chunk_size!(6, ChunkSize6);
 impl_chunk_size!(16, ChunkSize16);
 impl_chunk_size!(32, ChunkSize32);

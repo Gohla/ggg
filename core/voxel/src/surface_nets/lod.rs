@@ -5,7 +5,7 @@ use ultraviolet::UVec3;
 use crate::chunk::array::Array;
 use crate::chunk::index::CellIndex;
 use crate::chunk::mesh::ChunkMesh;
-use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::sample::{ChunkSamples, MaybeCompressedChunkSamples};
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
 use crate::surface_nets::{Case, Cell, SurfaceNets};
@@ -34,61 +34,61 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   // Top-level functions
 
   #[profiling::function]
-  pub fn extract_border_x(
+  pub fn extract_border_x<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_x: UVec3,
-    chunk_samples_x: &ChunkSamples<C>,
+    chunk_samples_x: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_x(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
       Self::extract_global_positions_border_x(1, step, min_x, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_x(1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
   #[profiling::function]
-  pub fn extract_border_x_hires(
+  pub fn extract_border_x_hires<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_x_front: UVec3,
-    chunk_samples_x_front: &ChunkSamples<C>,
+    chunk_samples_x_front: &MaybeCompressedChunkSamples<CS>,
     min_x_front_y: UVec3,
-    chunk_samples_x_front_y: &ChunkSamples<C>,
+    chunk_samples_x_front_y: &MaybeCompressedChunkSamples<CS>,
     min_x_back: UVec3,
-    chunk_samples_x_back: &ChunkSamples<C>,
+    chunk_samples_x_back: &MaybeCompressedChunkSamples<CS>,
     min_x_back_y: UVec3,
-    chunk_samples_x_back_y: &ChunkSamples<C>,
+    chunk_samples_x_back_y: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_x(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
     let mut extracted_positions = false;
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front {
       Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front_y {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front_y {
       Self::extract_global_positions_border_x_hires(1, 0, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back {
       Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, 0, step, min_x_back, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back_y {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back_y {
       Self::extract_global_positions_border_x_hires(1, 0, 0, step, min_x_back_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
@@ -98,135 +98,135 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   }
 
   #[profiling::function]
-  pub fn extract_border_y(
+  pub fn extract_border_y<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_y: UVec3,
-    chunk_samples_y: &ChunkSamples<C>,
+    chunk_samples_y: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_y(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
       Self::extract_global_positions_border_y(1, step, min_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_y(1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
   #[profiling::function]
-  pub fn extract_border_z(
+  pub fn extract_border_z<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_z: UVec3,
-    chunk_samples_z: &ChunkSamples<C>,
+    chunk_samples_z: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_z(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
       Self::extract_global_positions_border_z(1, step, min_z, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_z(1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
   #[profiling::function]
-  pub fn extract_border_xy(
+  pub fn extract_border_xy<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_x: UVec3,
-    chunk_samples_x: &ChunkSamples<C>,
+    chunk_samples_x: &MaybeCompressedChunkSamples<CS>,
     min_y: UVec3,
-    chunk_samples_y: &ChunkSamples<C>,
+    chunk_samples_y: &MaybeCompressedChunkSamples<CS>,
     min_xy: UVec3,
-    chunk_samples_xy: &ChunkSamples<C>,
+    chunk_samples_xy: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = RowVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = RowCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_xy(0, 0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
       Self::extract_global_positions_border_xy(1, 0, step, min_x, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
       Self::extract_global_positions_border_xy(0, 1, step, min_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xy {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xy {
       Self::extract_global_positions_border_xy(1, 1, step, min_xy, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_xy(1, 1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
   #[profiling::function]
-  pub fn extract_border_yz(
+  pub fn extract_border_yz<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_y: UVec3,
-    chunk_samples_y: &ChunkSamples<C>,
+    chunk_samples_y: &MaybeCompressedChunkSamples<CS>,
     min_z: UVec3,
-    chunk_samples_z: &ChunkSamples<C>,
+    chunk_samples_z: &MaybeCompressedChunkSamples<CS>,
     min_yz: UVec3,
-    chunk_samples_yz: &ChunkSamples<C>,
+    chunk_samples_yz: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = RowVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = RowCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_yz(0, 0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_y {
       Self::extract_global_positions_border_yz(1, 0, step, min_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
       Self::extract_global_positions_border_yz(0, 1, step, min_z, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_yz {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_yz {
       Self::extract_global_positions_border_yz(1, 1, step, min_yz, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_yz(1, 1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
   }
 
   #[profiling::function]
-  pub fn extract_border_xz(
+  pub fn extract_border_xz<CS: ChunkSamples<C>>(
     &self,
     step: u32,
     min: UVec3,
-    chunk_samples: &ChunkSamples<C>,
+    chunk_samples: &MaybeCompressedChunkSamples<CS>,
     min_x: UVec3,
-    chunk_samples_x: &ChunkSamples<C>,
+    chunk_samples_x: &MaybeCompressedChunkSamples<CS>,
     min_z: UVec3,
-    chunk_samples_z: &ChunkSamples<C>,
+    chunk_samples_z: &MaybeCompressedChunkSamples<CS>,
     min_xz: UVec3,
-    chunk_samples_xz: &ChunkSamples<C>,
+    chunk_samples_xz: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let mut cell_index_to_vertex_index = RowVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = RowCaseArray::<C>::new(Case::default());
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
       Self::extract_global_positions_border_xz(0, 0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x {
       Self::extract_global_positions_border_xz(1, 0, step, min_x, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_z {
       Self::extract_global_positions_border_xz(0, 1, step, min_z, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xz {
+    if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_xz {
       Self::extract_global_positions_border_xz(1, 1, step, min_xz, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       Self::extract_quads_border_xz(1, 1, &cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
     }
@@ -235,11 +235,11 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
 
   // Extract positions
 
-  fn extract_global_positions_border_x(
+  fn extract_global_positions_border_x<CS: ChunkSamples<C>>(
     x: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut DeckVertexIndexArray<C>,
     cell_index_to_case: &mut DeckCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -249,18 +249,18 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_x::<C>();
         let border_cell_index = border_cell.to_index::<ShapeX<C>>();
-        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
       }
     }
   }
 
-  fn extract_global_positions_border_x_hires(
+  fn extract_global_positions_border_x_hires<CS: ChunkSamples<C>>(
     x: u32,
     y_start: u32,
     z_start: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut DeckVertexIndexArray<C>,
     cell_index_to_case: &mut DeckCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -270,16 +270,16 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_x_hires::<C>(y_start, z_start);
         let border_cell_index = border_cell.to_index::<ShapeX<C>>();
-        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
       }
     }
   }
 
-  fn extract_global_positions_border_y(
+  fn extract_global_positions_border_y<CS: ChunkSamples<C>>(
     y: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut DeckVertexIndexArray<C>,
     cell_index_to_case: &mut DeckCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -289,16 +289,16 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_y::<C>();
         let border_cell_index = border_cell.to_index::<ShapeY<C>>();
-        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
       }
     }
   }
 
-  fn extract_global_positions_border_z(
+  fn extract_global_positions_border_z<CS: ChunkSamples<C>>(
     z: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut DeckVertexIndexArray<C>,
     cell_index_to_case: &mut DeckCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -308,17 +308,17 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_z::<C>();
         let border_cell_index = border_cell.to_index::<ShapeZ<C>>();
-        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+        SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
       }
     }
   }
 
-  fn extract_global_positions_border_xy(
+  fn extract_global_positions_border_xy<CS: ChunkSamples<C>>(
     x: u32,
     y: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut RowVertexIndexArray<C>,
     cell_index_to_case: &mut RowCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -327,16 +327,16 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       let border_cell = BorderCell::new(x, y, z);
       let cell = border_cell.to_cell_border_xy::<C>();
       let border_cell_index = border_cell.to_index::<ShapeXY<C>>();
-      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
     }
   }
 
-  fn extract_global_positions_border_yz(
+  fn extract_global_positions_border_yz<CS: ChunkSamples<C>>(
     y: u32,
     z: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut RowVertexIndexArray<C>,
     cell_index_to_case: &mut RowCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -345,16 +345,16 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       let border_cell = BorderCell::new(x, y, z);
       let cell = border_cell.to_cell_border_yz::<C>();
       let border_cell_index = border_cell.to_index::<ShapeYZ<C>>();
-      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
     }
   }
 
-  fn extract_global_positions_border_xz(
+  fn extract_global_positions_border_xz<CS: ChunkSamples<C>>(
     x: u32,
     z: u32,
     step: u32,
     min: UVec3,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut RowVertexIndexArray<C>,
     cell_index_to_case: &mut RowCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
@@ -363,7 +363,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       let border_cell = BorderCell::new(x, y, z);
       let cell = border_cell.to_cell_border_xz::<C>();
       let border_cell_index = border_cell.to_index::<ShapeXZ<C>>();
-      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+      SurfaceNets::<C>::extract_cell_vertex_positions(cell, border_cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
     }
   }
 

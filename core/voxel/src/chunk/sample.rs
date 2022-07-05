@@ -5,9 +5,37 @@ use crate::chunk::index::VoxelIndex;
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
 
-// Samples
+// Chunk samples traits
 
-pub enum ChunkSamples<C: ChunkSize> {
+pub trait ChunkSamples<C: ChunkSize> {
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32;
+  #[inline]
+  fn sample(&self, position: UVec3) -> f32 {
+    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
+    self.sample_index(voxel_index)
+  }
+}
+
+pub trait MutableChunkSamples<C: ChunkSize> {
+  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32;
+  #[inline]
+  fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
+    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
+    self.sample_index_mut(voxel_index)
+  }
+  #[inline]
+  fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
+    let voxel_index = C::VoxelChunkShape::index_from_xyz(x, y, z);
+    *self.sample_index_mut(voxel_index) = sample;
+  }
+}
+
+
+// Maybe compressed chunk samples
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub enum MaybeCompressedChunkSamples<CS> {
   /// All sampled values in the chunk are exactly `0.0`.
   Zero,
   /// All sampled values in the chunk are positive (i.e., `f32::is_sign_positive() == true`).
@@ -15,90 +43,52 @@ pub enum ChunkSamples<C: ChunkSize> {
   /// All sampled values in the chunk are negative (i.e., `f32::is_sign_negative() == true`).
   Negative,
   /// Sampled values in the chunk are mixed.
-  Mixed(ChunkSampleArray<C>),
+  Mixed(CS),
 }
 
-impl<C: ChunkSize> ChunkSamples<C> {
+impl<C: ChunkSize, CS: ChunkSamples<C>> ChunkSamples<C> for MaybeCompressedChunkSamples<CS> {
   #[inline]
-  pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
-    use ChunkSamples::*;
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
+    use MaybeCompressedChunkSamples::*;
     match self {
       Zero => 0.0,
       Positive => 1.0,
       Negative => -1.0,
-      Mixed(array) => array.sample_index(voxel_index)
+      Mixed(inner) => inner.sample_index(voxel_index)
     }
   }
-
   #[inline]
-  pub fn sample(&self, index: UVec3) -> f32 {
-    use ChunkSamples::*;
+  fn sample(&self, position: UVec3) -> f32 {
+    use MaybeCompressedChunkSamples::*;
     match self {
       Zero => 0.0,
       Positive => 1.0,
       Negative => -1.0,
-      Mixed(array) => array.sample(index)
+      Mixed(inner) => inner.sample(position)
     }
   }
 }
 
+pub type MaybeCompressedChunkSampleArray<C> = MaybeCompressedChunkSamples<ChunkSampleArray<C>>;
 
-// Sample array
 
-#[derive(Copy, Clone, Debug)]
+// Chunk sample array
+
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ChunkSampleArray<C: ChunkSize> {
-  pub array: C::VoxelChunkArray<f32>,
+  array: C::VoxelChunkArray<f32>,
 }
 
 impl<C: ChunkSize> ChunkSampleArray<C> {
   #[inline]
-  pub fn new(array: C::VoxelChunkArray<f32>) -> Self {
-    Self { array }
-  }
-
+  pub fn new(array: C::VoxelChunkArray<f32>) -> Self { Self { array } }
   #[inline]
-  pub fn new_with(default: f32) -> Self {
-    Self::new(C::VoxelChunkArray::new(default))
-  }
-
+  pub fn new_with(default: f32) -> Self { Self::new(C::VoxelChunkArray::new(default)) }
   #[inline]
-  pub fn new_positive_zeroed() -> Self {
-    Self::new_with(0.0)
-  }
-
+  pub fn new_positive_zeroed() -> Self { Self::new_with(0.0) }
   #[inline]
-  pub fn new_negative_zeroed() -> Self {
-    Self::new_with(-0.0)
-  }
-
-  #[inline]
-  pub fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
-    self.array.index(voxel_index)
-  }
-
-  #[inline]
-  pub fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
-    self.array.index_mut(voxel_index)
-  }
-
-  #[inline]
-  pub fn sample(&self, position: UVec3) -> f32 {
-    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
-    self.sample_index(voxel_index)
-  }
-
-  #[inline]
-  pub fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
-    let voxel_index = C::VoxelChunkShape::index_from_pos(position);
-    self.sample_index_mut(voxel_index)
-  }
-
-  #[inline]
-  pub fn set(&mut self, x: u32, y: u32, z: u32, sample: f32) {
-    let voxel_index = C::VoxelChunkShape::index_from_xyz(x, y, z);
-    self.array.set(voxel_index, sample);
-  }
+  pub fn new_negative_zeroed() -> Self { Self::new_with(-0.0) }
 
   #[inline]
   pub fn set_all_to(&mut self, sample: f32) {
@@ -106,7 +96,6 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
       *s = sample;
     }
   }
-
   #[inline]
   pub fn flip_all(&mut self) {
     for s in self.array.slice_mut().iter_mut() {
@@ -115,11 +104,17 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
   }
 }
 
+impl<C: ChunkSize> ChunkSamples<C> for ChunkSampleArray<C> {
+  #[inline]
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array.index(voxel_index) }
+}
 
-// Default impl
+impl<C: ChunkSize> MutableChunkSamples<C> for ChunkSampleArray<C> {
+  #[inline]
+  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { self.array.index_mut(voxel_index) }
+}
 
 impl<C: ChunkSize> Default for ChunkSampleArray<C> {
-  fn default() -> Self {
-    Self::new_positive_zeroed()
-  }
+  fn default() -> Self { Self::new_positive_zeroed() }
 }
+

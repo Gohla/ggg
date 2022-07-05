@@ -9,7 +9,7 @@ use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput, };
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::size::{ChunkSize, ChunkSize2};
+use voxel::chunk::size::{ChunkSize, ChunkSize2, ChunkSize6};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
@@ -37,6 +37,7 @@ pub struct Input {
 }
 
 pub type C2 = ChunkSize2;
+pub type C6 = ChunkSize6;
 
 const EXTENDS: f32 = C2::CELLS_IN_CHUNK_ROW_F32 / 2.0;
 

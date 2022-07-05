@@ -7,7 +7,7 @@ use gfx::prelude::*;
 
 use crate::chunk::array::Array;
 use crate::chunk::mesh::{ChunkMesh, Vertex};
-use crate::chunk::sample::ChunkSamples;
+use crate::chunk::sample::{ChunkSamples, MaybeCompressedChunkSampleArray};
 use crate::chunk::size::ChunkSize;
 use crate::transvoxel::side::TransitionSide;
 use crate::transvoxel::tables::TransitionVertexData;
@@ -29,7 +29,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     &self,
     side: TransitionSide,
     hires_chunk_mins: &[UVec3; 4],
-    hires_chunk_samples: &[ChunkSamples<C>; 4],
+    hires_chunk_samples: &[MaybeCompressedChunkSampleArray<C>; 4],
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,
@@ -74,7 +74,7 @@ impl<C: ChunkSize> Transvoxel<C> {
     u: u32,
     v: u32,
     hires_chunk_mins: &[UVec3; 4],
-    hires_chunk_samples: &[ChunkSamples<C>; 4],
+    hires_chunk_samples: &[MaybeCompressedChunkSampleArray<C>; 4],
     hires_step: u32,
     lores_min: UVec3,
     lores_step: u32,

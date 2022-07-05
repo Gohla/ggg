@@ -8,7 +8,7 @@ use ultraviolet::{Isometry3, Vec3};
 
 use job_queue::{Job, JobQueue, JobQueueMessage};
 
-use crate::chunk::sample::ChunkSamples;
+use crate::chunk::sample::MaybeCompressedChunkSampleArray;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::Aabb;
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
@@ -70,7 +70,7 @@ pub struct LodOctmap<C: ChunkSize, V: Volume, E: LodExtractor<C>> {
 
   requested_meshing: FxHashSet<Aabb>,
   requested_removal: FxHashSet<Aabb>,
-  job_queue: JobQueue<Aabb, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<ChunkSamples<C>, E::Chunk>>,
+  job_queue: JobQueue<Aabb, E::DependencyKey, LodJobInput<V, E::JobInput>, LodJob<C, V, E>, LodJobOutput<MaybeCompressedChunkSampleArray<C>, E::Chunk>>,
 }
 
 impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
@@ -104,7 +104,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
         settings.job_queue_worker_threads,
         settings.job_queue_worker_threads * 2,
         4096,
-        move |aabb: Aabb, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<ChunkSamples<C>, E::Chunk>)]| {
+        move |aabb: Aabb, input: LodJobInput<V, E::JobInput>, dependency_outputs: &[(E::DependencyKey, LodJobOutput<MaybeCompressedChunkSampleArray<C>, E::Chunk>)]| {
           match input {
             LodJobInput::Sample(volume) => {
               LodJobOutput::Sample(Arc::new(volume.sample_chunk(aabb.minimum_point(root_size), aabb.step::<C>(root_size))))

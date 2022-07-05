@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
-use crate::chunk::sample::ChunkSamples;
+use crate::chunk::sample::MaybeCompressedChunkSampleArray;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
@@ -49,7 +49,7 @@ impl<C: ChunkSize> LodExtractor<C> for MarchingCubesExtractor<C> {
   fn run_job(
     &self,
     input: Self::JobInput,
-    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
+    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<MaybeCompressedChunkSampleArray<C>, Self::Chunk>)],
   ) -> Self::Chunk {
     if let (_, LodJobOutput::Sample(chunk_samples)) = &dependency_outputs[0] {
       let MarchingCubesJobInput { aabb, empty_lod_chunk_mesh: mut chunk } = input;

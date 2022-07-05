@@ -1,7 +1,7 @@
 use ultraviolet::{UVec3, Vec3};
 
 use crate::chunk::array::Array;
-use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::sample::{ChunkSampleArray, MaybeCompressedChunkSampleArray, MaybeCompressedChunkSamples};
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
 
@@ -13,7 +13,7 @@ pub trait Volume: Clone + Send + 'static {
 
   /// Samples an entire chunk, returning a value indicating whether the chunk is all zero, positive, negative, or mixed.
   #[profiling::function]
-  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> ChunkSamples<C> {
+  fn sample_chunk<C: ChunkSize>(&self, start: UVec3, step: u32) -> MaybeCompressedChunkSampleArray<C> {
     let mut all_zero = true;
     let mut all_positive = true;
     let mut all_negative = true;
@@ -26,13 +26,13 @@ pub trait Volume: Clone + Send + 'static {
       array.set(i, value);
     });
     if all_zero {
-      ChunkSamples::Zero
+      MaybeCompressedChunkSamples::Zero
     } else if all_positive {
-      ChunkSamples::Positive
+      MaybeCompressedChunkSamples::Positive
     } else if all_negative {
-      ChunkSamples::Negative
+      MaybeCompressedChunkSamples::Negative
     } else {
-      ChunkSamples::Mixed(ChunkSampleArray::new(array))
+      MaybeCompressedChunkSamples::Mixed(ChunkSampleArray::new(array))
     }
   }
 }

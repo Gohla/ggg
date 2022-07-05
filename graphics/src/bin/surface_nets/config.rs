@@ -6,7 +6,7 @@ use voxel::uniform::LightSettings;
 
 use crate::SurfaceNetsDebugging;
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
   pub camera_settings: CameraSettings,
   pub camera_debugging: CameraDebugging,

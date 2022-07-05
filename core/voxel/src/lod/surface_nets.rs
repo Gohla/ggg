@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
-use crate::chunk::sample::ChunkSamples;
+use crate::chunk::sample::MaybeCompressedChunkSampleArray;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::{Aabb, AabbWithSize};
 use crate::lod::chunk_mesh::LodChunkMesh;
@@ -75,7 +75,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
   fn run_job(
     &self,
     input: Self::JobInput,
-    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
+    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<MaybeCompressedChunkSampleArray<C>, Self::Chunk>)],
   ) -> Self::Chunk {
     let mut chunk = input.empty_lod_chunk_mesh;
     // Gather samples
@@ -118,7 +118,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       let min_y = aabb.sibling_positive_y().map(|aabb| aabb.minimum_point());
       let min_z = aabb.sibling_positive_z().map(|aabb| aabb.minimum_point());
       // Regular
-      self.surface_nets.extract_chunk(min, step, &chunk_samples, &mut chunk.regular);
+      self.surface_nets.extract_chunk_from_maybe_compressed_samples(min, step, &chunk_samples, &mut chunk.regular);
       // Positive X border
       if let (
         Some(LodJobOutput::Sample(chunk_samples_x_front))

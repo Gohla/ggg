@@ -10,7 +10,7 @@ use ultraviolet::{UVec3, Vec3};
 use crate::chunk::array::Array;
 use crate::chunk::index::{CellIndex, VoxelIndex};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
-use crate::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use crate::chunk::sample::{ChunkSamples, MaybeCompressedChunkSamples};
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
 
@@ -34,35 +34,46 @@ impl<C: ChunkSize> SurfaceNets<C> {
 
   // Top-level functions
   #[profiling::function]
-  pub fn extract_chunk(
+  pub fn extract_chunk_from_maybe_compressed_samples<CS: ChunkSamples<C>>(
     &self,
     min: UVec3,
     step: u32,
-    chunk_samples: &ChunkSamples<C>,
+    maybe_compressed_chunk_samples: &MaybeCompressedChunkSamples<CS>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    if let ChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      let mut cell_index_to_vertex_index = VertexIndexArray::<C>::new(u16::MAX);
-      let mut cell_index_to_case = CaseArray::<C>::new(Case::default());
-      Self::extract_global_positions::<CellShape<C>>(min, step, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
-      Self::extract_quads(&cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
+    if let MaybeCompressedChunkSamples::Mixed(chunk_samples) = maybe_compressed_chunk_samples {
+      self.extract_chunk_from_samples(min, step, chunk_samples, chunk_mesh);
     }
+  }
+
+  #[profiling::function]
+  pub fn extract_chunk_from_samples<CS: ChunkSamples<C>>(
+    &self,
+    min: UVec3,
+    step: u32,
+    chunk_samples: &CS,
+    chunk_mesh: &mut ChunkMesh,
+  ) {
+    let mut cell_index_to_vertex_index = VertexIndexArray::<C>::new(u16::MAX);
+    let mut cell_index_to_case = CaseArray::<C>::new(Case::default());
+    Self::extract_global_positions::<CellShape<C>, CS>(min, step, chunk_samples, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+    Self::extract_quads(&cell_index_to_vertex_index, &cell_index_to_case, chunk_mesh);
   }
 
 
   // Extract positions
 
-  fn extract_global_positions<S: Shape<CellIndex>>(
+  fn extract_global_positions<S: Shape<CellIndex>, CS: ChunkSamples<C>>(
     min: UVec3,
     step: u32,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut VertexIndexArray<C>,
     cell_index_to_case: &mut CaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     S::for_all(|x, y, z, cell_index| {
       let cell = Cell::new(x, y, z);
-      Self::extract_cell_vertex_positions(cell, cell_index, min, step, chunk_sample_array, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
+      Self::extract_cell_vertex_positions(cell, cell_index, min, step, chunk_samples, cell_index_to_vertex_index, cell_index_to_case, chunk_mesh);
     });
   }
 
@@ -72,18 +83,18 @@ impl<C: ChunkSize> SurfaceNets<C> {
   // This is done by estimating, for each cube edge, where the isosurface crosses the edge (if it does at all). Then the
   // estimated surface point is the average of these edge crossings.
   #[inline]
-  fn extract_cell_vertex_positions(
+  fn extract_cell_vertex_positions<CS: ChunkSamples<C>>(
     cell: Cell,
     cell_index: CellIndex,
     min: UVec3,
     step: u32,
-    chunk_sample_array: &ChunkSampleArray<C>,
+    chunk_samples: &CS,
     cell_index_to_vertex_index: &mut impl Array<u16, CellIndex>,
     cell_index_to_case: &mut impl Array<Case, CellIndex>,
     chunk_mesh: &mut ChunkMesh,
   ) {
     let local_voxel_positions = Self::local_voxel_positions(cell);
-    let values = Self::sample(chunk_sample_array, &local_voxel_positions);
+    let values = Self::sample(chunk_samples, &local_voxel_positions);
     let case = Self::case(&values);
     if case.is_uniform() { return; }
     let global_voxel_positions = Self::global_voxel_positions(min, step, &local_voxel_positions);
@@ -275,6 +286,8 @@ impl<C: ChunkSize> SurfaceNets<C> {
     chunk_mesh.extend_indices_from_slice(&quad);
   }
 
+
+  // Read/Write helpers
   #[inline]
   fn write_vertex_position(cell_index_to_vertex_index: &mut impl Array<u16, CellIndex>, chunk_mesh: &mut ChunkMesh, cell_index: CellIndex, position: Vec3) {
     let vertex_index = chunk_mesh.push_vertex(Vertex { position });
@@ -305,7 +318,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
 
-  // Helpers
+  // Other helpers and tables
 
   pub const VOXELS: [Voxel; 8] = [
     Voxel::new(0, 0, 0), // 1
@@ -333,16 +346,16 @@ impl<C: ChunkSize> SurfaceNets<C> {
   }
 
   #[inline]
-  pub fn sample(chunk_sample_array: &ChunkSampleArray<C>, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
+  pub fn sample<CS: ChunkSamples<C>>(chunk_samples: &CS, local_coordinates: &[UVec3; 8]) -> [f32; 8] {
     [
-      chunk_sample_array.sample(local_coordinates[0]),
-      chunk_sample_array.sample(local_coordinates[1]),
-      chunk_sample_array.sample(local_coordinates[2]),
-      chunk_sample_array.sample(local_coordinates[3]),
-      chunk_sample_array.sample(local_coordinates[4]),
-      chunk_sample_array.sample(local_coordinates[5]),
-      chunk_sample_array.sample(local_coordinates[6]),
-      chunk_sample_array.sample(local_coordinates[7]),
+      chunk_samples.sample(local_coordinates[0]),
+      chunk_samples.sample(local_coordinates[1]),
+      chunk_samples.sample(local_coordinates[2]),
+      chunk_samples.sample(local_coordinates[3]),
+      chunk_samples.sample(local_coordinates[4]),
+      chunk_samples.sample(local_coordinates[5]),
+      chunk_samples.sample(local_coordinates[6]),
+      chunk_samples.sample(local_coordinates[7]),
     ]
   }
 

@@ -84,7 +84,7 @@ pub fn surface_nets_benchmark(c: &mut Criterion) {
     let chunk_samples = sphere.sample_chunk(start, step);
     c.bench_function("SurfaceNets-Sphere-16", |b| b.iter_batched(
       || preallocate_chunk_vertices::<C16>(),
-      |mut chunk_mesh| surface_nets.extract_chunk(start, step, &chunk_samples, &mut chunk_mesh),
+      |mut chunk_mesh| surface_nets.extract_chunk_from_maybe_compressed_samples(start, step, &chunk_samples, &mut chunk_mesh),
       BatchSize::SmallInput,
     ));
   }
@@ -94,7 +94,7 @@ pub fn surface_nets_benchmark(c: &mut Criterion) {
     let chunk_samples = sphere.sample_chunk(start, step);
     c.bench_function("SurfaceNets-Sphere-32", |b| b.iter_batched(
       || preallocate_chunk_vertices::<C32>(),
-      |mut chunk_mesh| surface_nets.extract_chunk(start, step, &chunk_samples, &mut chunk_mesh),
+      |mut chunk_mesh| surface_nets.extract_chunk_from_maybe_compressed_samples(start, step, &chunk_samples, &mut chunk_mesh),
       BatchSize::SmallInput,
     ));
   }

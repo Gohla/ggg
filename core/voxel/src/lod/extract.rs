@@ -1,7 +1,7 @@
 use job_queue::{DepKey, In};
 
 use crate::chunk::mesh::Vertex;
-use crate::chunk::sample::ChunkSamples;
+use crate::chunk::sample::MaybeCompressedChunkSampleArray;
 use crate::chunk::size::ChunkSize;
 use crate::lod::aabb::AabbWithSize;
 use crate::lod::chunk_mesh::LodChunkMesh;
@@ -27,7 +27,7 @@ pub trait LodExtractor<C: ChunkSize>: Clone + Send + Sync + 'static {
   fn run_job(
     &self,
     input: Self::JobInput,
-    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)],
+    dependency_outputs: &[(Self::DependencyKey, LodJobOutput<MaybeCompressedChunkSampleArray<C>, Self::Chunk>)],
   ) -> Self::Chunk;
 
   fn update_render_data(
@@ -61,7 +61,7 @@ impl<C: ChunkSize> LodExtractor<C> for () {
   #[inline]
   fn create_job<V: Volume>(&self, _aabb: AabbWithSize, _neighbor_depths: NeighborDepths, _volume: V, _empty_lod_chunk_mesh: Self::Chunk) -> (Self::JobInput, Self::DependenciesIterator<V>) { ((), std::iter::empty()) }
   #[inline]
-  fn run_job(&self, _input: Self::JobInput, _dependency_outputs: &[(Self::DependencyKey, LodJobOutput<ChunkSamples<C>, Self::Chunk>)]) -> Self::Chunk { () }
+  fn run_job(&self, _input: Self::JobInput, _dependency_outputs: &[(Self::DependencyKey, LodJobOutput<MaybeCompressedChunkSampleArray<C>, Self::Chunk>)]) -> Self::Chunk { () }
   #[inline]
   fn update_render_data(&self, _chunk: &Self::Chunk, _vertices: &mut Vec<Vertex>, _indices: &mut Vec<u16>, _draws: &mut Vec<LodDraw>) {}
 }
