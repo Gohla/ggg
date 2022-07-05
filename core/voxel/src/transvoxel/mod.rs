@@ -261,9 +261,9 @@ impl<C: ChunkSize> Transvoxel<C> {
       // Create a new vertex and index, and share the index.
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_mesh);
       let shared_indices_index = Self::shared_index(u, v, vertex_data.vertex_index() as usize);
-      debug_assert!(shared_indices_index < shared_indices.slice().len(), "Tried to write out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
-      debug_assert!(shared_indices.slice()[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
-      shared_indices.slice_mut()[shared_indices_index] = index;
+      debug_assert!(shared_indices_index < shared_indices.as_slice().len(), "Tried to write out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
+      debug_assert!(shared_indices.as_slice()[shared_indices_index] == u16::MAX, "Tried to write already set shared transition index, at index: {}, position: {}, {}", shared_indices_index, u, v);
+      shared_indices.as_slice_mut()[shared_indices_index] = index;
       index
     } else if vertex_data.new_interior_vertex() {
       // Create a new vertex and index, but this vertex will never be shared, as it is an interior vertex.
@@ -283,8 +283,8 @@ impl<C: ChunkSize> Transvoxel<C> {
           (prev_u, prev_v)
         };
         let shared_indices_index = Self::shared_index(prev_u, prev_v, vertex_data.vertex_index() as usize);
-        debug_assert!(shared_indices_index < shared_indices.slice().len(), "Tried to read out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, prev_u, prev_v);
-        let index = shared_indices.slice()[shared_indices_index];
+        debug_assert!(shared_indices_index < shared_indices.as_slice().len(), "Tried to read out of bounds shared transition index, at index: {}, position: {}, {}", shared_indices_index, prev_u, prev_v);
+        let index = shared_indices.as_slice()[shared_indices_index];
         debug_assert!(index != u16::MAX, "Tried to read unset shared transition index, at index: {}, position: {}, {}", shared_indices_index, prev_u, prev_v);
         index
       } else {

@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use ultraviolet::UVec3;
 
 use crate::chunk::array::Array;
@@ -91,14 +93,19 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
   pub fn new_negative_zeroed() -> Self { Self::new_with(-0.0) }
 
   #[inline]
+  pub fn slice_index(&self, range: Range<VoxelIndex>) -> ChunkSampleArraySlice<C> {
+    ChunkSampleArraySlice { array: self, range }
+  }
+
+  #[inline]
   pub fn set_all_to(&mut self, sample: f32) {
-    for s in self.array.slice_mut().iter_mut() {
+    for s in self.array.as_slice_mut().iter_mut() {
       *s = sample;
     }
   }
   #[inline]
   pub fn flip_all(&mut self) {
-    for s in self.array.slice_mut().iter_mut() {
+    for s in self.array.as_slice_mut().iter_mut() {
       *s *= -1.0;
     }
   }
@@ -118,3 +125,20 @@ impl<C: ChunkSize> Default for ChunkSampleArray<C> {
   fn default() -> Self { Self::new_positive_zeroed() }
 }
 
+
+// Chunk sample array slice
+
+pub struct ChunkSampleArraySlice<'a, C: ChunkSize> {
+  array: &'a ChunkSampleArray<C>,
+  range: Range<VoxelIndex>,
+}
+
+impl<'a, C: ChunkSize> ChunkSamples<C> for ChunkSampleArraySlice<'a, C> {
+  #[inline]
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array.sample_index(voxel_index) }
+}
+// 
+// impl<'a, C: ChunkSize> MutableChunkSamples<C> for ChunkSampleArraySlice<'a, C> {
+//   #[inline]
+//   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { self.array.sample_index_mut(voxel_index) }
+// }

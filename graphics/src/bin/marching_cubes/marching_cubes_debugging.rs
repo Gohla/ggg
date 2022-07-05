@@ -6,7 +6,7 @@ use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples};
+use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, MutableChunkSamples};
 use voxel::chunk::size::ChunkSize;
 use voxel::marching_cubes;
 use voxel::marching_cubes::{MarchingCubes, RegularCell};

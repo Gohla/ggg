@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::ops::Range;
 
 use crate::chunk::index::Index;
 use crate::chunk::Value;
@@ -19,8 +20,11 @@ pub trait Array<T: Value, I>: Value {
   fn len(&self) -> usize;
   fn contains(&self, index: I) -> bool;
 
-  fn slice(&self) -> &[T];
-  fn slice_mut(&mut self) -> &mut [T];
+  fn as_slice(&self) -> &[T];
+  fn as_slice_mut(&mut self) -> &mut [T];
+
+  fn slice(&self, range: Range<I>) -> &[T];
+  fn slice_mut(&mut self, range: Range<I>) -> &mut [T];
 }
 
 // Array implementation
@@ -54,9 +58,14 @@ impl<T: Value, I: Index, const LEN: usize> Array<T, I> for ConstArray<T, I, LEN>
   fn contains(&self, index: I) -> bool { index.into_usize() < LEN }
 
   #[inline]
-  fn slice(&self) -> &[T] { &self.array }
+  fn as_slice(&self) -> &[T] { &self.array }
   #[inline]
-  fn slice_mut(&mut self) -> &mut [T] { &mut self.array }
+  fn as_slice_mut(&mut self) -> &mut [T] { &mut self.array }
+
+  #[inline]
+  fn slice(&self, range: Range<I>) -> &[T] { &self.array[range.start.into_usize()..range.end.into_usize()] }
+  #[inline]
+  fn slice_mut(&mut self, range: Range<I>) -> &mut [T] { &mut self.array[range.start.into_usize()..range.end.into_usize()] }
 }
 
 // From: https://github.com/serde-rs/serde/issues/1937#issuecomment-812137971
