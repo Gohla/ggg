@@ -1,8 +1,8 @@
-use std::ops::Range;
+use std::marker::PhantomData;
 
 use ultraviolet::UVec3;
 
-use crate::chunk::array::Array;
+use crate::chunk::array::{Array, ArrayIndex, ArraySlice, ArraySliceMut};
 use crate::chunk::index::VoxelIndex;
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;
@@ -18,7 +18,7 @@ pub trait ChunkSamples<C: ChunkSize> {
   }
 }
 
-pub trait MutableChunkSamples<C: ChunkSize> {
+pub trait ChunkSamplesMut<C: ChunkSize> {
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32;
   #[inline]
   fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
@@ -93,8 +93,12 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
   pub fn new_negative_zeroed() -> Self { Self::new_with(-0.0) }
 
   #[inline]
-  pub fn slice_index(&self, range: Range<VoxelIndex>) -> ChunkSampleArraySlice<C> {
-    ChunkSampleArraySlice { array: self, range }
+  pub fn slice<'a, CC: ChunkSize, Idx: ArrayIndex<f32, VoxelIndex, Output=[f32]>>(&'a self, index: Idx) -> ChunkSampleSlice<'a, CC> {
+    ChunkSampleSlice::<'a, CC>::new(self.array.slice(index))
+  }
+  #[inline]
+  pub fn slice_mut<'a, CC: ChunkSize, Idx: ArrayIndex<f32, VoxelIndex, Output=[f32]>>(&'a mut self, index: Idx) -> ChunkSampleSliceMut<'a, CC> {
+    ChunkSampleSliceMut::<'a, CC>::new(self.array.slice_mut(index))
   }
 
   #[inline]
@@ -116,29 +120,55 @@ impl<C: ChunkSize> ChunkSamples<C> for ChunkSampleArray<C> {
   fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array[voxel_index] }
 }
 
-impl<C: ChunkSize> MutableChunkSamples<C> for ChunkSampleArray<C> {
+impl<C: ChunkSize> ChunkSamplesMut<C> for ChunkSampleArray<C> {
   #[inline]
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { &mut self.array[voxel_index] }
 }
 
 impl<C: ChunkSize> Default for ChunkSampleArray<C> {
+  #[inline]
   fn default() -> Self { Self::new_positive_zeroed() }
 }
 
 
-// Chunk sample array slice
+// Chunk sample slice
 
-pub struct ChunkSampleArraySlice<'a, C: ChunkSize> {
-  array: &'a ChunkSampleArray<C>,
-  range: Range<VoxelIndex>,
+#[repr(transparent)]
+pub struct ChunkSampleSlice<'a, C: ChunkSize> {
+  slice: ArraySlice<'a, f32, VoxelIndex>,
+  _phantom: PhantomData<C>,
 }
 
-impl<'a, C: ChunkSize> ChunkSamples<C> for ChunkSampleArraySlice<'a, C> {
+impl<'a, C: ChunkSize> ChunkSamples<C> for ChunkSampleSlice<'a, C> {
   #[inline]
-  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array.sample_index(voxel_index) }
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.slice[voxel_index] }
 }
-// 
-// impl<'a, C: ChunkSize> MutableChunkSamples<C> for ChunkSampleArraySlice<'a, C> {
-//   #[inline]
-//   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { self.array.sample_index_mut(voxel_index) }
-// }
+
+impl<'a, C: ChunkSize> ChunkSampleSlice<'a, C> {
+  #[inline]
+  fn new(slice: ArraySlice<'a, f32, VoxelIndex>) -> Self { Self { slice, _phantom: PhantomData::default() } }
+}
+
+
+// Chunk sample slice mutable
+
+#[repr(transparent)]
+pub struct ChunkSampleSliceMut<'a, C: ChunkSize> {
+  slice: ArraySliceMut<'a, f32, VoxelIndex>,
+  _phantom: PhantomData<C>,
+}
+
+impl<'a, C: ChunkSize> ChunkSamples<C> for ChunkSampleSliceMut<'a, C> {
+  #[inline]
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.slice[voxel_index] }
+}
+
+impl<'a, C: ChunkSize> ChunkSamplesMut<C> for ChunkSampleSliceMut<'a, C> {
+  #[inline]
+  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { &mut self.slice[voxel_index] }
+}
+
+impl<'a, C: ChunkSize> ChunkSampleSliceMut<'a, C> {
+  #[inline]
+  fn new(slice: ArraySliceMut<'a, f32, VoxelIndex>) -> Self { Self { slice, _phantom: PhantomData::default() } }
+}

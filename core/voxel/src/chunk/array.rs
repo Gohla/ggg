@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use std::ops::{Range, RangeFull};
+use std::ops::{Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
 use crate::chunk::Value;
 
@@ -23,7 +23,7 @@ impl Index for u32 {
 
 // Slice & Array trait
 
-pub trait Slice<T: Value, I>: Value + std::ops::Index<I, Output=T> {
+pub trait Slice<T: Value, I>: std::ops::Index<I, Output=T> {
   fn len(&self) -> usize;
   fn contains(&self, index: I) -> bool;
 }
@@ -35,13 +35,25 @@ pub trait SliceMut<T: Value, I>: Slice<T, I> + std::ops::IndexMut<I, Output=T> {
   }
 }
 
-pub trait Array<T: Value, I>: SliceMut<T, I>
+pub trait Array<T: Value, I>: Value + SliceMut<T, I>
 + std::ops::Index<Range<I>, Output=[T]>
++ std::ops::Index<RangeFrom<I>, Output=[T]>
 + std::ops::Index<RangeFull, Output=[T]>
++ std::ops::Index<RangeInclusive<I>, Output=[T]>
++ std::ops::Index<RangeTo<I>, Output=[T]>
++ std::ops::Index<RangeToInclusive<I>, Output=[T]>
 + std::ops::IndexMut<Range<I>, Output=[T]>
++ std::ops::IndexMut<RangeFrom<I>, Output=[T]>
 + std::ops::IndexMut<RangeFull, Output=[T]>
++ std::ops::IndexMut<RangeInclusive<I>, Output=[T]>
++ std::ops::IndexMut<RangeTo<I>, Output=[T]>
++ std::ops::IndexMut<RangeToInclusive<I>, Output=[T]>
 {
   fn new(default: T) -> Self;
+
+  // TODO: figure out how to move these into the std::ops::Index(Mut) outputs, tricky because of lifetime.
+  fn slice<Idx: ArrayIndex<T, I, Output=[T]>>(&self, index: Idx) -> ArraySlice<T, I>;
+  fn slice_mut<Idx: ArrayIndex<T, I, Output=[T]>>(&mut self, index: Idx) -> ArraySliceMut<T, I>;
 }
 
 
@@ -56,37 +68,57 @@ pub trait ArrayIndex<T, I> {
 impl<T, I: Index> ArrayIndex<T, I> for I {
   type Output = T;
   #[inline]
-  fn index(self, slice: &[T]) -> &Self::Output {
-    &(*slice)[self.into_usize()]
-  }
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[self.into_usize()] }
   #[inline]
-  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output {
-    &mut (*slice)[self.into_usize()]
-  }
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[self.into_usize()] }
 }
 
 impl<T, I: Index> ArrayIndex<T, I> for Range<I> {
   type Output = [T];
   #[inline]
-  fn index(self, slice: &[T]) -> &Self::Output {
-    &(*slice)[self.start.into_usize()..self.end.into_usize()]
-  }
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[self.start.into_usize()..self.end.into_usize()] }
   #[inline]
-  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output {
-    &mut (*slice)[self.start.into_usize()..self.end.into_usize()]
-  }
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[self.start.into_usize()..self.end.into_usize()] }
+}
+
+impl<T, I: Index> ArrayIndex<T, I> for RangeFrom<I> {
+  type Output = [T];
+  #[inline]
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[self.start.into_usize()..] }
+  #[inline]
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[self.start.into_usize()..] }
 }
 
 impl<T, I: Index> ArrayIndex<T, I> for RangeFull {
   type Output = [T];
   #[inline]
-  fn index(self, slice: &[T]) -> &Self::Output {
-    &(*slice)[..]
-  }
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[..] }
   #[inline]
-  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output {
-    &mut (*slice)[..]
-  }
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[..] }
+}
+
+impl<T, I: Index> ArrayIndex<T, I> for RangeInclusive<I> {
+  type Output = [T];
+  #[inline]
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[self.start().into_usize()..=self.end().into_usize()] }
+  #[inline]
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[self.start().into_usize()..=self.end().into_usize()] }
+}
+
+impl<T, I: Index> ArrayIndex<T, I> for RangeTo<I> {
+  type Output = [T];
+  #[inline]
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[..self.end.into_usize()] }
+  #[inline]
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[..self.end.into_usize()] }
+}
+
+impl<T, I: Index> ArrayIndex<T, I> for RangeToInclusive<I> {
+  type Output = [T];
+  #[inline]
+  fn index(self, slice: &[T]) -> &Self::Output { &(*slice)[..=self.end.into_usize()] }
+  #[inline]
+  fn index_mut(self, slice: &mut [T]) -> &mut Self::Output { &mut (*slice)[..=self.end.into_usize()] }
 }
 
 
@@ -101,15 +133,16 @@ pub struct ConstArray<T, I: Index, const LEN: usize> {
   _phantom: PhantomData<I>,
 }
 
-impl<T: Value, I: Index, IR: ArrayIndex<T, I>, const LEN: usize> std::ops::Index<IR> for ConstArray<T, I, LEN> {
-  type Output = IR::Output;
+
+impl<T: Value, I: Index, Idx: ArrayIndex<T, I>, const LEN: usize> std::ops::Index<Idx> for ConstArray<T, I, LEN> {
+  type Output = Idx::Output;
   #[inline]
-  fn index(&self, index: IR) -> &Self::Output { index.index(&self.array) }
+  fn index(&self, index: Idx) -> &Self::Output { index.index(&self.array) }
 }
 
-impl<T: Value, I: Index, IR: ArrayIndex<T, I>, const LEN: usize> std::ops::IndexMut<IR> for ConstArray<T, I, LEN> {
+impl<T: Value, I: Index, Idx: ArrayIndex<T, I>, const LEN: usize> std::ops::IndexMut<Idx> for ConstArray<T, I, LEN> {
   #[inline]
-  fn index_mut(&mut self, index: IR) -> &mut Self::Output { index.index_mut(&mut self.array) }
+  fn index_mut(&mut self, index: Idx) -> &mut Self::Output { index.index_mut(&mut self.array) }
 }
 
 impl<T: Value, I: Index, const LEN: usize> Slice<T, I> for ConstArray<T, I, LEN> {
@@ -123,10 +156,75 @@ impl<T: Value, I: Index, const LEN: usize> SliceMut<T, I> for ConstArray<T, I, L
 
 impl<T: Value, I: Index, const LEN: usize> Array<T, I> for ConstArray<T, I, LEN> {
   #[inline]
-  fn new(default: T) -> Self {
-    let array = [default; LEN];
-    Self { array, _phantom: PhantomData::default() }
+  fn new(default: T) -> Self { Self { array: [default; LEN], _phantom: PhantomData::default() } }
+  #[inline]
+  fn slice<Idx: ArrayIndex<T, I, Output=[T]>>(&self, index: Idx) -> ArraySlice<T, I> {
+    let slice = index.index(&self.array);
+    ArraySlice::new(slice)
   }
+  #[inline]
+  fn slice_mut<Idx: ArrayIndex<T, I, Output=[T]>>(&mut self, index: Idx) -> ArraySliceMut<T, I> {
+    let slice = index.index_mut(&mut self.array);
+    ArraySliceMut::new(slice)
+  }
+}
+
+// Array slice implementation
+
+#[repr(transparent)]
+pub struct ArraySlice<'a, T, I> {
+  slice: &'a [T],
+  _phantom: PhantomData<I>,
+}
+
+impl<'a, T: Value, I: Index, IR: ArrayIndex<T, I>> std::ops::Index<IR> for ArraySlice<'a, T, I> {
+  type Output = IR::Output;
+  #[inline]
+  fn index(&self, index: IR) -> &Self::Output { index.index(self.slice) }
+}
+
+impl<'a, T: Value, I: Index> Slice<T, I> for ArraySlice<'a, T, I> {
+  #[inline]
+  fn len(&self) -> usize { self.slice.len() }
+  #[inline]
+  fn contains(&self, index: I) -> bool { index.into_usize() < self.len() }
+}
+
+impl<'a, T, I: Index> ArraySlice<'a, T, I> {
+  fn new(slice: &'a [T]) -> Self { Self { slice, _phantom: PhantomData::default() } }
+}
+
+
+// Array slice mutable implementation
+
+#[repr(transparent)]
+pub struct ArraySliceMut<'a, T, I> {
+  slice: &'a mut [T],
+  _phantom: PhantomData<I>,
+}
+
+impl<'a, T: Value, I: Index, IR: ArrayIndex<T, I>> std::ops::Index<IR> for ArraySliceMut<'a, T, I> {
+  type Output = IR::Output;
+  #[inline]
+  fn index(&self, index: IR) -> &Self::Output { index.index(self.slice) }
+}
+
+impl<'a, T: Value, I: Index, IR: ArrayIndex<T, I>> std::ops::IndexMut<IR> for ArraySliceMut<'a, T, I> {
+  #[inline]
+  fn index_mut(&mut self, index: IR) -> &mut Self::Output { index.index_mut(self.slice) }
+}
+
+impl<'a, T: Value, I: Index> Slice<T, I> for ArraySliceMut<'a, T, I> {
+  #[inline]
+  fn len(&self) -> usize { self.slice.len() }
+  #[inline]
+  fn contains(&self, index: I) -> bool { index.into_usize() < self.len() }
+}
+
+impl<'a, T: Value, I: Index> SliceMut<T, I> for ArraySliceMut<'a, T, I> {}
+
+impl<'a, T, I: Index> ArraySliceMut<'a, T, I> {
+  fn new(slice: &'a mut [T]) -> Self { Self { slice, _phantom: PhantomData::default() } }
 }
 
 
