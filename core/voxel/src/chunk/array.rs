@@ -21,25 +21,27 @@ impl Index for u32 {
 }
 
 
-// Array trait
+// Slice & Array trait
 
-pub trait Array<T: Value, I>: Value
-+ std::ops::Index<I, Output=T>
-+ std::ops::Index<Range<I>, Output=[T]>
-+ std::ops::Index<RangeFull, Output=[T]>
-+ std::ops::IndexMut<I, Output=T>
-+ std::ops::IndexMut<Range<I>, Output=[T]>
-+ std::ops::IndexMut<RangeFull, Output=[T]>
-{
-  fn new(default: T) -> Self;
+pub trait Slice<T: Value, I>: Value + std::ops::Index<I, Output=T> {
+  fn len(&self) -> usize;
+  fn contains(&self, index: I) -> bool;
+}
 
+pub trait SliceMut<T: Value, I>: Slice<T, I> + std::ops::IndexMut<I, Output=T> {
   #[inline]
   fn set(&mut self, index: I, value: T) {
     *self.index_mut(index) = value;
   }
+}
 
-  fn len(&self) -> usize;
-  fn contains(&self, index: I) -> bool;
+pub trait Array<T: Value, I>: SliceMut<T, I>
++ std::ops::Index<Range<I>, Output=[T]>
++ std::ops::Index<RangeFull, Output=[T]>
++ std::ops::IndexMut<Range<I>, Output=[T]>
++ std::ops::IndexMut<RangeFull, Output=[T]>
+{
+  fn new(default: T) -> Self;
 }
 
 
@@ -110,16 +112,21 @@ impl<T: Value, I: Index, IR: ArrayIndex<T, I>, const LEN: usize> std::ops::Index
   fn index_mut(&mut self, index: IR) -> &mut Self::Output { index.index_mut(&mut self.array) }
 }
 
+impl<T: Value, I: Index, const LEN: usize> Slice<T, I> for ConstArray<T, I, LEN> {
+  #[inline]
+  fn len(&self) -> usize { LEN }
+  #[inline]
+  fn contains(&self, index: I) -> bool { index.into_usize() < LEN }
+}
+
+impl<T: Value, I: Index, const LEN: usize> SliceMut<T, I> for ConstArray<T, I, LEN> {}
+
 impl<T: Value, I: Index, const LEN: usize> Array<T, I> for ConstArray<T, I, LEN> {
   #[inline]
   fn new(default: T) -> Self {
     let array = [default; LEN];
     Self { array, _phantom: PhantomData::default() }
   }
-  #[inline]
-  fn len(&self) -> usize { LEN }
-  #[inline]
-  fn contains(&self, index: I) -> bool { index.into_usize() < LEN }
 }
 
 

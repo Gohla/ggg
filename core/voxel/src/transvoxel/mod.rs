@@ -5,7 +5,7 @@ use ultraviolet::{UVec3, Vec3};
 
 use gfx::prelude::*;
 
-use crate::chunk::array::Array;
+use crate::chunk::array::{Array, Slice};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::{ChunkSamples, MaybeCompressedChunkSampleArray};
 use crate::chunk::size::ChunkSize;

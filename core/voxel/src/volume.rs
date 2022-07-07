@@ -1,6 +1,6 @@
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::array::Array;
+use crate::chunk::array::{Array, SliceMut};
 use crate::chunk::sample::{ChunkSampleArray, MaybeCompressedChunkSampleArray, MaybeCompressedChunkSamples};
 use crate::chunk::shape::Shape;
 use crate::chunk::size::ChunkSize;

@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::{UVec3, Vec3};
 
-use crate::chunk::array::Array;
+use crate::chunk::array::{Array, Slice};
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::chunk::sample::{ChunkSampleArray, ChunkSamples, MaybeCompressedChunkSampleArray, MaybeCompressedChunkSamples};
 use crate::chunk::size::ChunkSize;
