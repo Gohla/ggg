@@ -380,7 +380,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       for y in 0..C::CELLS_IN_CHUNK_ROW {
         let border_cell = BorderCell::new(x, y, z);
         let border_cell_index = border_cell.to_index::<ShapeX<C>>();
-        let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+        let vertex_index = cell_index_to_vertex_index[border_cell_index];
         if vertex_index == u16::MAX { continue; }
         let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
         Self::extract_quad_border_x(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);
@@ -398,7 +398,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       for x in 0..C::CELLS_IN_CHUNK_ROW {
         let border_cell = BorderCell::new(x, y, z);
         let border_cell_index = border_cell.to_index::<ShapeY<C>>();
-        let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+        let vertex_index = cell_index_to_vertex_index[border_cell_index];
         if vertex_index == u16::MAX { continue; }
         let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
         Self::extract_quad_border_y(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);
@@ -416,7 +416,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
       for x in 0..C::CELLS_IN_CHUNK_ROW {
         let border_cell = BorderCell::new(x, y, z);
         let border_cell_index = border_cell.to_index::<ShapeZ<C>>();
-        let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+        let vertex_index = cell_index_to_vertex_index[border_cell_index];
         if vertex_index == u16::MAX { continue; }
         let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
         Self::extract_quad_border_z(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);
@@ -434,7 +434,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     for z in 0..C::CELLS_IN_CHUNK_ROW {
       let border_cell = BorderCell::new(x, y, z);
       let border_cell_index = border_cell.to_index::<ShapeXY<C>>();
-      let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+      let vertex_index = cell_index_to_vertex_index[border_cell_index];
       if vertex_index == u16::MAX { continue; }
       let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
       Self::extract_quad_border_xy(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);
@@ -451,7 +451,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     for x in 0..C::CELLS_IN_CHUNK_ROW {
       let border_cell = BorderCell::new(x, y, z);
       let border_cell_index = border_cell.to_index::<ShapeYZ<C>>();
-      let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+      let vertex_index = cell_index_to_vertex_index[border_cell_index];
       if vertex_index == u16::MAX { continue; }
       let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
       Self::extract_quad_border_yz(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);
@@ -468,7 +468,7 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     for y in 0..C::CELLS_IN_CHUNK_ROW {
       let border_cell = BorderCell::new(x, y, z);
       let border_cell_index = border_cell.to_index::<ShapeXZ<C>>();
-      let vertex_index = cell_index_to_vertex_index.index(border_cell_index);
+      let vertex_index = cell_index_to_vertex_index[border_cell_index];
       if vertex_index == u16::MAX { continue; }
       let case = SurfaceNets::<C>::read_case(cell_index_to_case, border_cell_index);
       Self::extract_quad_border_xz(border_cell, border_cell_index, case, cell_index_to_vertex_index, chunk_mesh);

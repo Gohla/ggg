@@ -170,10 +170,10 @@ impl<C: ChunkSize> MarchingCubes<C> {
     if vertex_data.new_vertex() {
       // Create a new vertex and index, and share the index.
       let index = Self::create_vertex(vertex_data, global_voxels, values, chunk_mesh);
-      let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index() as usize);
-      debug_assert!(shared_indices_index < shared_indices.as_slice().len(), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
-      debug_assert!(shared_indices.as_slice()[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
-      shared_indices.as_slice_mut()[shared_indices_index] = index;
+      let shared_indices_index = Self::shared_index(cell, vertex_data.vertex_index());
+      debug_assert!(shared_indices.contains(shared_indices_index), "Tried to write out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, cell);
+      debug_assert!(shared_indices[shared_indices_index] == u16::MAX, "Tried to write already set shared index, at index: {}, position: {:?}", shared_indices_index, cell);
+      shared_indices[shared_indices_index] = index;
       index
     } else {
       let subtract_u = vertex_data.subtract_u();
@@ -189,9 +189,9 @@ impl<C: ChunkSize> MarchingCubes<C> {
           if subtract_w { previous_cell.w -= 1; }
           previous_cell
         };
-        let shared_indices_index = Self::shared_index(previous_cell, vertex_data.vertex_index() as usize);
-        debug_assert!(shared_indices_index < shared_indices.as_slice().len(), "Tried to read out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
-        let index = shared_indices.as_slice()[shared_indices_index];
+        let shared_indices_index = Self::shared_index(previous_cell, vertex_data.vertex_index());
+        debug_assert!(shared_indices.contains(shared_indices_index), "Tried to read out of bounds shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
+        let index = shared_indices[shared_indices_index];
         debug_assert!(index != u16::MAX, "Tried to read unset shared index, at index: {}, position: {:?}", shared_indices_index, previous_cell);
         index
       } else {
@@ -229,11 +229,11 @@ impl<C: ChunkSize> MarchingCubes<C> {
   }
 
   #[inline]
-  pub fn shared_index(cell: RegularCell, vertex_index: usize) -> usize {
-    cell.u as usize
-      + C::CELLS_IN_CHUNK_ROW_USIZE * cell.v as usize
-      + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * cell.w as usize
-      + C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * C::CELLS_IN_CHUNK_ROW_USIZE * vertex_index
+  pub fn shared_index(cell: RegularCell, vertex_index: u8) -> u32 {
+    cell.u
+      + C::CELLS_IN_CHUNK_ROW * cell.v
+      + C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * cell.w
+      + C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * C::CELLS_IN_CHUNK_ROW * vertex_index as u32
   }
 }
 

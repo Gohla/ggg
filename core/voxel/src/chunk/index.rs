@@ -2,29 +2,8 @@ use std::fmt::{Display, Formatter};
 
 use ultraviolet::UVec3;
 
+use crate::chunk::array::Index;
 use crate::chunk::shape::{index_from_xyz, Shape};
-use crate::chunk::Value;
-
-// Index trait
-
-pub trait Index: Value {
-  fn from_u32(i: u32) -> Self;
-  fn into_u32(self) -> u32;
-  fn into_usize(self) -> usize;
-}
-
-
-// u32 implementation
-
-impl Index for u32 {
-  #[inline]
-  fn from_u32(i: u32) -> Self { i }
-  #[inline]
-  fn into_u32(self) -> u32 { self }
-  #[inline]
-  fn into_usize(self) -> usize { self as usize }
-}
-
 
 // Cell index implementations
 

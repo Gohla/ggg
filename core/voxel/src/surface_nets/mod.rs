@@ -150,7 +150,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
         for x in 0..C::CELLS_IN_CHUNK_ROW {
           let cell = Cell::new(x, y, z);
           let cell_index = cell.to_index::<C>();
-          let vertex_index = cell_index_to_vertex_index.index(cell_index);
+          let vertex_index = cell_index_to_vertex_index[cell_index];
           if vertex_index == u16::MAX { continue; }
           let case = Self::read_case(cell_index_to_case, cell_index);
           Self::extract_quad(case, cell, cell_index, cell_index_to_vertex_index, chunk_mesh);
@@ -292,14 +292,14 @@ impl<C: ChunkSize> SurfaceNets<C> {
   fn write_vertex_position(cell_index_to_vertex_index: &mut impl Array<u16, CellIndex>, chunk_mesh: &mut ChunkMesh, cell_index: CellIndex, position: Vec3) {
     let vertex_index = chunk_mesh.push_vertex(Vertex { position });
     debug_assert!(cell_index_to_vertex_index.contains(cell_index), "Tried to write out of bounds cell index {} (>= {}) in cell index to vertex index array, with vertex index: {}", cell_index, cell_index_to_vertex_index.len(), vertex_index);
-    debug_assert!(cell_index_to_vertex_index.index(cell_index) == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
+    debug_assert!(cell_index_to_vertex_index[cell_index] == u16::MAX, "Tried to write to already written cell index {} in cell index to vertex index array, with vertex index: {}", cell_index, vertex_index);
     debug_assert!(vertex_index < u16::MAX, "Tried to write vertex index {} that is equal to or larger than {} in cell index to vertex index array, at cell index: {}", vertex_index, u16::MAX, cell_index);
     cell_index_to_vertex_index.set(cell_index, vertex_index);
   }
 
   #[inline]
   fn read_vertex_position(cell_index_to_vertex_index: &impl Array<u16, CellIndex>, chunk_mesh: &ChunkMesh, cell_index: CellIndex) -> (u16, Vec3) {
-    let vertex_index = cell_index_to_vertex_index.index(cell_index);
+    let vertex_index = cell_index_to_vertex_index[cell_index];
     debug_assert!(vertex_index < u16::MAX, "Tried to read vertex index that was not set in cell index to vertex index array, at cell index: {}", cell_index);
     let position = chunk_mesh.vertices()[vertex_index as usize].position;
     (vertex_index, position)
@@ -314,7 +314,7 @@ impl<C: ChunkSize> SurfaceNets<C> {
   #[inline]
   fn read_case(cell_index_to_case: &impl Array<Case, CellIndex>, cell_index: CellIndex) -> Case {
     debug_assert!(cell_index_to_case.contains(cell_index), "Tried to read out of bounds {} (>= {}) in cell index to case array", cell_index, cell_index_to_case.len());
-    cell_index_to_case.index(cell_index)
+    cell_index_to_case[cell_index]
   }
 
 

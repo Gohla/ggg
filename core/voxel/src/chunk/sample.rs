@@ -99,13 +99,13 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
 
   #[inline]
   pub fn set_all_to(&mut self, sample: f32) {
-    for s in self.array.as_slice_mut().iter_mut() {
+    for s in self.array[..].iter_mut() {
       *s = sample;
     }
   }
   #[inline]
   pub fn flip_all(&mut self) {
-    for s in self.array.as_slice_mut().iter_mut() {
+    for s in self.array[..].iter_mut() {
       *s *= -1.0;
     }
   }
@@ -113,12 +113,12 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
 
 impl<C: ChunkSize> ChunkSamples<C> for ChunkSampleArray<C> {
   #[inline]
-  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array.index(voxel_index) }
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 { self.array[voxel_index] }
 }
 
 impl<C: ChunkSize> MutableChunkSamples<C> for ChunkSampleArray<C> {
   #[inline]
-  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { self.array.index_mut(voxel_index) }
+  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { &mut self.array[voxel_index] }
 }
 
 impl<C: ChunkSize> Default for ChunkSampleArray<C> {

@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use ultraviolet::UVec3;
 
-use crate::chunk::index::Index;
+use crate::chunk::array::Index;
 
 // Shape trait
 
