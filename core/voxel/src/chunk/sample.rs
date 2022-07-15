@@ -171,4 +171,17 @@ impl<'a, C: ChunkSize> ChunkSamplesMut<C> for ChunkSampleSliceMut<'a, C> {
 impl<'a, C: ChunkSize> ChunkSampleSliceMut<'a, C> {
   #[inline]
   fn new(slice: ArraySliceMut<'a, f32, VoxelIndex>) -> Self { Self { slice, _phantom: PhantomData::default() } }
+  
+  #[inline]
+  pub fn set_all_to(&mut self, sample: f32) {
+    for s in self.slice[..].iter_mut() {
+      *s = sample;
+    }
+  }
+  #[inline]
+  pub fn flip_all(&mut self) {
+    for s in self.slice[..].iter_mut() {
+      *s *= -1.0;
+    }
+  }
 }
