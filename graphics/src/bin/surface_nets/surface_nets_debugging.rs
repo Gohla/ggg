@@ -8,11 +8,8 @@ use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::{UVec3DisplayExt, Vec3DisplayExt};
 use gui_widget::UiWidgetsExt;
-use voxel::chunk::array::ArrayIndex;
-use voxel::chunk::index::VoxelIndex;
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSampleSlice, ChunkSampleSliceMut, ChunkSamplesMut};
-use voxel::chunk::shape::Shape;
+use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut};
 use voxel::chunk::size::ChunkSize;
 use voxel::surface_nets::{Cell, SurfaceNets};
 
@@ -65,11 +62,11 @@ impl SurfaceNetsDebugging {
     let surface_nets = SurfaceNets::<C2>::new();
     let r = C2::CELLS_IN_CHUNK_ROW;
     let x = r * 2;
-    self.main_lores.extract_chunk_and_debug_draw(2, UVec3::zero(), surface_nets, self.chunk_sample_array.slice::<C2, _>(self.main_samples_index()), chunk_vertices, debug_renderer);
-    self.x_positive.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, 0), surface_nets, self.chunk_sample_array.slice::<C2, _>(self.x_positive_samples_index()), chunk_vertices, debug_renderer);
-    self.x_positive_y.extract_chunk_and_debug_draw(1, UVec3::new(x, r, 0), surface_nets, self.chunk_sample_array.slice::<C2, _>(self.x_positive_y_samples_index()), chunk_vertices, debug_renderer);
-    self.x_positive_z.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, r), surface_nets, self.chunk_sample_array.slice::<C2, _>(self.x_positive_z_samples_index()), chunk_vertices, debug_renderer);
-    self.x_positive_yz.extract_chunk_and_debug_draw(1, UVec3::new(x, r, r), surface_nets, self.chunk_sample_array.slice::<C2, _>(self.x_positive_yz_samples_index()), chunk_vertices, debug_renderer);
+    self.main_lores.extract_chunk_and_debug_draw(2, UVec3::zero(), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    self.x_positive.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, 0), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    self.x_positive_y.extract_chunk_and_debug_draw(1, UVec3::new(x, r, 0), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    self.x_positive_z.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, r), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    self.x_positive_yz.extract_chunk_and_debug_draw(1, UVec3::new(x, r, r), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
     // Voxels
     for z in 0..C6::VOXELS_IN_CHUNK_ROW {
       for y in 0..C6::VOXELS_IN_CHUNK_ROW {
@@ -88,51 +85,12 @@ impl SurfaceNetsDebugging {
     let o = C2::CELLS_IN_CHUNK_ROW;
     let x = o * 2;
     match self.selected_chunk {
-      SelectedChunk::Main => self.main_lores.draw_window_contents(ui, 2, UVec3::zero(), self.chunk_sample_array.slice_mut::<C2, _>(self.main_samples_index())),
-      SelectedChunk::XPositive => self.x_positive.draw_window_contents(ui, 1, UVec3::new(x, 0, 0), self.chunk_sample_array.slice_mut::<C2, _>(self.x_positive_samples_index())),
-      SelectedChunk::XPositiveY => self.x_positive_y.draw_window_contents(ui, 1, UVec3::new(x, o, 0), self.chunk_sample_array.slice_mut::<C2, _>(self.x_positive_y_samples_index())),
-      SelectedChunk::XPositiveZ => self.x_positive_z.draw_window_contents(ui, 1, UVec3::new(x, 0, o), self.chunk_sample_array.slice_mut::<C2, _>(self.x_positive_z_samples_index())),
-      SelectedChunk::XPositiveYZ => self.x_positive_yz.draw_window_contents(ui, 1, UVec3::new(x, o, o), self.chunk_sample_array.slice_mut::<C2, _>(self.x_positive_yz_samples_index())),
+      SelectedChunk::Main => self.main_lores.draw_window_contents(ui, 2, UVec3::zero(), &mut self.chunk_sample_array),
+      SelectedChunk::XPositive => self.x_positive.draw_window_contents(ui, 1, UVec3::new(x, 0, 0), &mut self.chunk_sample_array),
+      SelectedChunk::XPositiveY => self.x_positive_y.draw_window_contents(ui, 1, UVec3::new(x, o, 0), &mut self.chunk_sample_array),
+      SelectedChunk::XPositiveZ => self.x_positive_z.draw_window_contents(ui, 1, UVec3::new(x, 0, o), &mut self.chunk_sample_array),
+      SelectedChunk::XPositiveYZ => self.x_positive_yz.draw_window_contents(ui, 1, UVec3::new(x, o, o), &mut self.chunk_sample_array),
     }
-  }
-
-  fn main_samples_index(&self) -> impl ArrayIndex<f32, VoxelIndex, Output=[f32]> {
-    let r = C2::CELLS_IN_CHUNK_ROW;
-    let min = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(0, 0, 0);
-    let max = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(r, r, r);
-    min..=max
-  }
-
-  fn x_positive_samples_index(&self) -> impl ArrayIndex<f32, VoxelIndex, Output=[f32]> {
-    let r = C2::CELLS_IN_CHUNK_ROW;
-    let x = r * 2;
-    let min = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x, 0, 0);
-    let max = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x + r, r, r);
-    min..=max
-  }
-
-  fn x_positive_y_samples_index(&self) -> impl ArrayIndex<f32, VoxelIndex, Output=[f32]> {
-    let r = C2::CELLS_IN_CHUNK_ROW;
-    let x = r * 2;
-    let min = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x, r, 0);
-    let max = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x + r, r + r, r);
-    min..=max
-  }
-
-  fn x_positive_z_samples_index(&self) -> impl ArrayIndex<f32, VoxelIndex, Output=[f32]> {
-    let r = C2::CELLS_IN_CHUNK_ROW;
-    let x = r * 2;
-    let min = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x, 0, r);
-    let max = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x + r, r, r + r);
-    min..=max
-  }
-
-  fn x_positive_yz_samples_index(&self) -> impl ArrayIndex<f32, VoxelIndex, Output=[f32]> {
-    let r = C2::CELLS_IN_CHUNK_ROW;
-    let x = r * 2;
-    let min = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x, r, r);
-    let max = <C6 as ChunkSize>::VoxelChunkShape::index_from_xyz(x + r, r + r, r + r);
-    min..=max
   }
 }
 
@@ -156,12 +114,13 @@ impl Display for SelectedChunk {
 }
 
 impl Chunk {
-  fn draw_window_contents(&mut self, ui: &mut Ui, step: u32, minimum_point: UVec3, mut samples: ChunkSampleSliceMut<C2>) {
+  fn draw_window_contents(&mut self, ui: &mut Ui, step: u32, minimum_point: UVec3, chunk_sample_array: &mut ChunkSampleArray<C6>) {
+    let mut samples = chunk_sample_array.offset_mut(minimum_point);
     self.draw_cell_gui(ui, &mut samples);
     self.draw_data_gui(ui, step, minimum_point, &mut samples);
   }
 
-  fn draw_cell_gui(&mut self, ui: &mut Ui, samples: &mut ChunkSampleSliceMut<C2>) {
+  fn draw_cell_gui(&mut self, ui: &mut Ui, samples: &mut impl ChunkSamplesMut<C2>) {
     ui.collapsing_open("Cell", |ui| {
       ui.horizontal(|ui| {
         if ui.button("Flip").clicked() {
@@ -207,7 +166,7 @@ impl Chunk {
     });
   }
 
-  fn draw_data_gui(&mut self, ui: &mut Ui, step: u32, minimum_point: UVec3, samples: &mut ChunkSampleSliceMut<C2>) {
+  fn draw_data_gui(&mut self, ui: &mut Ui, step: u32, minimum_point: UVec3, samples: &mut impl ChunkSamplesMut<C2>) {
     ui.collapsing_open("Cell Data", |ui| {
       ui.horizontal(|ui| {
         ui.label("Selected Cell");
@@ -260,11 +219,11 @@ impl Chunk {
     step: u32,
     minimum_point: UVec3,
     surface_nets: SurfaceNets<C2>,
-    chunk_samples: ChunkSampleSlice<C2>,
+    chunk_sample_array: &ChunkSampleArray<C6>,
     chunk_mesh: &mut ChunkMesh,
     debug_renderer: &mut DebugRenderer
   ) {
-    surface_nets.extract_chunk_from_samples(minimum_point, step, &chunk_samples, chunk_mesh);
+    surface_nets.extract_chunk_from_samples(minimum_point, step, &chunk_sample_array.offset(minimum_point), chunk_mesh);
     self.debug_draw(step, minimum_point, debug_renderer);
   }
 

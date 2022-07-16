@@ -18,7 +18,7 @@ pub trait ChunkSamples<C: ChunkSize> {
   }
 }
 
-pub trait ChunkSamplesMut<C: ChunkSize> {
+pub trait ChunkSamplesMut<C: ChunkSize>: ChunkSamples<C> {
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32;
   #[inline]
   fn sample_mut(&mut self, position: UVec3) -> &mut f32 {
@@ -30,6 +30,9 @@ pub trait ChunkSamplesMut<C: ChunkSize> {
     let voxel_index = C::VoxelChunkShape::index_from_xyz(x, y, z);
     *self.sample_index_mut(voxel_index) = sample;
   }
+
+  fn set_all_to(&mut self, sample: f32);
+  fn flip_all(&mut self);
 }
 
 
@@ -100,18 +103,13 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
   pub fn slice_mut<'a, CC: ChunkSize, Idx: ArrayIndex<f32, VoxelIndex, Output=[f32]>>(&'a mut self, index: Idx) -> ChunkSampleSliceMut<'a, CC> {
     ChunkSampleSliceMut::<'a, CC>::new(self.array.slice_mut(index))
   }
-
   #[inline]
-  pub fn set_all_to(&mut self, sample: f32) {
-    for s in self.array[..].iter_mut() {
-      *s = sample;
-    }
+  pub fn offset<CC: ChunkSize>(&self, offset: UVec3) -> ChunkSampleOffset<C, ChunkSampleArray<C>, CC> {
+    ChunkSampleOffset::new(self, offset)
   }
   #[inline]
-  pub fn flip_all(&mut self) {
-    for s in self.array[..].iter_mut() {
-      *s *= -1.0;
-    }
+  pub fn offset_mut<CC: ChunkSize>(&mut self, offset: UVec3) -> ChunkSampleOffsetMut<C, ChunkSampleArray<C>, CC> {
+    ChunkSampleOffsetMut::new(self, offset)
   }
 }
 
@@ -123,6 +121,19 @@ impl<C: ChunkSize> ChunkSamples<C> for ChunkSampleArray<C> {
 impl<C: ChunkSize> ChunkSamplesMut<C> for ChunkSampleArray<C> {
   #[inline]
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { &mut self.array[voxel_index] }
+
+  #[inline]
+  fn set_all_to(&mut self, sample: f32) {
+    for s in self.array[..].iter_mut() {
+      *s = sample;
+    }
+  }
+  #[inline]
+  fn flip_all(&mut self) {
+    for s in self.array[..].iter_mut() {
+      *s *= -1.0;
+    }
+  }
 }
 
 impl<C: ChunkSize> Default for ChunkSampleArray<C> {
@@ -166,22 +177,118 @@ impl<'a, C: ChunkSize> ChunkSamples<C> for ChunkSampleSliceMut<'a, C> {
 impl<'a, C: ChunkSize> ChunkSamplesMut<C> for ChunkSampleSliceMut<'a, C> {
   #[inline]
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 { &mut self.slice[voxel_index] }
-}
 
-impl<'a, C: ChunkSize> ChunkSampleSliceMut<'a, C> {
   #[inline]
-  fn new(slice: ArraySliceMut<'a, f32, VoxelIndex>) -> Self { Self { slice, _phantom: PhantomData::default() } }
-  
-  #[inline]
-  pub fn set_all_to(&mut self, sample: f32) {
+  fn set_all_to(&mut self, sample: f32) {
     for s in self.slice[..].iter_mut() {
       *s = sample;
     }
   }
   #[inline]
-  pub fn flip_all(&mut self) {
+  fn flip_all(&mut self) {
     for s in self.slice[..].iter_mut() {
       *s *= -1.0;
     }
+  }
+}
+
+impl<'a, C: ChunkSize> ChunkSampleSliceMut<'a, C> {
+  #[inline]
+  fn new(slice: ArraySliceMut<'a, f32, VoxelIndex>) -> Self { Self { slice, _phantom: PhantomData::default() } }
+}
+
+
+// Chunk sample offset
+
+pub struct ChunkSampleOffset<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> {
+  samples: &'a S,
+  offset: UVec3,
+  _phantom_cs: PhantomData<CS>,
+  _phantom_ct: PhantomData<CT>,
+}
+
+impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSamples<CT> for ChunkSampleOffset<'a, CS, S, CT> {
+  #[inline]
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
+    let voxel_position = CT::VoxelChunkShape::index_into_pos(voxel_index);
+    let position = self.offset + voxel_position;
+    let index = CS::VoxelChunkShape::index_from_pos(position);
+    self.samples.sample_index(index)
+  }
+}
+
+impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSampleOffset<'a, CS, S, CT> {
+  #[inline]
+  fn new(samples: &'a S, offset: UVec3) -> Self {
+    Self {
+      samples,
+      offset,
+      _phantom_cs: PhantomData::default(),
+      _phantom_ct: PhantomData::default(),
+    }
+  }
+}
+
+
+// Chunk sample offset mutable
+
+pub struct ChunkSampleOffsetMut<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> {
+  samples: &'a mut S,
+  offset: UVec3,
+  _phantom_cs: PhantomData<CS>,
+  _phantom_ct: PhantomData<CT>,
+}
+
+impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSamples<CT> for ChunkSampleOffsetMut<'a, CS, S, CT> {
+  #[inline]
+  fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
+    self.samples.sample_index(self.offset_index(voxel_index))
+  }
+}
+
+impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSamplesMut<CT> for ChunkSampleOffsetMut<'a, CS, S, CT> {
+  #[inline]
+  fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
+    self.samples.sample_index_mut(self.offset_index(voxel_index))
+  }
+  
+  #[inline]
+  fn set_all_to(&mut self, sample: f32) {
+    for z in 0..CT::VOXELS_IN_CHUNK_ROW {
+      for y in 0..CT::VOXELS_IN_CHUNK_ROW {
+        for x in 0..CT::VOXELS_IN_CHUNK_ROW {
+          self.set(x, y, z, sample);
+        }
+      }
+    }
+  }
+  #[inline]
+  fn flip_all(&mut self) {
+    for z in 0..CT::VOXELS_IN_CHUNK_ROW {
+      for y in 0..CT::VOXELS_IN_CHUNK_ROW {
+        for x in 0..CT::VOXELS_IN_CHUNK_ROW {
+          *self.sample_mut(UVec3::new(x, y, z)) *= -1.0;
+        }
+      }
+    }
+  }
+}
+
+impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSampleOffsetMut<'a, CS, S, CT> {
+  #[inline]
+  fn new(samples: &'a mut S, offset: UVec3) -> Self {
+    Self {
+      samples,
+      offset,
+      _phantom_cs: PhantomData::default(),
+      _phantom_ct: PhantomData::default(),
+    }
+  }
+
+  #[inline]
+  fn offset_index(&self, voxel_index: VoxelIndex) -> VoxelIndex {
+    let voxel_position = CT::VoxelChunkShape::index_into_pos(voxel_index);
+    let position = self.offset + voxel_position;
+    CS::VoxelChunkShape::index_from_pos(position)
   }
 }
