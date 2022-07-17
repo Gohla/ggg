@@ -104,12 +104,12 @@ impl<C: ChunkSize> ChunkSampleArray<C> {
     ChunkSampleSliceMut::<'a, CC>::new(self.array.slice_mut(index))
   }
   #[inline]
-  pub fn offset<CC: ChunkSize>(&self, offset: UVec3) -> ChunkSampleOffset<C, ChunkSampleArray<C>, CC> {
-    ChunkSampleOffset::new(self, offset)
+  pub fn offset<CC: ChunkSize>(&self, offset: UVec3, step: u32) -> ChunkSampleOffset<C, ChunkSampleArray<C>, CC> {
+    ChunkSampleOffset::new(self, offset, step)
   }
   #[inline]
-  pub fn offset_mut<CC: ChunkSize>(&mut self, offset: UVec3) -> ChunkSampleOffsetMut<C, ChunkSampleArray<C>, CC> {
-    ChunkSampleOffsetMut::new(self, offset)
+  pub fn offset_mut<CC: ChunkSize>(&mut self, offset: UVec3, step: u32) -> ChunkSampleOffsetMut<C, ChunkSampleArray<C>, CC> {
+    ChunkSampleOffsetMut::new(self, offset, step)
   }
 }
 
@@ -203,6 +203,7 @@ impl<'a, C: ChunkSize> ChunkSampleSliceMut<'a, C> {
 pub struct ChunkSampleOffset<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> {
   samples: &'a S,
   offset: UVec3,
+  step: u32,
   _phantom_cs: PhantomData<CS>,
   _phantom_ct: PhantomData<CT>,
 }
@@ -211,7 +212,7 @@ impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSamples<CT> for
   #[inline]
   fn sample_index(&self, voxel_index: VoxelIndex) -> f32 {
     let voxel_position = CT::VoxelChunkShape::index_into_pos(voxel_index);
-    let position = self.offset + voxel_position;
+    let position = self.offset + voxel_position * self.step;
     let index = CS::VoxelChunkShape::index_from_pos(position);
     self.samples.sample_index(index)
   }
@@ -219,10 +220,11 @@ impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSamples<CT> for
 
 impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSampleOffset<'a, CS, S, CT> {
   #[inline]
-  fn new(samples: &'a S, offset: UVec3) -> Self {
+  fn new(samples: &'a S, offset: UVec3, step: u32) -> Self {
     Self {
       samples,
       offset,
+      step,
       _phantom_cs: PhantomData::default(),
       _phantom_ct: PhantomData::default(),
     }
@@ -235,6 +237,7 @@ impl<'a, CS: ChunkSize, S: ChunkSamples<CS>, CT: ChunkSize> ChunkSampleOffset<'a
 pub struct ChunkSampleOffsetMut<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> {
   samples: &'a mut S,
   offset: UVec3,
+  step: u32,
   _phantom_cs: PhantomData<CS>,
   _phantom_ct: PhantomData<CT>,
 }
@@ -251,13 +254,13 @@ impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSamplesMut<C
   fn sample_index_mut(&mut self, voxel_index: VoxelIndex) -> &mut f32 {
     self.samples.sample_index_mut(self.offset_index(voxel_index))
   }
-  
+
   #[inline]
   fn set_all_to(&mut self, sample: f32) {
     for z in 0..CT::VOXELS_IN_CHUNK_ROW {
       for y in 0..CT::VOXELS_IN_CHUNK_ROW {
         for x in 0..CT::VOXELS_IN_CHUNK_ROW {
-          self.set(x, y, z, sample);
+          *self.sample_mut(UVec3::new(x, y, z)) = sample;
         }
       }
     }
@@ -276,10 +279,11 @@ impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSamplesMut<C
 
 impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSampleOffsetMut<'a, CS, S, CT> {
   #[inline]
-  fn new(samples: &'a mut S, offset: UVec3) -> Self {
+  fn new(samples: &'a mut S, offset: UVec3, step: u32, ) -> Self {
     Self {
       samples,
       offset,
+      step,
       _phantom_cs: PhantomData::default(),
       _phantom_ct: PhantomData::default(),
     }
@@ -288,7 +292,7 @@ impl<'a, CS: ChunkSize, S: ChunkSamplesMut<CS>, CT: ChunkSize> ChunkSampleOffset
   #[inline]
   fn offset_index(&self, voxel_index: VoxelIndex) -> VoxelIndex {
     let voxel_position = CT::VoxelChunkShape::index_into_pos(voxel_index);
-    let position = self.offset + voxel_position;
+    let position = self.offset + voxel_position * self.step;
     CS::VoxelChunkShape::index_from_pos(position)
   }
 }

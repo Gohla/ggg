@@ -142,7 +142,7 @@ impl app::Application for SurfaceNetsDemo {
 
 fn main() {
   app::run::<SurfaceNetsDemo>(Options {
-    name: "Transvoxel".to_string(),
+    name: "Surface Nets".to_string(),
     request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
     sample_count: 4,
     ..Options::default()

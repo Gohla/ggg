@@ -115,7 +115,7 @@ impl Display for SelectedChunk {
 
 impl Chunk {
   fn draw_window_contents(&mut self, ui: &mut Ui, step: u32, minimum_point: UVec3, chunk_sample_array: &mut ChunkSampleArray<C6>) {
-    let mut samples = chunk_sample_array.offset_mut(minimum_point);
+    let mut samples = chunk_sample_array.offset_mut(minimum_point, step);
     self.draw_cell_gui(ui, &mut samples);
     self.draw_data_gui(ui, step, minimum_point, &mut samples);
   }
@@ -223,7 +223,7 @@ impl Chunk {
     chunk_mesh: &mut ChunkMesh,
     debug_renderer: &mut DebugRenderer
   ) {
-    surface_nets.extract_chunk_from_samples(minimum_point, step, &chunk_sample_array.offset(minimum_point), chunk_mesh);
+    surface_nets.extract_chunk_from_samples(minimum_point, step, &chunk_sample_array.offset(minimum_point, step), chunk_mesh);
     self.debug_draw(step, minimum_point, debug_renderer);
   }
 
