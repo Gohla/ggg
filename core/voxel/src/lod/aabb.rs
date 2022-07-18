@@ -59,9 +59,26 @@ impl Aabb {
   }
 
   #[inline]
-  pub fn subdivide(&self) -> AABBIter {
+  pub fn subdivide(&self) -> AabbSubdivide {
     debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
-    AABBIter::new(self)
+    let code = self.child_code();
+    unsafe {
+      AabbSubdivide {
+        front: Self::new_unchecked(code | 0b000_0),
+        front_x: Self::new_unchecked(code | 0b001_0),
+        front_y: Self::new_unchecked(code | 0b010_0),
+        front_xy: Self::new_unchecked(code | 0b011_0),
+        back: Self::new_unchecked(code | 0b100_0),
+        back_x: Self::new_unchecked(code | 0b101_0),
+        back_y: Self::new_unchecked(code | 0b110_0),
+        back_xy: Self::new_unchecked(code | 0b111_0),
+      }
+    }
+  }
+  #[inline]
+  pub fn subdivide_iter(&self) -> AabbSubdivideIter {
+    debug_assert!(self.0.leading_zeros() > 3, "Cannot subdivide {:?}, there is no space left in the locational code", self);
+    AabbSubdivideIter::new(self)
   }
   #[inline]
   pub fn subdivide_array(&self) -> [Aabb; 8] {
@@ -216,7 +233,7 @@ impl AabbWithSize {
   pub fn distance_from(&self, point: Vec3) -> f32 { self.inner.distance_from(self.root_size, point) }
 
   #[inline]
-  pub fn subdivide(&self) -> AABBIter { self.inner.subdivide() }
+  pub fn subdivide(&self) -> AabbSubdivideIter { self.inner.subdivide_iter() }
   #[inline]
   pub fn subdivide_array(&self) -> [Aabb; 8] { self.inner.subdivide_array() }
 
@@ -249,19 +266,55 @@ impl AabbWithSize {
 }
 
 
-// Iterator
+// Subdivide struct
 
-pub struct AABBIter {
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct AabbSubdivide {
+  pub front: Aabb,
+  pub front_x: Aabb,
+  pub front_y: Aabb,
+  pub front_xy: Aabb,
+  pub back: Aabb,
+  pub back_x: Aabb,
+  pub back_y: Aabb,
+  pub back_xy: Aabb,
+}
+
+impl AabbSubdivide {
+  #[inline]
+  pub fn into_array(self) -> [Aabb; 8] {
+    [
+      self.front,
+      self.front_x,
+      self.front_y,
+      self.front_xy,
+      self.back,
+      self.back_x,
+      self.back_y,
+      self.back_xy,
+    ]
+  }
+}
+
+impl From<AabbSubdivide> for [Aabb; 8] {
+  #[inline]
+  fn from(sub: AabbSubdivide) -> Self { sub.into_array() }
+}
+
+
+// Subdivide iterator
+
+pub struct AabbSubdivideIter {
   code: u32,
   octant: u8,
 }
 
-impl AABBIter {
+impl AabbSubdivideIter {
   #[inline]
   fn new(aabb: &Aabb) -> Self { Self { code: aabb.child_code(), octant: 0 } }
 }
 
-impl Iterator for AABBIter {
+impl Iterator for AabbSubdivideIter {
   type Item = Aabb;
   #[inline]
   fn next(&mut self) -> Option<Self::Item> {
@@ -486,16 +539,35 @@ mod tests {
   }
 
   #[test]
-  fn subdivide_iter() {
+  fn subdivide_struct() {
     let root = Aabb::root();
-    assert_eq!(root.subdivide_array().into_iter().collect::<Vec<_>>(), root.subdivide().collect::<Vec<_>>());
-    for sub_1 in root.subdivide() {
-      assert_eq!(sub_1.subdivide_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide().collect::<Vec<_>>());
-      for sub_2 in sub_1.subdivide() {
-        assert_eq!(sub_2.subdivide_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide().collect::<Vec<_>>());
+    assert_eq!(root.subdivide_array(), root.subdivide().into_array());
+    assert_eq!(root.subdivide_iter().collect::<Vec<_>>(), root.subdivide().into_array().into_iter().collect::<Vec<_>>());
+    for sub_1 in root.subdivide_iter() {
+      assert_eq!(sub_1.subdivide_array(), sub_1.subdivide().into_array());
+      assert_eq!(sub_1.subdivide_iter().collect::<Vec<_>>(), sub_1.subdivide().into_array().into_iter().collect::<Vec<_>>());
+      for sub_2 in sub_1.subdivide_iter() {
+        assert_eq!(sub_2.subdivide_array(), sub_2.subdivide().into_array());
+        assert_eq!(sub_2.subdivide_iter().collect::<Vec<_>>(), sub_2.subdivide().into_array().into_iter().collect::<Vec<_>>());
       }
     }
   }
+
+  #[test]
+  fn subdivide_iter() {
+    let root = Aabb::root();
+    assert_eq!(root.subdivide().into_array().into_iter().collect::<Vec<_>>(), root.subdivide_iter().collect::<Vec<_>>());
+    assert_eq!(root.subdivide_array().into_iter().collect::<Vec<_>>(), root.subdivide_iter().collect::<Vec<_>>());
+    for sub_1 in root.subdivide_iter() {
+      assert_eq!(sub_1.subdivide().into_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide_iter().collect::<Vec<_>>());
+      assert_eq!(sub_1.subdivide_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide_iter().collect::<Vec<_>>());
+      for sub_2 in sub_1.subdivide_iter() {
+        assert_eq!(sub_2.subdivide().into_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide_iter().collect::<Vec<_>>());
+        assert_eq!(sub_2.subdivide_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide_iter().collect::<Vec<_>>());
+      }
+    }
+  }
+
 
   #[test]
   fn twice_nested_siblings() {
@@ -602,7 +674,7 @@ mod tests {
     test_points(root.inner, root_size);
     for sub_1 in root.subdivide() {
       test_points(sub_1, root_size);
-      for sub_2 in sub_1.subdivide() {
+      for sub_2 in sub_1.subdivide_iter() {
         test_points(sub_2, root_size);
       }
     }

@@ -57,9 +57,10 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
   #[profiling::function]
   pub fn extract_border_x_hires<CS: ChunkSamples<C>>(
     &self,
-    step: u32,
+    lores_step: u32,
     min: UVec3,
     chunk_samples: &MaybeCompressedChunkSamples<CS>,
+    hires_step: u32,
     min_x_front: UVec3,
     chunk_samples_x_front: &MaybeCompressedChunkSamples<CS>,
     min_x_front_y: UVec3,
@@ -73,23 +74,23 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     let mut cell_index_to_vertex_index = DeckVertexIndexArray::<C>::new(u16::MAX);
     let mut cell_index_to_case = DeckCaseArray::<C>::new(Case::default());
     if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples {
-      Self::extract_global_positions_border_x(0, step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_global_positions_border_x(0, lores_step, min, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
     }
     let mut extracted_positions = false;
     if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front {
-      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, C::CELLS_IN_CHUNK_ROW_DIV_TWO, hires_step, min_x_front, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
     if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_front_y {
-      Self::extract_global_positions_border_x_hires(1, 0, C::CELLS_IN_CHUNK_ROW_DIV_TWO, step, min_x_front_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_global_positions_border_x_hires(1, 0, C::CELLS_IN_CHUNK_ROW_DIV_TWO, hires_step, min_x_front_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
     if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back {
-      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, 0, step, min_x_back, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_global_positions_border_x_hires(1, C::CELLS_IN_CHUNK_ROW_DIV_TWO, 0, hires_step, min_x_back, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
     if let MaybeCompressedChunkSamples::Mixed(chunk_sample_array) = chunk_samples_x_back_y {
-      Self::extract_global_positions_border_x_hires(1, 0, 0, step, min_x_back_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
+      Self::extract_global_positions_border_x_hires(1, 0, 0, hires_step, min_x_back_y, chunk_sample_array, &mut cell_index_to_vertex_index, &mut cell_index_to_case, chunk_mesh);
       extracted_positions |= true;
     }
     if extracted_positions {

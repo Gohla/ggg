@@ -136,7 +136,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         let min_x_front_y = x_subdivided.map(|subdivided| subdivided[3].minimum_point(aabb.root_size)).unwrap();
         let min_x_back = x_subdivided.map(|subdivided| subdivided[5].minimum_point(aabb.root_size)).unwrap();
         let min_x_back_y = x_subdivided.map(|subdivided| subdivided[7].minimum_point(aabb.root_size)).unwrap();
-        self.surface_nets_lod.extract_border_x_hires(step, min, &chunk_samples, min_x_front, chunk_samples_x_front, min_x_front_y, chunk_samples_x_front_y, min_x_back, chunk_samples_x_back, min_x_back_y, chunk_samples_x_back_y, &mut chunk.border_x_chunk);
+        self.surface_nets_lod.extract_border_x_hires(step, min, &chunk_samples, step * 2, min_x_front, chunk_samples_x_front, min_x_front_y, chunk_samples_x_front_y, min_x_back, chunk_samples_x_back, min_x_back_y, chunk_samples_x_back_y, &mut chunk.border_x_chunk);
       } else if let Some(chunk_samples_x) = &chunk_samples_x {
         if let LodJobOutput::Sample(chunk_samples_x) = chunk_samples_x.borrow() {
           self.surface_nets_lod.extract_border_x(step, min, &chunk_samples, min_x.unwrap(), chunk_samples_x, &mut chunk.border_x_chunk);
@@ -245,11 +245,11 @@ impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
     let x_aabb = aabb.sibling_positive_x();
     let has_x_sibling = neighbor_depths.x != 0;
     let x_sibling_hires = neighbor_depths.x > depth;
-    let x_subdivided = x_aabb.map(|aabb| aabb.subdivide_array());
-    let x_front_aabb = x_subdivided.map(|subdivided| subdivided[1]);
-    let x_front_y_aabb = x_subdivided.map(|subdivided| subdivided[3]);
-    let x_back_aabb = x_subdivided.map(|subdivided| subdivided[5]);
-    let x_back_y_aabb = x_subdivided.map(|subdivided| subdivided[7]);
+    let x_subdivided = x_aabb.map(|aabb| aabb.subdivide());
+    let x_front_aabb = x_subdivided.as_ref().map(|s| s.front_x);
+    let x_front_y_aabb = x_subdivided.as_ref().map(|s| s.front_xy);
+    let x_back_aabb = x_subdivided.as_ref().map(|s| s.back_x);
+    let x_back_y_aabb = x_subdivided.as_ref().map(|s| s.back_xy);
     let y_aabb = aabb.sibling_positive_y();
     let has_y_sibling = neighbor_depths.y != 0;
     let z_aabb = aabb.sibling_positive_z();

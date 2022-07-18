@@ -9,9 +9,10 @@ use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::{UVec3DisplayExt, Vec3DisplayExt};
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut};
+use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSamples};
 use voxel::chunk::size::ChunkSize;
 use voxel::surface_nets::{Cell, SurfaceNets};
+use voxel::surface_nets::lod::SurfaceNetsLod;
 
 use crate::{C2, C6};
 
@@ -60,14 +61,39 @@ impl SurfaceNetsDebugging {
 
   pub fn extract_chunk_and_debug_draw(&self, chunk_vertices: &mut ChunkMesh, debug_renderer: &mut DebugRenderer) {
     let surface_nets = SurfaceNets::<C2>::new();
+    // Main (lores)
     let r = C2::CELLS_IN_CHUNK_ROW;
+    let main_lores_min = UVec3::zero();
+    self.main_lores.extract_chunk_and_debug_draw(2, main_lores_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    // Positive X (hires)
     let x = r * 2;
-    self.main_lores.extract_chunk_and_debug_draw(2, UVec3::zero(), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    self.x_positive.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, 0), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    self.x_positive_y.extract_chunk_and_debug_draw(1, UVec3::new(x, r, 0), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    self.x_positive_z.extract_chunk_and_debug_draw(1, UVec3::new(x, 0, r), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    self.x_positive_yz.extract_chunk_and_debug_draw(1, UVec3::new(x, r, r), surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    // Voxels
+    let x_positive_min = UVec3::new(x, 0, 0);
+    self.x_positive.extract_chunk_and_debug_draw(1, x_positive_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    let x_positive_y_min = UVec3::new(x, r, 0);
+    self.x_positive_y.extract_chunk_and_debug_draw(1, x_positive_y_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    let x_positive_z_min = UVec3::new(x, 0, r);
+    self.x_positive_z.extract_chunk_and_debug_draw(1, x_positive_z_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    let x_positive_yz_min = UVec3::new(x, r, r);
+    self.x_positive_yz.extract_chunk_and_debug_draw(1, x_positive_yz_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    // Border positive X from lores to hires
+    let surface_nets_lod = SurfaceNetsLod::<C2>::new();
+    surface_nets_lod.extract_border_x_hires(
+      2,
+      main_lores_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(main_lores_min, 2)),
+      1,
+      x_positive_yz_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_yz_min, 1)),
+      x_positive_z_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_z_min, 1)),
+      x_positive_y_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_y_min, 1)),
+      x_positive_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_min, 1)),
+      chunk_vertices
+    );
+
+    // Debug draw voxels
     for z in 0..C6::VOXELS_IN_CHUNK_ROW {
       for y in 0..C6::VOXELS_IN_CHUNK_ROW {
         for x in 0..C6::VOXELS_IN_CHUNK_ROW {
