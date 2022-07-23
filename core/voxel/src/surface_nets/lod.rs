@@ -266,8 +266,8 @@ impl<C: ChunkSize> SurfaceNetsLod<C> {
     cell_index_to_case: &mut DeckCaseArray<C>,
     chunk_mesh: &mut ChunkMesh,
   ) {
-    for z in z_start..(z_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
-      for y in y_start..(y_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
+    for z in z_start..=(z_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
+      for y in y_start..=(y_start + C::CELLS_IN_CHUNK_ROW_DIV_TWO) {
         let border_cell = BorderCell::new(x, y, z);
         let cell = border_cell.to_cell_border_x_hires::<C>(y_start, z_start);
         let border_cell_index = border_cell.to_index::<ShapeX<C>>();

@@ -10,7 +10,7 @@ use job_queue::{Job, JobQueue, JobQueueMessage};
 
 use crate::chunk::sample::MaybeCompressedChunkSampleArray;
 use crate::chunk::size::ChunkSize;
-use crate::lod::aabb::Aabb;
+use crate::lod::aabb::{Aabb, AabbSubdivide, PerAabbSubdivide};
 use crate::lod::chunk_mesh::{LodChunkMesh, LodChunkMeshManager, LodChunkMeshManagerParameters};
 use crate::lod::extract::{LodExtractor, NeighborDepths};
 use crate::volume::Volume;
@@ -224,97 +224,97 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
       NodeResult::new(self_filled, false, depth)
     } else { // Subdivide
       let mut all_filled = true;
-      let mut activated = [false; 8];
+      let mut activated = PerAabbSubdivide::<bool>::with_default();
       let depth_plus_one = depth + 1;
       let mut maximum_depth = depth_plus_one;
-      let subdivided @ [front, front_x, front_y, front_xy, back, back_x, back_y, back_xy] = aabb.subdivide_array();
+      let subdivided @ AabbSubdivide { base, x, y, xy, z, xz, yz, xyz } = aabb.subdivide();
 
-      let front_result = {
-        let result = self.update_nodes(front, depth_plus_one, neighbor_depths, position);
-        activated[0] = result.activated;
+      let xyz_result = {
+        let result = self.update_nodes(xyz, depth_plus_one, neighbor_depths, position);
+        activated.xyz = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let front_x_result = {
+      let yz_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.x = front_result.maximum_depth;
-        let result = self.update_nodes(front_x, depth_plus_one, neighbor_depths, position);
-        activated[1] = result.activated;
+        neighbor_depths.x = xyz_result.maximum_depth;
+        let result = self.update_nodes(yz, depth_plus_one, neighbor_depths, position);
+        activated.yz = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let front_y_result = {
+      let xz_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.y = front_result.maximum_depth;
-        let result = self.update_nodes(front_y, depth_plus_one, neighbor_depths, position);
-        activated[2] = result.activated;
+        neighbor_depths.y = xyz_result.maximum_depth;
+        let result = self.update_nodes(xz, depth_plus_one, neighbor_depths, position);
+        activated.xz = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let front_xy_result = {
+      let z_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.x = front_y_result.maximum_depth;
-        neighbor_depths.y = front_x_result.maximum_depth;
-        neighbor_depths.xy = front_result.maximum_depth;
-        let result = self.update_nodes(front_xy, depth_plus_one, neighbor_depths, position);
-        activated[3] = result.activated;
+        neighbor_depths.x = xz_result.maximum_depth;
+        neighbor_depths.y = yz_result.maximum_depth;
+        neighbor_depths.xy = xyz_result.maximum_depth;
+        let result = self.update_nodes(z, depth_plus_one, neighbor_depths, position);
+        activated.z = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let back_result = {
+      let xy_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.z = front_result.maximum_depth;
-        let result = self.update_nodes(back, depth_plus_one, neighbor_depths, position);
-        activated[4] = result.activated;
+        neighbor_depths.z = xyz_result.maximum_depth;
+        let result = self.update_nodes(xy, depth_plus_one, neighbor_depths, position);
+        activated.xy = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let back_x_result = {
+      let y_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.x = back_result.maximum_depth;
-        neighbor_depths.z = front_x_result.maximum_depth;
-        neighbor_depths.xz = front_result.maximum_depth;
-        let result = self.update_nodes(back_x, depth_plus_one, neighbor_depths, position);
-        activated[5] = result.activated;
+        neighbor_depths.x = xy_result.maximum_depth;
+        neighbor_depths.z = yz_result.maximum_depth;
+        neighbor_depths.xz = xyz_result.maximum_depth;
+        let result = self.update_nodes(y, depth_plus_one, neighbor_depths, position);
+        activated.y = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let back_y_result = {
+      let x_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.y = back_result.maximum_depth;
-        neighbor_depths.z = front_y_result.maximum_depth;
-        neighbor_depths.yz = front_result.maximum_depth;
-        let result = self.update_nodes(back_y, depth_plus_one, neighbor_depths, position);
-        activated[6] = result.activated;
+        neighbor_depths.y = xy_result.maximum_depth;
+        neighbor_depths.z = xz_result.maximum_depth;
+        neighbor_depths.yz = xyz_result.maximum_depth;
+        let result = self.update_nodes(x, depth_plus_one, neighbor_depths, position);
+        activated.x = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
-      let _back_xy_result = {
+      let _base_result = {
         let mut neighbor_depths = neighbor_depths;
-        neighbor_depths.x = back_y_result.maximum_depth;
-        neighbor_depths.y = back_x_result.maximum_depth;
-        neighbor_depths.z = front_xy_result.maximum_depth;
-        neighbor_depths.xy = back_result.maximum_depth;
-        neighbor_depths.yz = front_x_result.maximum_depth;
-        neighbor_depths.xz = front_y_result.maximum_depth;
-        let result = self.update_nodes(back_xy, depth_plus_one, neighbor_depths, position);
-        activated[7] = result.activated;
+        neighbor_depths.x = x_result.maximum_depth;
+        neighbor_depths.y = y_result.maximum_depth;
+        neighbor_depths.z = z_result.maximum_depth;
+        neighbor_depths.xy = xy_result.maximum_depth;
+        neighbor_depths.yz = yz_result.maximum_depth;
+        neighbor_depths.xz = xz_result.maximum_depth;
+        let result = self.update_nodes(base, depth_plus_one, neighbor_depths, position);
+        activated.base = result.activated;
         all_filled &= result.filled;
         maximum_depth = maximum_depth.max(result.maximum_depth);
         result
       };
 
       if all_filled { // All subdivided nodes are filled, activate each non-activated node.
-        for (i, sub_aabb) in subdivided.into_iter().enumerate() {
+        for i in 0..8u8 {
           if !activated[i] {
-            self.active_aabbs.insert(sub_aabb);
+            self.active_aabbs.insert(subdivided[i]);
           }
         }
         NodeResult::new(true, true, maximum_depth) // Act as is filled and activated, because all sub-nodes are filled and activated.

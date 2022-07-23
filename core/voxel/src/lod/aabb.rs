@@ -1,4 +1,5 @@
 use std::num::NonZeroU32;
+use std::ops::Index;
 
 use ultraviolet::{UVec3, Vec3};
 
@@ -64,14 +65,14 @@ impl Aabb {
     let code = self.child_code();
     unsafe {
       AabbSubdivide {
-        front: Self::new_unchecked(code | 0b000_0),
-        front_x: Self::new_unchecked(code | 0b001_0),
-        front_y: Self::new_unchecked(code | 0b010_0),
-        front_xy: Self::new_unchecked(code | 0b011_0),
-        back: Self::new_unchecked(code | 0b100_0),
-        back_x: Self::new_unchecked(code | 0b101_0),
-        back_y: Self::new_unchecked(code | 0b110_0),
-        back_xy: Self::new_unchecked(code | 0b111_0),
+        base: Self::new_unchecked(code | 0b000_0),
+        x: Self::new_unchecked(code | 0b001_0),
+        y: Self::new_unchecked(code | 0b010_0),
+        xy: Self::new_unchecked(code | 0b011_0),
+        z: Self::new_unchecked(code | 0b100_0),
+        xz: Self::new_unchecked(code | 0b101_0),
+        yz: Self::new_unchecked(code | 0b110_0),
+        xyz: Self::new_unchecked(code | 0b111_0),
       }
     }
   }
@@ -99,11 +100,11 @@ impl Aabb {
   }
 
   #[inline]
-  pub fn sibling_positive_x(&self) -> Option<Self> { self.positive_sibling::<1>() }
+  pub fn sibling_positive_x(&self) -> Option<Self> { self.positive_sibling::<0>() }
   #[inline]
-  pub fn sibling_positive_y(&self) -> Option<Self> { self.positive_sibling::<2>() }
+  pub fn sibling_positive_y(&self) -> Option<Self> { self.positive_sibling::<1>() }
   #[inline]
-  pub fn sibling_positive_z(&self) -> Option<Self> { self.positive_sibling::<3>() }
+  pub fn sibling_positive_z(&self) -> Option<Self> { self.positive_sibling::<2>() }
   #[inline]
   pub fn sibling_positive_xy(&self) -> Option<Self> { self.sibling_positive_x().and_then(|aabb| aabb.sibling_positive_y()) }
   #[inline]
@@ -115,11 +116,11 @@ impl Aabb {
     let depth = self.depth();
     let mut code = self.0.get();
     for d in 0..depth {
-      let bit = 1 << ((d * 3) + O);
-      if code & bit != 0 { // If bit is set, unset it to go to the positive sibling; and we're done.
-        unsafe { return Some(Self::new_unchecked(code & !bit)); }
-      } else { // Otherwise set the bit to go to the negative sibling and continue.
-        code = code | bit;
+      let bit = 1 << ((d * 3) + O + 1); // + 1 to skip user bit
+      if (code & bit) == 0 { // If bit is unset, set it to go to the positive sibling; and we're done.
+        unsafe { return Some(Self::new_unchecked(code | bit)); }
+      } else { // Otherwise unset the bit to go to the negative sibling and continue.
+        code = code & !bit;
       }
     }
     None // No parent was found with the bit set, so we couldn't go to a positive sibling anywhere.
@@ -189,14 +190,14 @@ impl Aabb {
   #[inline]
   fn octant_to_minimum_point(octant: u8, size: u32) -> UVec3 {
     match octant {
-      0b000_0 => UVec3::new(size, size, size),
-      0b001_0 => UVec3::new(0, size, size),
-      0b010_0 => UVec3::new(size, 0, size),
-      0b011_0 => UVec3::new(0, 0, size),
-      0b100_0 => UVec3::new(size, size, 0),
-      0b101_0 => UVec3::new(0, size, 0),
-      0b110_0 => UVec3::new(size, 0, 0),
-      0b111_0 => UVec3::new(0, 0, 0),
+      0b000_0 => UVec3::new(0, 0, 0),
+      0b001_0 => UVec3::new(size, 0, 0),
+      0b010_0 => UVec3::new(0, size, 0),
+      0b011_0 => UVec3::new(size, size, 0),
+      0b100_0 => UVec3::new(0, 0, size),
+      0b101_0 => UVec3::new(size, 0, size),
+      0b110_0 => UVec3::new(0, size, size),
+      0b111_0 => UVec3::new(size, size, size),
       _ => unreachable!(),
     }
   }
@@ -266,40 +267,137 @@ impl AabbWithSize {
 }
 
 
-// Subdivide struct
+// Per AABB subdivide struct
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct AabbSubdivide {
-  pub front: Aabb,
-  pub front_x: Aabb,
-  pub front_y: Aabb,
-  pub front_xy: Aabb,
-  pub back: Aabb,
-  pub back_x: Aabb,
-  pub back_y: Aabb,
-  pub back_xy: Aabb,
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct PerAabbSubdivide<T> {
+  pub base: T,
+  pub x: T,
+  pub y: T,
+  pub xy: T,
+  pub z: T,
+  pub xz: T,
+  pub yz: T,
+  pub xyz: T,
 }
 
-impl AabbSubdivide {
+impl<T> PerAabbSubdivide<T> {
   #[inline]
-  pub fn into_array(self) -> [Aabb; 8] {
+  pub fn with(default: T) -> Self where T: Copy {
+    Self { base: default, x: default, y: default, xy: default, z: default, xz: default, yz: default, xyz: default, }
+  }
+
+  #[inline]
+  pub fn with_default() -> Self where T: Default {
+    Self { base: T::default(), x: T::default(), y: T::default(), xy: T::default(), z: T::default(), xz: T::default(), yz: T::default(), xyz: T::default(), }
+  }
+
+  #[inline]
+  pub fn from_array(array: [T; 8]) -> Self {
+    let [base, x, y, xy, z, xz, yz, xyz] = array;
+    Self { base, x, y, xy, z, xz, yz, xyz, }
+  }
+
+  #[inline]
+  pub fn into_array(self) -> [T; 8] {
     [
-      self.front,
-      self.front_x,
-      self.front_y,
-      self.front_xy,
-      self.back,
-      self.back_x,
-      self.back_y,
-      self.back_xy,
+      self.base,
+      self.x,
+      self.y,
+      self.xy,
+      self.z,
+      self.xz,
+      self.yz,
+      self.xyz,
     ]
+  }
+
+  #[inline]
+  pub fn into_iter(self) -> PerAabbSubdivideIter<T> where T: Copy {
+    PerAabbSubdivideIter::new(self)
   }
 }
 
-impl From<AabbSubdivide> for [Aabb; 8] {
+impl<T> From<PerAabbSubdivide<T>> for [T; 8] {
   #[inline]
-  fn from(sub: AabbSubdivide) -> Self { sub.into_array() }
+  fn from(sub: PerAabbSubdivide<T>) -> Self { sub.into_array() }
 }
+
+impl<T> From<[T; 8]> for PerAabbSubdivide<T> {
+  #[inline]
+  fn from(array: [T; 8]) -> Self { PerAabbSubdivide::from_array(array) }
+}
+
+impl<T> Index<usize> for PerAabbSubdivide<T> {
+  type Output = T;
+
+  #[inline]
+  fn index(&self, index: usize) -> &Self::Output {
+    match index {
+      0 => &self.base,
+      1 => &self.x,
+      2 => &self.y,
+      3 => &self.xy,
+      4 => &self.z,
+      5 => &self.xz,
+      6 => &self.yz,
+      7 => &self.xyz,
+      _ => unreachable!(),
+    }
+  }
+}
+
+impl<T> Index<u8> for PerAabbSubdivide<T> {
+  type Output = T;
+
+  #[inline]
+  fn index(&self, index: u8) -> &Self::Output {
+    match index {
+      0 => &self.base,
+      1 => &self.x,
+      2 => &self.y,
+      3 => &self.xy,
+      4 => &self.z,
+      5 => &self.xz,
+      6 => &self.yz,
+      7 => &self.xyz,
+      _ => unreachable!(),
+    }
+  }
+}
+
+impl<T> IntoIterator for PerAabbSubdivide<T> where T: Copy {
+  type Item = T;
+  type IntoIter = PerAabbSubdivideIter<T>;
+  #[inline]
+  fn into_iter(self) -> Self::IntoIter { self.into_iter() }
+}
+
+pub struct PerAabbSubdivideIter<T> {
+  sub: PerAabbSubdivide<T>,
+  i: u8,
+}
+
+impl<T> PerAabbSubdivideIter<T> {
+  #[inline]
+  fn new(sub: PerAabbSubdivide<T>) -> Self { Self { sub, i: 0 } }
+}
+
+impl<T> Iterator for PerAabbSubdivideIter<T> where T: Copy {
+  type Item = T;
+  #[inline]
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.i > 7 { return None; }
+    let v = self.sub[self.i];
+    self.i += 1;
+    Some(v)
+  }
+}
+
+
+// AABB subdivide struct
+
+pub type AabbSubdivide = PerAabbSubdivide<Aabb>;
 
 
 // Subdivide iterator
@@ -334,7 +432,7 @@ mod tests {
 
   use ultraviolet::{UVec3, Vec3};
 
-  use crate::lod::aabb::{Aabb, AabbWithSize};
+  use crate::lod::aabb::{Aabb, AabbSubdivide, AabbWithSize};
 
   #[test]
   fn root() {
@@ -356,145 +454,10 @@ mod tests {
     assert_eq!(false, root.is_user_bit_set());
   }
 
-  fn test_subdivided(root_size: u32, depth: u8, size: u32, offset: UVec3, user_bit_set: bool, subdivided: [Aabb; 8]) {
+  fn test_subdivided(root_size: u32, depth: u8, size: u32, offset: UVec3, user_bit_set: bool, subdivided: AabbSubdivide) {
     let half_size = size / 2;
-
-    let front = {
-      let sub = subdivided[0].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(size, size, size), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, size + half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size * 2, size * 2, size * 2), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(None, sub.sibling_positive_x());
-        assert_eq!(None, sub.sibling_positive_y());
-        assert_eq!(None, sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let front_x = {
-      let sub = subdivided[1].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(0, size, size), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(half_size, size + half_size, size + half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size, size * 2, size * 2), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(Some(front), sub.sibling_positive_x());
-        assert_eq!(None, sub.sibling_positive_y());
-        assert_eq!(None, sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let front_y = {
-      let sub = subdivided[2].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(size, 0, size), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(size + half_size, half_size, size + half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size * 2, size, size * 2), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(None, sub.sibling_positive_x());
-        assert_eq!(Some(front), sub.sibling_positive_y());
-        assert_eq!(None, sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let front_xy = {
-      let sub = subdivided[3].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(0, 0, size), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(half_size, half_size, size + half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size, size, size * 2), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(Some(front_y), sub.sibling_positive_x());
-        assert_eq!(Some(front_x), sub.sibling_positive_y());
-        assert_eq!(None, sub.sibling_positive_z());
-        assert_eq!(Some(front), sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-
-    let back = {
-      let sub = subdivided[4].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(size, size, 0), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size * 2, size * 2, size), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(None, sub.sibling_positive_x());
-        assert_eq!(None, sub.sibling_positive_y());
-        assert_eq!(Some(front), sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let back_x = {
-      let sub = subdivided[5].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(0, size, 0), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(half_size, size + half_size, half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size, size * 2, size), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(Some(back), sub.sibling_positive_x());
-        assert_eq!(None, sub.sibling_positive_y());
-        assert_eq!(Some(front_x), sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(None, sub.sibling_positive_yz());
-        assert_eq!(Some(front), sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let back_y = {
-      let sub = subdivided[6].with_size(root_size);
-      assert_eq!(depth, sub.depth());
-      assert_eq!(half_size, sub.half_size());
-      assert_eq!(size, sub.size());
-      assert_eq!(offset + UVec3::new(size, 0, 0), sub.minimum_point());
-      assert_eq!(offset + UVec3::new(size + half_size, half_size, half_size), sub.center_point());
-      assert_eq!(offset + UVec3::new(size * 2, size, size), sub.maximum_point());
-      if depth == 1 {
-        assert_eq!(None, sub.sibling_positive_x());
-        assert_eq!(Some(back), sub.sibling_positive_y());
-        assert_eq!(Some(front_y), sub.sibling_positive_z());
-        assert_eq!(None, sub.sibling_positive_xy());
-        assert_eq!(Some(front), sub.sibling_positive_yz());
-        assert_eq!(None, sub.sibling_positive_xz());
-      }
-      assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
-    let _back_xy = {
-      let sub = subdivided[7].with_size(root_size);
+    { // Base
+      let sub = subdivided.base.with_size(root_size);
       assert_eq!(depth, sub.depth());
       assert_eq!(half_size, sub.half_size());
       assert_eq!(size, sub.size());
@@ -502,29 +465,154 @@ mod tests {
       assert_eq!(offset + UVec3::new(half_size, half_size, half_size), sub.center_point());
       assert_eq!(offset + UVec3::new(size, size, size), sub.maximum_point());
       if depth == 1 {
-        assert_eq!(Some(back_y), sub.sibling_positive_x());
-        assert_eq!(Some(back_x), sub.sibling_positive_y());
-        assert_eq!(Some(front_xy), sub.sibling_positive_z());
-        assert_eq!(Some(back), sub.sibling_positive_xy());
-        assert_eq!(Some(front_x), sub.sibling_positive_yz());
-        assert_eq!(Some(front_y), sub.sibling_positive_xz());
+        assert_eq!(Some(subdivided.x), sub.inner.sibling_positive_x());
+        assert_eq!(Some(subdivided.y), sub.inner.sibling_positive_y());
+        assert_eq!(Some(subdivided.z), sub.inner.sibling_positive_z());
+        assert_eq!(Some(subdivided.xy), sub.inner.sibling_positive_xy());
+        assert_eq!(Some(subdivided.yz), sub.inner.sibling_positive_yz());
+        assert_eq!(Some(subdivided.xz), sub.inner.sibling_positive_xz());
       }
       assert_eq!(user_bit_set, sub.is_user_bit_set());
-      sub
-    };
+    }
+    { // X
+      let sub = subdivided.x.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, 0, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.inner.sibling_positive_x());
+        assert_eq!(Some(subdivided.xy), sub.inner.sibling_positive_y());
+        assert_eq!(Some(subdivided.xz), sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // Y
+      let sub = subdivided.y.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, size, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, size + half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size * 2, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(subdivided.xy), sub.inner.sibling_positive_x());
+        assert_eq!(None, sub.inner.sibling_positive_y());
+        assert_eq!(Some(subdivided.yz), sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // XY
+      let sub = subdivided.xy.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, size, 0), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size * 2, size), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.inner.sibling_positive_x());
+        assert_eq!(None, sub.inner.sibling_positive_y());
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // Z
+      let sub = subdivided.z.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, 0, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(subdivided.xz), sub.inner.sibling_positive_x());
+        assert_eq!(Some(subdivided.yz), sub.inner.sibling_positive_y());
+        assert_eq!(None, sub.inner.sibling_positive_z());
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // XZ 
+      let sub = subdivided.xz.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, 0, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.inner.sibling_positive_x());
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_y());
+        assert_eq!(None, sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // YZ
+      let sub = subdivided.yz.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(0, size, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(half_size, size + half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size, size * 2, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(Some(subdivided.xyz), sub.inner.sibling_positive_x());
+        assert_eq!(None, sub.inner.sibling_positive_y());
+        assert_eq!(None, sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
+    { // XYZ
+      let sub = subdivided.xyz.with_size(root_size);
+      assert_eq!(depth, sub.depth());
+      assert_eq!(half_size, sub.half_size());
+      assert_eq!(size, sub.size());
+      assert_eq!(offset + UVec3::new(size, size, size), sub.minimum_point());
+      assert_eq!(offset + UVec3::new(size + half_size, size + half_size, size + half_size), sub.center_point());
+      assert_eq!(offset + UVec3::new(size * 2, size * 2, size * 2), sub.maximum_point());
+      if depth == 1 {
+        assert_eq!(None, sub.inner.sibling_positive_x());
+        assert_eq!(None, sub.inner.sibling_positive_y());
+        assert_eq!(None, sub.inner.sibling_positive_z());
+        assert_eq!(None, sub.inner.sibling_positive_xy());
+        assert_eq!(None, sub.inner.sibling_positive_yz());
+        assert_eq!(None, sub.inner.sibling_positive_xz());
+      }
+      assert_eq!(user_bit_set, sub.is_user_bit_set());
+    }
   }
 
   #[test]
   fn subdivide_once() {
     let root_size = 4096;
-    test_subdivided(root_size, 1, root_size / 2, UVec3::zero(), false, Aabb::root().subdivide_array());
+    test_subdivided(root_size, 1, root_size / 2, UVec3::zero(), false, Aabb::root().subdivide());
   }
 
   #[test]
   fn subdivide_twice() {
     let root_size = 4096;
     for sub in Aabb::root().subdivide_array() {
-      test_subdivided(root_size, 2, root_size / 4, sub.minimum_point(root_size), false, sub.subdivide_array());
+      test_subdivided(root_size, 2, root_size / 4, sub.minimum_point(root_size), false, sub.subdivide());
     }
   }
 
@@ -533,7 +621,7 @@ mod tests {
     let root_size = 4096;
     for sub_1 in Aabb::root().subdivide_array() {
       for sub_2 in sub_1.subdivide_array() {
-        test_subdivided(root_size, 3, root_size / 8, sub_2.minimum_point(root_size), false, sub_2.subdivide_array());
+        test_subdivided(root_size, 3, root_size / 8, sub_2.minimum_point(root_size), false, sub_2.subdivide());
       }
     }
   }
@@ -542,13 +630,13 @@ mod tests {
   fn subdivide_struct() {
     let root = Aabb::root();
     assert_eq!(root.subdivide_array(), root.subdivide().into_array());
-    assert_eq!(root.subdivide_iter().collect::<Vec<_>>(), root.subdivide().into_array().into_iter().collect::<Vec<_>>());
+    assert_eq!(root.subdivide_iter().collect::<Vec<_>>(), root.subdivide().into_iter().collect::<Vec<_>>());
     for sub_1 in root.subdivide_iter() {
       assert_eq!(sub_1.subdivide_array(), sub_1.subdivide().into_array());
-      assert_eq!(sub_1.subdivide_iter().collect::<Vec<_>>(), sub_1.subdivide().into_array().into_iter().collect::<Vec<_>>());
+      assert_eq!(sub_1.subdivide_iter().collect::<Vec<_>>(), sub_1.subdivide().into_iter().collect::<Vec<_>>());
       for sub_2 in sub_1.subdivide_iter() {
         assert_eq!(sub_2.subdivide_array(), sub_2.subdivide().into_array());
-        assert_eq!(sub_2.subdivide_iter().collect::<Vec<_>>(), sub_2.subdivide().into_array().into_iter().collect::<Vec<_>>());
+        assert_eq!(sub_2.subdivide_iter().collect::<Vec<_>>(), sub_2.subdivide().into_iter().collect::<Vec<_>>());
       }
     }
   }
@@ -556,13 +644,13 @@ mod tests {
   #[test]
   fn subdivide_iter() {
     let root = Aabb::root();
-    assert_eq!(root.subdivide().into_array().into_iter().collect::<Vec<_>>(), root.subdivide_iter().collect::<Vec<_>>());
+    assert_eq!(root.subdivide().into_iter().collect::<Vec<_>>(), root.subdivide_iter().collect::<Vec<_>>());
     assert_eq!(root.subdivide_array().into_iter().collect::<Vec<_>>(), root.subdivide_iter().collect::<Vec<_>>());
     for sub_1 in root.subdivide_iter() {
-      assert_eq!(sub_1.subdivide().into_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide_iter().collect::<Vec<_>>());
+      assert_eq!(sub_1.subdivide().into_iter().collect::<Vec<_>>(), sub_1.subdivide_iter().collect::<Vec<_>>());
       assert_eq!(sub_1.subdivide_array().into_iter().collect::<Vec<_>>(), sub_1.subdivide_iter().collect::<Vec<_>>());
       for sub_2 in sub_1.subdivide_iter() {
-        assert_eq!(sub_2.subdivide().into_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide_iter().collect::<Vec<_>>());
+        assert_eq!(sub_2.subdivide().into_iter().collect::<Vec<_>>(), sub_2.subdivide_iter().collect::<Vec<_>>());
         assert_eq!(sub_2.subdivide_array().into_iter().collect::<Vec<_>>(), sub_2.subdivide_iter().collect::<Vec<_>>());
       }
     }
@@ -571,43 +659,43 @@ mod tests {
 
   #[test]
   fn twice_nested_siblings() {
-    let subdivided_1 = Aabb::root().subdivide_array();
-    let front_1 = subdivided_1[0];
-    let front_x_1 = subdivided_1[1];
-    let subdivided_2_in_front_1 = front_1.subdivide_array();
-    let subdivided_2_in_front_x_1 = front_x_1.subdivide_array();
-    assert_eq!(Some(subdivided_2_in_front_1[1]), subdivided_2_in_front_x_1[0].sibling_positive_x());
+    let sub_1 = Aabb::root().subdivide();
+    let xyz_1 = sub_1.xyz;
+    let yz_1 = sub_1.yz;
+    let sub_2_in_xyz_1 = xyz_1.subdivide();
+    let sub_2_in_yz_1 = yz_1.subdivide();
+    assert_eq!(Some(sub_2_in_xyz_1.yz), sub_2_in_yz_1.xyz.sibling_positive_x());
   }
 
   #[test]
   fn trice_nested_siblings_1() {
     let root = Aabb::root();
-    let sub_1 = root.subdivide_array();
-    let front_depth_1 = sub_1[0];
-    let sub_2_front_1 = front_depth_1.subdivide_array();
-    let front_2_front_1 = sub_2_front_1[0];
-    let front_x_2_front_1 = sub_2_front_1[1];
-    let sub_3_front_2_front_1 = front_2_front_1.subdivide_array();
-    let sub_3_front_x_2_front_1 = front_x_2_front_1.subdivide_array();
-    let front_x_3_front_2_front_1 = sub_3_front_2_front_1[1];
-    let front_3_front_x_2_front_1 = sub_3_front_x_2_front_1[0];
-    assert_eq!(Some(front_x_3_front_2_front_1), front_3_front_x_2_front_1.sibling_positive_x());
+    let sub_1 = root.subdivide();
+    let xyz_depth_1 = sub_1.xyz;
+    let sub_2_xyz_1 = xyz_depth_1.subdivide();
+    let xyz_2_xyz_1 = sub_2_xyz_1.xyz;
+    let yz_2_xyz_1 = sub_2_xyz_1.yz;
+    let sub_3_xyz_2_xyz_1 = xyz_2_xyz_1.subdivide();
+    let sub_3_yz_2_xyz_1 = yz_2_xyz_1.subdivide();
+    let yz_3_xyz_2_xyz_1 = sub_3_xyz_2_xyz_1.yz;
+    let xyz_3_yz_2_xyz_1 = sub_3_yz_2_xyz_1.xyz;
+    assert_eq!(Some(yz_3_xyz_2_xyz_1), xyz_3_yz_2_xyz_1.sibling_positive_x());
   }
 
   #[test]
   fn trice_nested_siblings_2() {
     let root_size = 4096;
     let root = Aabb::root();
-    let sub_1 = root.subdivide_array();
-    let front_x_1 = sub_1[1];
-    let sub_2_front_x_1 = front_x_1.subdivide_array();
-    let front_2_front_x_1 = sub_2_front_x_1[0];
-    let sub_3_front_2_front_x_1 = front_2_front_x_1.subdivide_array();
-    let front_3_front_2_front_x_1 = sub_3_front_2_front_x_1[0];
-    assert_eq!(UVec3::new(root_size / 2, root_size, root_size), front_3_front_2_front_x_1.maximum_point(root_size));
-    assert!(front_3_front_2_front_x_1.sibling_positive_x().is_some());
-    let front_3_x_front_2_x_front_1 = sub_1[0].subdivide_array()[1].subdivide_array()[1];
-    assert_eq!(Some(front_3_x_front_2_x_front_1), front_3_front_2_front_x_1.sibling_positive_x());
+    let sub_1 = root.subdivide();
+    let yz_1 = sub_1.yz;
+    let sub_2_yz_1 = yz_1.subdivide();
+    let xyz_2_yz_1 = sub_2_yz_1.xyz;
+    let sub_3_xyz_2_yz_1 = xyz_2_yz_1.subdivide();
+    let xyz_3_xyz_2_yz_1 = sub_3_xyz_2_yz_1.xyz;
+    assert_eq!(UVec3::new(root_size / 2, root_size, root_size), xyz_3_xyz_2_yz_1.maximum_point(root_size));
+    assert!(xyz_3_xyz_2_yz_1.sibling_positive_x().is_some());
+    let yz_3_yz_2_xyz_1 = sub_1.xyz.subdivide().yz.subdivide().yz;
+    assert_eq!(Some(yz_3_yz_2_xyz_1), xyz_3_xyz_2_yz_1.sibling_positive_x());
   }
 
   #[test]
@@ -622,17 +710,17 @@ mod tests {
     assert_eq!(false, root.is_user_bit_set());
 
     let root_size = 4096;
-    let sub_1_false = root.subdivide_array();
+    let sub_1_false = root.subdivide();
     test_subdivided(root_size, 1, root_size / 2, UVec3::zero(), false, sub_1_false);
-    for i in 0..7 {
-      test_subdivided(root_size, 2, root_size / 4, sub_1_false[i].minimum_point(root_size), false, sub_1_false[i].subdivide_array());
+    for i in 0..8u8 {
+      test_subdivided(root_size, 2, root_size / 4, sub_1_false[i].minimum_point(root_size), false, sub_1_false[i].subdivide());
     }
 
     root.set_user_bit();
-    let sub_1_true = root.subdivide_array();
+    let sub_1_true = root.subdivide();
     test_subdivided(root_size, 1, root_size / 2, UVec3::zero(), true, sub_1_true);
-    for i in 0..7 {
-      test_subdivided(root_size, 2, root_size / 4, sub_1_true[i].minimum_point(root_size), true, sub_1_true[i].subdivide_array());
+    for i in 0..8u8 {
+      test_subdivided(root_size, 2, root_size / 4, sub_1_true[i].minimum_point(root_size), true, sub_1_true[i].subdivide());
     }
   }
 

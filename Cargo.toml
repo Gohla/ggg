@@ -36,12 +36,6 @@ incremental = true
 codegen-units = 256
 
 
-# Testing: same as development profile, but with full debug information for our own crates. Very low compile-time.
-[profile.test]
-inherits = "dev"
-debug = true
-
-
 # Debug profile: full debug information, no optimisations. Low compile-time.
 [profile.dbg]
 inherits = "dev"
@@ -61,6 +55,13 @@ overflow-checks = true
 debug-assertions = true
 incremental = true
 codegen-units = 256
+
+
+# Testing: same as debug profile.
+[profile.test]
+inherits = "dbg"
+debug = true
+
 
 
 # Release profile: full optimisations, including full LTO. High compile-time.

@@ -246,10 +246,10 @@ impl<C: ChunkSize, V: Volume> SurfaceNetsJobDependenciesIterator<C, V> {
     let has_x_sibling = neighbor_depths.x != 0;
     let x_sibling_hires = neighbor_depths.x > depth;
     let x_subdivided = x_aabb.map(|aabb| aabb.subdivide());
-    let x_front_aabb = x_subdivided.as_ref().map(|s| s.front_x);
-    let x_front_y_aabb = x_subdivided.as_ref().map(|s| s.front_xy);
-    let x_back_aabb = x_subdivided.as_ref().map(|s| s.back_x);
-    let x_back_y_aabb = x_subdivided.as_ref().map(|s| s.back_xy);
+    let x_front_aabb = x_subdivided.as_ref().map(|s| s.x);
+    let x_front_y_aabb = x_subdivided.as_ref().map(|s| s.xy);
+    let x_back_aabb = x_subdivided.as_ref().map(|s| s.xz);
+    let x_back_y_aabb = x_subdivided.as_ref().map(|s| s.xyz);
     let y_aabb = aabb.sibling_positive_y();
     let has_y_sibling = neighbor_depths.y != 0;
     let z_aabb = aabb.sibling_positive_z();

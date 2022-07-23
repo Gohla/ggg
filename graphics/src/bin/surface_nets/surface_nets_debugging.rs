@@ -63,9 +63,9 @@ impl SurfaceNetsDebugging {
     let surface_nets = SurfaceNets::<C2>::new();
     // Main (lores)
     let r = C2::CELLS_IN_CHUNK_ROW;
-    let main_lores_min = UVec3::zero();
-    self.main_lores.extract_chunk_and_debug_draw(2, main_lores_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
-    // Positive X (hires)
+    let main_min = UVec3::zero();
+    self.main_lores.extract_chunk_and_debug_draw(2, main_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
+    // Positive X neighbor (hires)
     let x = r * 2;
     let x_positive_min = UVec3::new(x, 0, 0);
     self.x_positive.extract_chunk_and_debug_draw(1, x_positive_min, surface_nets, &self.chunk_sample_array, chunk_vertices, debug_renderer);
@@ -79,8 +79,8 @@ impl SurfaceNetsDebugging {
     let surface_nets_lod = SurfaceNetsLod::<C2>::new();
     surface_nets_lod.extract_border_x_hires(
       2,
-      main_lores_min,
-      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(main_lores_min, 2)),
+      main_min,
+      &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(main_min, 2)),
       1,
       x_positive_yz_min,
       &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_yz_min, 1)),
