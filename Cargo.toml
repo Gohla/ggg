@@ -12,6 +12,6 @@ default-members = [
 resolver = "2"
 
 [workspace.dependencies]
-raw-window-handle = "0.5"
-wgpu = "0.18"
+raw-window-handle = "0.6"
+wgpu = "0.19"
 egui = "0.18"

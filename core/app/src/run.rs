@@ -16,9 +16,9 @@ use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
 use gui::Gui;
-use os::context::OsContext;
+use os::context::{OsContext, OsContextCreateError};
 use os::directory::Directories;
-use os::event_sys::{OsEvent, OsEventSys};
+use os::event_sys::{EventSysRunError, OsEvent, OsEventSys};
 use os::input_sys::OsInputSys;
 use os::window::{OsWindow, WindowCreateError};
 
@@ -26,6 +26,8 @@ use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
 
 #[derive(Error, Debug)]
 pub enum CreateError {
+  #[error(transparent)]
+  OsContextCreateFail(#[from] OsContextCreateError),
   #[error(transparent)]
   WindowCreateFail(#[from] WindowCreateError),
   #[error("Failed to create graphics surface")]
@@ -36,6 +38,8 @@ pub enum CreateError {
   RequestDeviceFail(#[from] RequestDeviceError),
   #[error(transparent)]
   ThreadCreateFail(#[from] std::io::Error),
+  #[error(transparent)]
+  EventSysRunFail(#[from] EventSysRunError),
 }
 
 #[profiling::function]
@@ -80,7 +84,7 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
       .init();
   }
 
-  let os_context = OsContext::new();
+  let os_context = OsContext::new()?;
   let window = {
     OsWindow::new(&os_context, options.window_inner_size, options.window_min_inner_size, options.name.clone())?
   };
@@ -97,7 +101,7 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
     ..InstanceDescriptor::default()
   };
   let instance = Instance::new(instance_descriptor);
-  let surface = unsafe { instance.create_surface(os.window.get_inner()) }?;
+  let surface = instance.create_surface(os.window.get_inner())?;
   let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),
@@ -114,17 +118,17 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
     info!("The following features were requested but not supported: {:?}", requested_but_unsupported_features);
   }
   let requested_and_supported_features = options.request_graphics_device_features.intersection(supported_features);
-  let features = options.require_graphics_device_features.union(requested_and_supported_features);
+  let required_features = options.require_graphics_device_features.union(requested_and_supported_features);
 
   let supported_limits = adapter.limits();
-  let limits = options.graphics_device_limits
+  let required_limits = options.graphics_device_limits
     .using_resolution(supported_limits.clone())
     .using_alignment(supported_limits)
     ;
 
   let (device, queue) = adapter.request_device(&DeviceDescriptor {
-    features,
-    limits,
+    required_features,
+    required_limits,
     label: Some("Device"),
     ..DeviceDescriptor::default()
   }, None).await?;
@@ -151,7 +155,7 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
 
   let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
 
-  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, config)?;
+  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, config)
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -171,18 +175,21 @@ fn run_app<A: Application + 'static>(
   os_event_rx: Receiver<OsEvent>,
   os_input_sys: OsInputSys,
   os: Os,
-  gfx: Gfx,
+  gfx: Gfx<'static>,
   gui: Gui,
   screen_size: ScreenSize,
   config: Config<A::Config>,
-) -> Result<!, CreateError> { // Run app loop in a new thread, while Winit takes over the current thread.
+) -> Result<(), CreateError> {
+  // TODO: winit does not take over the thread any more on native
+  // Run app loop in a new thread, while Winit takes over the current thread.
   let app_thread_join_handle = std::thread::Builder::new()
     .name(name)
     .spawn(move || {
       profiling::register_thread!();
       run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, config);
     })?;
-  os_event_sys.run(os_context, app_thread_join_handle);
+  os_event_sys.run(os_context, app_thread_join_handle)?;
+  Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

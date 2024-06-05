@@ -161,7 +161,7 @@ impl Gui {
           MouseButton::Left => Some(PointerButton::Primary),
           MouseButton::Right => Some(PointerButton::Secondary),
           MouseButton::Middle => Some(PointerButton::Middle),
-          MouseButton::Other(_) => None
+          _ => None
         }
       }
       for button in &input.mouse_buttons_pressed {
@@ -189,20 +189,20 @@ impl Gui {
           End => Key::End,
           PageDown => Key::PageDown,
           PageUp => Key::PageUp,
-          Left => Key::ArrowLeft,
-          Up => Key::ArrowUp,
-          Right => Key::ArrowRight,
-          Down => Key::ArrowDown,
-          Back => Key::Backspace,
-          Return => Key::Enter,
+          ArrowLeft => Key::ArrowLeft,
+          ArrowUp => Key::ArrowUp,
+          ArrowRight => Key::ArrowRight,
+          ArrowDown => Key::ArrowDown,
+          Backspace => Key::Backspace,
+          Enter => Key::Enter,
           Tab => Key::Tab,
           Space => Key::Space,
 
-          A => Key::A,
-          K => Key::K,
-          U => Key::U,
-          W => Key::W,
-          Z => Key::Z,
+          KeyA => Key::A,
+          KeyK => Key::K,
+          KeyU => Key::U,
+          KeyW => Key::W,
+          KeyZ => Key::Z,
 
           _ => { return None; }
         })

@@ -364,12 +364,12 @@ impl From<&RawInput> for CameraInput {
       secondary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Right),
       mouse_position_delta: input.mouse_position_delta,
       mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
-      forward_key_down: input.keyboard_buttons.contains(&KeyboardButton::W),
-      left_key_down: input.keyboard_buttons.contains(&KeyboardButton::A),
-      backward_key_down: input.keyboard_buttons.contains(&KeyboardButton::S),
-      right_key_down: input.keyboard_buttons.contains(&KeyboardButton::D),
+      forward_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyW),
+      left_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyA),
+      backward_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyS),
+      right_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyD),
       up_key_down: input.keyboard_buttons.contains(&KeyboardButton::Space),
-      down_key_down: input.keyboard_buttons.contains(&KeyboardButton::C)
+      down_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyC)
     }
   }
 }
@@ -480,7 +480,7 @@ impl CameraDebugging {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("key: ", &mut settings.arcball.keyboard_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_panning_speed, 1.0, 0.0..=f32::INFINITY);
-            let can_reset = settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed 
+            let can_reset = settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed
               || settings.arcball.keyboard_panning_speed != default_settings.arcball.keyboard_panning_speed
               || settings.arcball.debug_gui_panning_speed != default_settings.arcball.debug_gui_panning_speed;
             if ui.reset_button_response(can_reset).clicked() {
