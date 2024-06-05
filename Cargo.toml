@@ -13,5 +13,5 @@ resolver = "2"
 
 [workspace.dependencies]
 raw-window-handle = "0.5"
-wgpu = "0.17"
+wgpu = "0.18"
 egui = "0.18"

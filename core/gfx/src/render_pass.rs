@@ -1,4 +1,4 @@
-use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, TextureView};
+use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, TextureView};
 
 use crate::{Frame, Gfx};
 
@@ -42,7 +42,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
       view: depth_texture_view,
       depth_ops: Some(Operations {
         load: LoadOp::Clear(0.0), // Using "reversed Z", so clearing depth to 0 instead of 1.
-        store: true,
+        store: StoreOp::Store,
       }),
       stencil_ops: None,
     })
@@ -54,6 +54,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
       label: self.label,
       color_attachments: self.color_attachments,
       depth_stencil_attachment: self.depth_stencil_attachment,
+      ..RenderPassDescriptor::default()
     })
   }
 
@@ -77,6 +78,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
         })
       ],
       depth_stencil_attachment: self.depth_stencil_attachment,
+      ..RenderPassDescriptor::default()
     })
   }
 
@@ -89,7 +91,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   /// Ignores the previously set `color_attachments`.
   #[inline]
   pub fn begin_render_pass_for_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, framebuffer: &'a TextureView) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, &framebuffer, None, Operations { load: LoadOp::Load, store: true })
+    self.begin_render_pass_with_color_attachment(encoder, &framebuffer, None, Operations { load: LoadOp::Load, store: StoreOp::Store })
   }
 
   /// Ignores the previously set `color_attachments`.
@@ -101,7 +103,7 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   /// Ignores the previously set `color_attachments`.
   #[inline]
   pub fn begin_render_pass_for_multisampled_swap_chain_with_load(self, encoder: &'a mut CommandEncoder, multisampled_framebuffer: &'a TextureView, framebuffer: &'a TextureView) -> RenderPass<'a> {
-    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&framebuffer), Operations { load: LoadOp::Load, store: true })
+    self.begin_render_pass_with_color_attachment(encoder, multisampled_framebuffer, Some(&framebuffer), Operations { load: LoadOp::Load, store: StoreOp::Store })
   }
 
   /// Ignores the previously set `color_attachments`.
@@ -128,7 +130,11 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   /// Ignores the previously set `color_attachments` and `depth_stencil_attachment` if `gfx` has a `depth_texture`.
   #[inline]
   pub fn begin_render_pass_for_gfx_frame_simple(self, gfx: &'a Gfx, frame: &'a mut Frame, attach_depth_stencil: bool, clear: bool) -> RenderPass<'a> {
-    let ops = if clear { Operations::default() } else { Operations { load: LoadOp::Load, store: true } };
+    let ops = if clear {
+      Operations::default()
+    } else {
+      Operations { load: LoadOp::Load, store: StoreOp::Store }
+    };
     self.begin_render_pass_for_gfx_frame(gfx, frame, attach_depth_stencil, ops)
   }
 
@@ -141,6 +147,6 @@ impl<'a, 'b> RenderPassBuilder<'a, 'b> {
   /// Ignores the previously set `color_attachments` and `depth_stencil_attachment` if `gfx` has a `depth_texture`.
   #[inline]
   pub fn begin_render_pass_for_gfx_frame_with_load(self, gfx: &'a Gfx, frame: &'a mut Frame, attach_depth_stencil: bool) -> RenderPass<'a> {
-    self.begin_render_pass_for_gfx_frame(gfx, frame, attach_depth_stencil, Operations { load: LoadOp::Load, store: true })
+    self.begin_render_pass_for_gfx_frame(gfx, frame, attach_depth_stencil, Operations { load: LoadOp::Load, store: StoreOp::Store })
   }
 }
