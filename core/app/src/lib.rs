@@ -116,7 +116,7 @@ impl Default for Options {
       window_min_inner_size: size,
 
       graphics_backends: Backends::all(),
-      graphics_adapter_power_preference: PowerPreference::LowPower,
+      graphics_adapter_power_preference: PowerPreference::None,
       require_graphics_device_features: Features::empty(),
       request_graphics_device_features: Features::empty(),
       graphics_device_limits: default_limits(),
