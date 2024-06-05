@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 use image::RgbaImage;
 use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BufferAddress, Device, Extent3d, ImageCopyTexture, ImageDataLayout, Origin3d, Queue, ShaderStages, Texture, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
 
@@ -98,9 +96,9 @@ impl<'a> TextureBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_2d_array_size(self, width: u32, height: u32, layer_count: NonZeroU32) -> Self {
+  pub fn with_2d_array_size(self, width: u32, height: u32, layer_count: u32) -> Self {
     self
-      .with_size(Extent3d { width, height, depth_or_array_layers: layer_count.get() })
+      .with_size(Extent3d { width, height, depth_or_array_layers: layer_count })
       .with_dimension(TextureDimension::D2)
       .with_view_dimension(TextureViewDimension::D2Array)
       .with_view_array_layer_count(layer_count)
@@ -157,7 +155,7 @@ impl<'a> TextureBuilder<'a> {
   }
 
   #[inline]
-  pub fn with_view_array_layer_count(mut self, array_layer_count: NonZeroU32) -> Self {
+  pub fn with_view_array_layer_count(mut self, array_layer_count: u32) -> Self {
     self.texture_view_descriptor.array_layer_count = Some(array_layer_count);
     self
   }
@@ -192,7 +190,7 @@ impl<'a> TextureBuilder<'a> {
 
 impl<'a> GfxTexture {
   #[inline]
-  pub fn write_texture_data(&self, queue: &Queue, data: &[u8], offset: BufferAddress, bytes_per_row: Option<NonZeroU32>, rows_per_image: Option<NonZeroU32>, size: Extent3d) {
+  pub fn write_texture_data(&self, queue: &Queue, data: &[u8], offset: BufferAddress, bytes_per_row: Option<u32>, rows_per_image: Option<u32>, size: Extent3d) {
     queue.write_texture(
       ImageCopyTexture {
         texture: &self.texture,
@@ -211,13 +209,13 @@ impl<'a> GfxTexture {
   }
 
   #[inline]
-  pub fn write_whole_texture_data(&self, queue: &Queue, data: &[u8], bytes_per_row: Option<NonZeroU32>, rows_per_image: Option<NonZeroU32>) {
+  pub fn write_whole_texture_data(&self, queue: &Queue, data: &[u8], bytes_per_row: Option<u32>, rows_per_image: Option<u32>) {
     self.write_texture_data(queue, data, 0, bytes_per_row, rows_per_image, self.size);
   }
 
   #[inline]
   pub fn write_2d_rgba_texture_data(&self, queue: &Queue, data: &[u8]) {
-    self.write_whole_texture_data(queue, data, NonZeroU32::new(4 * self.size.width), None);
+    self.write_whole_texture_data(queue, data, Some(4 * self.size.width), None);
   }
 
   #[inline]

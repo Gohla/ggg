@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::mem::size_of;
-use std::num::NonZeroU32;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
@@ -46,7 +45,7 @@ impl Gui {
     if let Some(memory) = memory {
       *context.memory() = memory;
     }
-    
+
     let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
     let fragment_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
     let uniform_buffer = BufferBuilder::new()
@@ -102,7 +101,7 @@ impl Gui {
       .with_layout_label("GUI pipeline layout")
       .with_label("GUI render pipeline")
       .build(device);
-    
+
     Self {
       context,
       input: EguiRawInput::default(),
@@ -435,7 +434,7 @@ impl Gui {
       };
       let image_data_layout = ImageDataLayout {
         offset: 0,
-        bytes_per_row: NonZeroU32::new(4 * image_size.width),
+        bytes_per_row: Some(4 * image_size.width),
         rows_per_image: None,
       };
       let label_base = match texture_id {

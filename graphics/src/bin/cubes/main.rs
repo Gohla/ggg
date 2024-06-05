@@ -29,7 +29,7 @@ const CUBE_INDICES: [u32; NUM_CUBE_INDICES] = [
   0, 4, 6, 0, 6, 2,
 ];
 
-const MAX_INSTANCES: usize = 7_500_000;
+const MAX_INSTANCES: usize = 3_500_000;
 const MAX_INDICES: usize = MAX_INSTANCES * NUM_CUBE_INDICES;
 
 #[repr(C)]

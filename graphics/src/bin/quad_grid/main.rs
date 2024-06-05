@@ -111,7 +111,7 @@ impl app::Application for QuadGrid {
       "Quad grid array texture sampler",
       "Quad grid array texture bind group layout",
       "Quad grid array texture bind group",
-    ).unwrap();
+    );
 
     let mut rng = SmallRng::seed_from_u64(101702198783735);
     let instance_buffer = {
