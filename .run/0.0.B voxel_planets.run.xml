@@ -1,17 +1,17 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="1.T voxel" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="test --package voxel" />
+  <configuration default="false" name="0.0.B voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="build --bin voxel_planets" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-    <option name="channel" value="DEFAULT" />
-    <option name="requiredFeatures" value="false" />
-    <option name="allFeatures" value="false" />
-    <option name="emulateTerminal" value="false" />
-    <option name="withSudo" value="false" />
-    <option name="buildTarget" value="REMOTE" />
-    <option name="backtrace" value="FULL" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />
     </envs>
+    <option name="emulateTerminal" value="false" />
+    <option name="channel" value="DEFAULT" />
+    <option name="requiredFeatures" value="false" />
+    <option name="allFeatures" value="false" />
+    <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
+    <option name="backtrace" value="SHORT" />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">

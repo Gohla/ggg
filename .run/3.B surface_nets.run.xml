@@ -1,17 +1,17 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="D surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
-    <option name="command" value="run --package graphics --bin surface_nets --profile=dbg" />
+  <configuration default="false" name="3.B surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="build --bin surface_nets" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-    <option name="channel" value="DEFAULT" />
-    <option name="requiredFeatures" value="false" />
-    <option name="allFeatures" value="false" />
-    <option name="emulateTerminal" value="false" />
-    <option name="withSudo" value="false" />
-    <option name="buildTarget" value="REMOTE" />
-    <option name="backtrace" value="SHORT" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />
     </envs>
+    <option name="emulateTerminal" value="false" />
+    <option name="channel" value="DEFAULT" />
+    <option name="requiredFeatures" value="false" />
+    <option name="allFeatures" value="false" />
+    <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
+    <option name="backtrace" value="SHORT" />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">
