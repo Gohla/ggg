@@ -11,9 +11,9 @@ common = { path = "../common" }
 gfx = { path = "../gfx" }
 gui_widget = { path = "../gui_widget" }
 job_queue = { path = "../job_queue" }
-simdnoise = { git = "https://github.com/jackmott/rust-simd-noise.git", branch = "master" }
-wgpu = { version = "0.13", features = ["spirv"] }
-egui = "0.18"
+simdnoise = "3"
+wgpu = { workspace = true, features = ["spirv"] }
+egui = { workspace = true }
 ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
 bytemuck = { version = "1.5", features = ["derive"] }
 flagset = "0.4"

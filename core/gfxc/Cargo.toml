@@ -6,6 +6,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-shaderc = "=0.7.3"
-shaderc-sys = "=0.7.3"
+shaderc = "0.8"
+shaderc-sys = "0.8"
 walkdir = "2.3"

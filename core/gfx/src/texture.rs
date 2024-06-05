@@ -20,13 +20,14 @@ impl<'a> TextureBuilder<'a> {
   pub fn new() -> Self {
     Self {
       texture_descriptor: TextureDescriptor {
+        label: None,
         size: Extent3d::default(),
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-        label: None,
+        view_formats: &[],
       },
       texture_view_descriptor: TextureViewDescriptor::default(),
     }

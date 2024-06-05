@@ -7,9 +7,9 @@ publish = false
 
 [dependencies]
 common = { path = "../../core/common" }
-wgpu = "0.13"
-raw-window-handle = "0.4"
-egui = { version = "0.18", optional = true }
+raw-window-handle = { workspace = true }
+wgpu = { workspace = true }
+egui = { workspace = true, optional = true }
 gui_widget = { path = "../../core/gui_widget", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 image = { version = "0.23", default-features = false }

@@ -7,7 +7,7 @@ use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
-use wgpu::{DeviceDescriptor, Instance, RequestAdapterOptions, RequestDeviceError, SurfaceError};
+use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, SurfaceError};
 
 use common::screen::ScreenSize;
 use common::timing::{Duration, FrameTimer, TickTimer, TimingStats};
@@ -28,6 +28,8 @@ use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
 pub enum CreateError {
   #[error(transparent)]
   WindowCreateFail(#[from] WindowCreateError),
+  #[error("Failed to create graphics surface")]
+  CreateSurfaceFail(#[from] CreateSurfaceError),
   #[error("Failed to request graphics adapter because no adapters were found that meet the required options")]
   AdapterRequestFail,
   #[error("Failed to request graphics device because no adapters were found that meet the required options")]
@@ -90,8 +92,12 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
   };
   let os = Os { window, directories };
 
-  let instance = Instance::new(options.graphics_backends);
-  let surface = unsafe { instance.create_surface(os.window.get_inner()) };
+  let instance_descriptor = InstanceDescriptor {
+    backends: options.graphics_backends,
+    ..InstanceDescriptor::default()
+  };
+  let instance = Instance::new(instance_descriptor);
+  let surface = unsafe { instance.create_surface(os.window.get_inner()) }?;
   let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),

@@ -12,8 +12,8 @@ gfx = { path = "../core/gfx" }
 gui_widget = { path = "../core/gui_widget" }
 app = { path = "../core/app" }
 voxel = { path = "../core/voxel" }
-wgpu = { version = "0.13", features = ["spirv"] }
-egui = "0.18"
+wgpu = { workspace = true, features = ["spirv"] }
+egui = { workspace = true }
 image = { version = "0.23", default-features = false, features = ["bmp", "png"] }
 rand = { version = "0.8", default-features = false, features = ["small_rng"] }
 ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }

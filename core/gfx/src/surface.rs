@@ -1,4 +1,4 @@
-use wgpu::{Adapter, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat};
+use wgpu::{Adapter, CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat};
 
 use common::screen::ScreenSize;
 
@@ -17,7 +17,7 @@ impl GfxSurface {
   }
 
   pub fn new_with_defaults(surface: Surface, adapter: &Adapter, device: &Device, size: ScreenSize) -> GfxSurface {
-    Self::new(surface, adapter, device, wgpu::PresentMode::Mailbox, size)
+    Self::new(surface, adapter, device, PresentMode::Mailbox, size)
   }
 
 
@@ -36,13 +36,16 @@ impl GfxSurface {
 
 
   fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, size: ScreenSize) -> SurfaceConfiguration {
+    let capabilities = surface.get_capabilities(adapter);
     SurfaceConfiguration {
       usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-      format: *surface.get_supported_formats(adapter).get(0)
-        .unwrap_or_else(|| panic!("Surface is incompatible with the adapter")),
+      format: *capabilities.formats.get(0)
+        .unwrap_or_else(|| panic!("No supported formats; surface is incompatible with the adapter")),
       width: size.physical.width as u32,
       height: size.physical.height as u32,
-      present_mode,
+      present_mode, // TODO: check against capabilities?
+      alpha_mode: CompositeAlphaMode::Auto,
+      view_formats: vec![],
     }
   }
 }

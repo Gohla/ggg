@@ -9,8 +9,8 @@ publish = false
 common = { path = "../../core/common" }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
-egui = { version = "0.18", features = ["bytemuck"] }
-wgpu = "0.13"
+egui = { workspace = true, features = ["bytemuck"] }
+wgpu = { workspace = true }
 bytemuck = { version = "1.5", features = ["derive"] }
 thiserror = "1"
 profiling = "1"

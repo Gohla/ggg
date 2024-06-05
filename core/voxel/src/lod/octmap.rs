@@ -78,7 +78,7 @@ impl<C: ChunkSize, V: Volume, E: LodExtractor<C>> LodOctmap<C, V, E> {
     settings.check();
     let root_size = settings.root_size;
     let lod_0_step = root_size / C::CELLS_IN_CHUNK_ROW;
-    let max_depth = lod_0_step.log2() as u8;
+    let max_depth = lod_0_step.ilog2() as u8;
     Self {
       root_size,
       lod_factor: settings.lod_factor,

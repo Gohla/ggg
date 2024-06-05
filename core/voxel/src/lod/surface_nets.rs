@@ -109,7 +109,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
       panic!("Missing regular sample dependency output");
     }
     let chunk_samples = chunk_samples.unwrap();
-    if let LodJobOutput::Sample(chunk_samples) = chunk_samples.borrow() {
+    if let LodJobOutput::Sample(chunk_samples) = chunk_samples {
       // Extract
       let aabb = input.aabb;
       let min = aabb.minimum_point();
@@ -125,12 +125,7 @@ impl<C: ChunkSize> LodExtractor<C> for SurfaceNetsExtractor<C> {
         , Some(LodJobOutput::Sample(chunk_samples_x_front_y))
         , Some(LodJobOutput::Sample(chunk_samples_x_back))
         , Some(LodJobOutput::Sample(chunk_samples_x_back_y))
-      ) = (
-        chunk_samples_x_front.map(|s| s.borrow())
-        , chunk_samples_x_front_y.map(|s| s.borrow())
-        , chunk_samples_x_back.map(|s| s.borrow())
-        , chunk_samples_x_back_y.map(|s| s.borrow())
-      ) {
+      ) = (chunk_samples_x_front, chunk_samples_x_front_y, chunk_samples_x_back, chunk_samples_x_back_y) {
         let x_subdivided = aabb.sibling_positive_x().map(|aabb| aabb.subdivide_array());
         let min_x_front = x_subdivided.map(|subdivided| subdivided[1].minimum_point(aabb.root_size)).unwrap();
         let min_x_front_y = x_subdivided.map(|subdivided| subdivided[3].minimum_point(aabb.root_size)).unwrap();
@@ -290,37 +285,37 @@ impl<C: ChunkSize, V: Volume> Iterator for SurfaceNetsJobDependenciesIterator<C,
   fn next(&mut self) -> Option<Self::Item> {
     use SampleKind::*;
     if let Some(aabb) = self.regular_aabb.take() {
-      return Some((Regular, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((Regular, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.x_aabb.take() {
-      return Some((X, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((X, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.x_front_aabb.take() {
-      return Some((XFront, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XFront, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.x_front_y_aabb.take() {
-      return Some((XFrontY, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XFrontY, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.x_back_aabb.take() {
-      return Some((XBack, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XBack, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.x_back_y_aabb.take() {
-      return Some((XBackY, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XBackY, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.y_aabb.take() {
-      return Some((Y, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((Y, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.z_aabb.take() {
-      return Some((Z, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((Z, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.xy_aabb.take() {
-      return Some((XY, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XY, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.yz_aabb.take() {
-      return Some((YZ, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((YZ, LodJob::new_sample(aabb, self.volume.clone())));
     }
     if let Some(aabb) = self.xz_aabb.take() {
-      return Some((XZ, LodJob::new_sample(aabb, self.volume.clone())))
+      return Some((XZ, LodJob::new_sample(aabb, self.volume.clone())));
     }
     None
   }
