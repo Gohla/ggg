@@ -16,6 +16,7 @@ raw-window-handle = "0.6"
 wgpu = "0.19"
 egui = "0.18"
 ultraviolet = "0.9"
+image = { version = "0.25", default-features = false }
 bytemuck = "1"
 serde = "1"
 tracing = "0.1"

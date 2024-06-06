@@ -14,7 +14,7 @@ app = { path = "../core/app" }
 voxel = { path = "../core/voxel" }
 wgpu = { workspace = true, features = ["spirv"] }
 egui = { workspace = true }
-image = { version = "0.23", default-features = false, features = ["bmp", "png"] }
+image = { workspace = true, default-features = false, features = ["bmp", "png"] }
 rand = { version = "0.8", default-features = false, features = ["small_rng"] }
 ultraviolet = { workspace = true, features = ["bytemuck", "int"] }
 bytemuck = { workspace = true, features = ["derive"] }

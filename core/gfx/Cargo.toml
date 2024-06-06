@@ -11,7 +11,7 @@ wgpu = { workspace = true }
 egui = { workspace = true, optional = true }
 gui_widget = { path = "../../core/gui_widget", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-image = { version = "0.23", default-features = false }
+image = { workspace = true, default-features = false }
 ultraviolet.workspace = true
 bytemuck.workspace = true
 thiserror.workspace = true
