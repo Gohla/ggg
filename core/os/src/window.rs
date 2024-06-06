@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 use winit::error::OsError;
-use winit::window::WindowBuilder;
+use winit::window::WindowAttributes;
 
 use common::screen::{LogicalSize, ScreenSize};
 
@@ -26,11 +26,11 @@ impl Window {
     min_inner_size: LogicalSize,
     title: S,
   ) -> Result<Self, WindowCreateError> {
-    let window = WindowBuilder::new()
+    let window_attributes = WindowAttributes::default()
       .with_inner_size(inner_size.into_winit())
       .with_min_inner_size(min_inner_size.into_winit())
-      .with_title(title)
-      .build(&os_context.event_loop)?;
+      .with_title(title);
+    let window = os_context.event_loop.create_window(window_attributes)?;
 
     #[cfg(target_arch = "wasm32")] {
       use winit::platform::web::WindowExtWebSys;
@@ -56,7 +56,8 @@ impl Window {
       closure.forget();
     }
 
-    Ok(Self { window: Arc::new(window) })
+    let window = Arc::new(window);
+    Ok(Self { window })
   }
 
   #[inline]

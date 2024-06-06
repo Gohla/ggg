@@ -6,7 +6,7 @@ use tracing::debug;
 use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 use winit::error::EventLoopError;
 use winit::event::{ElementState as WinitElementState, Event as WinitEvent, KeyEvent, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent};
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{ModifiersState, PhysicalKey};
 use winit::window::WindowId;
 
@@ -139,16 +139,16 @@ impl EventLoopRunner {
 
 impl EventLoopHandler {
   /// Run one cycle of the event loop, handling exits out of the event loop.
-  fn event_cycle_handle_exit(&mut self, event: WinitEvent<()>, target: &EventLoopWindowTarget<()>) {
-    if let Err(Exit) = self.event_cycle(event, target) {
+  fn event_cycle_handle_exit(&mut self, event: WinitEvent<()>, event_loop: &ActiveEventLoop) {
+    if let Err(Exit) = self.event_cycle(event, event_loop) {
       // Exit the event loop if sending a message fails.
-      target.exit()
+      event_loop.exit()
     }
     if let Some(join_handle) = &self.app_thread_join_handle {
       // If the application thread has finished, also exit the event loop. This additional check is required because
       // not all events result in sending a message, thus the above error would never be triggered.
       if join_handle.is_finished() {
-        target.exit();
+        event_loop.exit();
       }
     }
   }
@@ -158,7 +158,7 @@ impl EventLoopHandler {
   /// Returns `Err(Exit)` if sending a message to the application fails due to the receiver end being dropped,
   /// indicating that the application is exiting.
   #[profiling::function]
-  fn event_cycle(&mut self, event: WinitEvent<()>, target: &EventLoopWindowTarget<()>) -> Result<(), Exit> {
+  fn event_cycle(&mut self, event: WinitEvent<()>, event_loop: &ActiveEventLoop) -> Result<(), Exit> {
     match event {
       WinitEvent::WindowEvent { event, window_id, .. } if window_id == self.window_id => {
         match event {
@@ -252,7 +252,7 @@ impl EventLoopHandler {
             self.modifiers = modifiers.state();
           }
           WindowEvent::CloseRequested => {
-            target.exit();
+            event_loop.exit();
             self.event_tx.send(Event::TerminateRequested)?;
           }
           WindowEvent::Resized(inner_size) => {
