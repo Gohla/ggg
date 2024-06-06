@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 common = { path = "../common" }
 profiling.workspace = true
-tracy-client = { version = "0.13", optional = true }
+tracy-client = { version = "0.17", optional = true }
 dotenvy = "0.15"
 dotenvy_macro = "0.15"
 directories = "5"
