@@ -14,7 +14,7 @@ gui_widget = { path = "../gui_widget" }
 raw-window-handle.workspace = true
 wgpu.workspace = true
 egui = { workspace = true, features = ["persistence"] }
-pollster = "0.2"
+pollster = "0.3"
 serde = { workspace = true, features = ["derive"] }
 ron = "0.7"
 thiserror.workspace = true
