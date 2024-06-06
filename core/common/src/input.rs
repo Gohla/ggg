@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::screen::{ScreenDelta, ScreenPosition};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Default, Clone, Debug)]
 pub struct RawInput {
   pub mouse_buttons: HashSet<MouseButton>,
   pub mouse_buttons_pressed: HashSet<MouseButton>,
@@ -89,6 +89,13 @@ impl RawInput {
   }
 }
 
+
+/// Describes a button of a mouse controller.
+///
+/// ## Platform-specific
+///
+/// **macOS:** `Back` and `Forward` might not work with all hardware.
+/// **Orbital:** `Back` and `Forward` are unsupported due to orbital not supporting them.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum MouseButton {
   Left,
@@ -99,6 +106,23 @@ pub enum MouseButton {
   Other(u16),
 }
 
+#[cfg(feature = "winit")]
+impl From<winit::event::MouseButton> for MouseButton {
+  #[inline]
+  fn from(button: winit::event::MouseButton) -> Self {
+    use winit::event::MouseButton::*;
+    match button {
+      Left => Self::Left,
+      Right => Self::Right,
+      Middle => Self::Middle,
+      Back => Self::Back,
+      Forward => Self::Forward,
+      Other(b) => Self::Other(b),
+    }
+  }
+}
+
+
 #[derive(Copy, Clone, Default, PartialOrd, PartialEq, Debug)]
 pub struct MouseWheelDelta {
   pub horizontal: f64,
@@ -107,11 +131,12 @@ pub struct MouseWheelDelta {
 
 impl MouseWheelDelta {
   #[inline]
-  pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { horizontal: x, vertical: y } }
+  pub fn new(x: f64, y: f64) -> Self { Self { horizontal: x, vertical: y } }
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.horizontal != 0.0 && self.vertical == 0.0 }
 }
+
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum KeyboardModifier {
@@ -122,7 +147,7 @@ pub enum KeyboardModifier {
 }
 
 /// Symbolic name for a keyboard key.
-#[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum KeyboardButton {
   /// <kbd>`</kbd> on a US keyboard. This is also called a backtick or grave.
   /// This is the <kbd>半角</kbd>/<kbd>全角</kbd>/<kbd>漢字</kbd>
@@ -565,4 +590,12 @@ pub enum KeyboardButton {
   F34,
   /// General-purpose function key.
   F35,
+}
+
+#[cfg(feature = "winit")]
+impl From<winit::keyboard::KeyCode> for KeyboardButton {
+  #[inline]
+  fn from(key_code: winit::keyboard::KeyCode) -> Self {
+    unsafe { std::mem::transmute(key_code) }
+  }
 }

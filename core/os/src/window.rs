@@ -8,7 +8,6 @@ use winit::window::WindowAttributes;
 use common::screen::{LogicalSize, ScreenSize};
 
 use crate::context::Context;
-use crate::screen_ext::*;
 
 #[derive(Debug)]
 pub struct Window {
@@ -27,8 +26,8 @@ impl Window {
     title: S,
   ) -> Result<Self, WindowCreateError> {
     let window_attributes = WindowAttributes::default()
-      .with_inner_size(inner_size.into_winit())
-      .with_min_inner_size(min_inner_size.into_winit())
+      .with_inner_size(inner_size)
+      .with_min_inner_size(min_inner_size)
       .with_title(title);
     let window = os_context.event_loop.create_window(window_attributes)?;
 
@@ -69,11 +68,9 @@ impl Window {
     self.window.clone()
   }
 
-
+  #[inline]
   pub fn get_inner_size(&self) -> ScreenSize {
-    let physical_size: (u32, u32) = self.window.inner_size().into();
-    let scale = self.window.scale_factor();
-    ScreenSize::from_physical_scale(physical_size, scale)
+    ScreenSize::from_physical_scale(self.window.inner_size(), self.window.scale_factor())
   }
 }
 

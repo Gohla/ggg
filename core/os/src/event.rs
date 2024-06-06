@@ -6,7 +6,7 @@ use tracing::debug;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 use winit::error::EventLoopError;
-use winit::event::{ElementState as WinitElementState, KeyEvent, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{KeyEvent, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{ModifiersState, PhysicalKey};
 use winit::window::WindowId;
@@ -15,10 +15,9 @@ use common::input::{KeyboardButton, KeyboardModifier, MouseButton};
 use common::screen::{ScreenDelta, ScreenPosition, ScreenSize};
 
 use crate::context::Context;
-use crate::screen_ext::*;
 use crate::window::Window;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub enum InputEvent {
   MouseInput { button: MouseButton, state: ElementState },
   MouseMoved(ScreenPosition),
@@ -29,7 +28,7 @@ pub enum InputEvent {
   CharacterInput(char),
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub enum Event {
   TerminateRequested,
   MouseEnteredWindow,
@@ -37,7 +36,7 @@ pub enum Event {
   WindowResized(ScreenSize),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum ElementState {
   Pressed,
   Released,
@@ -182,18 +181,10 @@ impl EventLoopHandler {
   fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) -> Result<(), Exit> {
     match event {
       WindowEvent::MouseInput { state, button, .. } => {
-        let button = match button {
-          WinitMouseButton::Left => MouseButton::Left,
-          WinitMouseButton::Right => MouseButton::Right,
-          WinitMouseButton::Middle => MouseButton::Middle,
-          WinitMouseButton::Back => MouseButton::Back,
-          WinitMouseButton::Forward => MouseButton::Forward,
-          WinitMouseButton::Other(b) => MouseButton::Other(b),
-        };
-        self.input_event_tx.send(InputEvent::MouseInput { button, state: state.into() })?;
+        self.input_event_tx.send(InputEvent::MouseInput { button: button.into(), state: state.into() })?;
       }
       WindowEvent::CursorMoved { position, .. } => {
-        let screen_position = ScreenPosition::from_physical_scale(position.into_common(), self.window_inner_size.scale);
+        let screen_position = ScreenPosition::from_physical_scale(position, self.window_inner_size.scale);
         self.input_event_tx.send(InputEvent::MouseMoved(screen_position))?;
       }
       WindowEvent::CursorEntered { .. } => {
@@ -218,9 +209,7 @@ impl EventLoopHandler {
       WindowEvent::KeyboardInput { event: KeyEvent { physical_key, text, state, .. }, .. } => {
         match physical_key {
           PhysicalKey::Code(key_code) => {
-            let button: KeyboardButton = unsafe { std::mem::transmute(key_code) };
-            let state = state.into();
-            self.input_event_tx.send(InputEvent::KeyboardInput { button, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardInput { button: key_code.into(), state: state.into() })?;
           }
           PhysicalKey::Unidentified(native_key_code) => {
             debug!("Received unidentified native key code: {:?}", native_key_code);
@@ -275,7 +264,7 @@ impl EventLoopHandler {
         self.event_tx.send(Event::TerminateRequested)?;
       }
       WindowEvent::Resized(inner_size) => {
-        self.window_inner_size = ScreenSize::from_physical_scale(inner_size.into_common(), self.window_inner_size.scale);
+        self.window_inner_size = ScreenSize::from_physical_scale(inner_size, self.window_inner_size.scale);
         self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
       }
       WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
@@ -288,11 +277,13 @@ impl EventLoopHandler {
   }
 }
 
-impl From<WinitElementState> for ElementState {
-  fn from(element_state: WinitElementState) -> Self {
+impl From<winit::event::ElementState> for ElementState {
+  #[inline]
+  fn from(element_state: winit::event::ElementState) -> Self {
+    use winit::event::ElementState::*;
     match element_state {
-      WinitElementState::Pressed => ElementState::Pressed,
-      WinitElementState::Released => ElementState::Released,
+      Pressed => Self::Pressed,
+      Released => Self::Released,
     }
   }
 }

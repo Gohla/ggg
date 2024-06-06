@@ -2,10 +2,7 @@
 
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-//
-// Scale (DPI) factor.
-//
-
+/// Scale (DPI) factor.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Scale(f64);
@@ -25,59 +22,57 @@ impl Scale {
 
 impl Mul<Scale> for f64 {
   type Output = f64;
-
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self * rhs.0 }
 }
 
 impl Div<Scale> for f64 {
   type Output = f64;
-
   #[inline]
   fn div(self, rhs: Scale) -> f64 { self / rhs.0 }
 }
 
 impl Mul<Scale> for u64 {
   type Output = f64;
-
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
 
 impl Div<Scale> for u64 {
   type Output = f64;
-
   #[inline]
   fn div(self, rhs: Scale) -> f64 { self as f64 / rhs.0 }
 }
 
 impl Mul<Scale> for i64 {
   type Output = f64;
-
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
 
 impl Div<Scale> for i64 {
   type Output = f64;
-
   #[inline]
   fn div(self, rhs: Scale) -> f64 { self as f64 / rhs.0 }
 }
 
 impl From<f64> for Scale {
+  #[inline]
   fn from(scale: f64) -> Self { Scale(scale) }
 }
 
 impl From<u64> for Scale {
+  #[inline]
   fn from(scale: u64) -> Self { Scale(scale as _) }
 }
 
 impl From<f32> for Scale {
+  #[inline]
   fn from(scale: f32) -> Self { Scale(scale as _) }
 }
 
 impl From<u32> for Scale {
+  #[inline]
   fn from(scale: u32) -> Self { Scale(scale as _) }
 }
 
@@ -96,8 +91,7 @@ impl Default for Scale {
 // Size
 //
 
-// Physical size: size in physical (real) pixels on the device.
-
+/// Physical size: size in physical (real) pixels on the device.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalSize {
@@ -109,7 +103,7 @@ impl PhysicalSize {
   #[inline]
   pub fn new(width: u64, height: u64) -> Self { Self { width, height } }
 
-  /// Loss of precision in physical size: conversion from f64 into u32.
+  /// Note: loss of precision in physical size: conversion from f64 into u32.
   #[inline]
   pub fn from_logical<L: Into<LogicalSize>, S: Into<Scale>>(logical: L, scale: S) -> Self { logical.into().into_physical(scale) }
 
@@ -167,9 +161,34 @@ impl From<PhysicalSize> for [f64; 2] {
   fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
 }
 
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalSize<P>> for PhysicalSize {
+  #[inline]
+  fn from(size: winit::dpi::PhysicalSize<P>) -> Self {
+    let size: (u32, u32) = size.into();
+    Self::from(size)
+  }
+}
 
-// Logical size: size after scaling. That is, the physical size divided by the scale factor.
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> Into<winit::dpi::PhysicalSize<P>> for PhysicalSize {
+  #[inline]
+  fn into(self) -> winit::dpi::PhysicalSize<P> {
+    // Note: loss of precision: conversion from u64 into u32.
+    winit::dpi::PhysicalSize::from((self.width as u32, self.height as u32))
+  }
+}
+#[cfg(feature = "winit")]
+impl Into<winit::dpi::Size> for PhysicalSize {
+  #[inline]
+  fn into(self) -> winit::dpi::Size {
+    // Note: loss of precision: conversion from u64 into u32.
+    winit::dpi::Size::Physical(self.into())
+  }
+}
 
+
+/// Logical size: size after scaling. That is, the physical size divided by the scale factor.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -191,7 +210,9 @@ impl LogicalSize {
   }
 
   #[inline]
-  pub fn from_physical<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
+  pub fn from_physical<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self {
+    physical.into().into_logical(scale)
+  }
 
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalSize {
@@ -254,9 +275,33 @@ impl From<LogicalSize> for [f64; 2] {
   fn from(l: LogicalSize) -> Self { [l.width, l.height] }
 }
 
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalSize<P>> for LogicalSize {
+  #[inline]
+  fn from(size: winit::dpi::LogicalSize<P>) -> Self {
+    let size: (f64, f64) = size.into();
+    Self::from(size)
+  }
+}
 
-// Screen size: combination of physical size, scale, and logical size.
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> Into<winit::dpi::LogicalSize<P>> for LogicalSize {
+  #[inline]
+  fn into(self) -> winit::dpi::LogicalSize<P> {
+    let size: (f64, f64) = self.into();
+    winit::dpi::LogicalSize::from(size)
+  }
+}
+#[cfg(feature = "winit")]
+impl Into<winit::dpi::Size> for LogicalSize {
+  #[inline]
+  fn into(self) -> winit::dpi::Size {
+    winit::dpi::Size::Logical(self.into())
+  }
+}
 
+
+/// Screen size: combination of physical size, scale, and logical size.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenSize {
@@ -318,8 +363,7 @@ impl From<ScreenSize> for Scale {
 // Position
 //
 
-// Position in physical screen space.
-
+/// Position in physical screen space.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalPosition {
@@ -332,7 +376,9 @@ impl PhysicalPosition {
   pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
   #[inline]
-  pub fn from_logical<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self { logical.into().into_physical(scale) }
+  pub fn from_logical<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self {
+    logical.into().into_physical(scale)
+  }
 
   #[inline]
   pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalPosition {
@@ -411,8 +457,26 @@ impl From<PhysicalPosition> for [f64; 2] {
   fn from(p: PhysicalPosition) -> Self { [p.x as _, p.y as _] }
 }
 
-// Position in logical screen space.
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalPosition<P>> for PhysicalPosition {
+  #[inline]
+  fn from(position: winit::dpi::PhysicalPosition<P>) -> Self {
+    let position: (i32, i32) = position.into();
+    Self::from(position)
+  }
+}
 
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> Into<winit::dpi::PhysicalPosition<P>> for PhysicalPosition {
+  #[inline]
+  fn into(self) -> winit::dpi::PhysicalPosition<P> {
+    // Note: loss of precision in physical position: conversion from i64 into i32.
+    winit::dpi::PhysicalPosition::from((self.x as i32, self.y as i32))
+  }
+}
+
+
+/// Position in logical screen space.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -434,7 +498,7 @@ impl LogicalPosition {
   #[inline]
   pub fn from_physical<P: Into<PhysicalPosition>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
 
-  /// Loss of precision in physical position: conversion from f64 into i32.
+  /// Note: loss of precision in physical position: conversion from f64 into i32.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalPosition {
     let scale = scale.into();
@@ -512,9 +576,26 @@ impl From<LogicalPosition> for [f64; 2] {
   fn from(l: LogicalPosition) -> Self { [l.x, l.y] }
 }
 
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalPosition<P>> for LogicalPosition {
+  #[inline]
+  fn from(position: winit::dpi::LogicalPosition<P>) -> Self {
+    let position: (f64, f64) = position.into();
+    Self::from(position)
+  }
+}
 
-// Screen position: combination of physical position, scale, and logical position.
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> Into<winit::dpi::LogicalPosition<P>> for LogicalPosition {
+  #[inline]
+  fn into(self) -> winit::dpi::LogicalPosition<P> {
+    let position: (f64, f64) = self.into();
+    winit::dpi::LogicalPosition::from(position)
+  }
+}
 
+
+/// Screen position: combination of physical and logical position.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenPosition {
@@ -595,8 +676,7 @@ impl From<ScreenPosition> for PhysicalPosition {
 // Delta
 //
 
-// Delta in physical screen space.
-
+/// Delta in physical screen space.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalDelta {
@@ -671,8 +751,7 @@ impl From<PhysicalDelta> for [i64; 2] {
 }
 
 
-// Delta in logical screen space.
-
+/// Delta in logical screen space.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -763,8 +842,7 @@ impl From<LogicalDelta> for [f64; 2] {
 }
 
 
-// Screen delta: combination of physical delta, scale, and logical delta.
-
+/// Screen delta: combination of physical and logical delta.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ScreenDelta {
