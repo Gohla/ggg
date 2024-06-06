@@ -3,9 +3,10 @@ use std::thread::JoinHandle;
 
 use thiserror::Error;
 use tracing::debug;
+use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 use winit::error::EventLoopError;
-use winit::event::{ElementState as WinitElementState, Event as WinitEvent, KeyEvent, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState as WinitElementState, KeyEvent, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{ModifiersState, PhysicalKey};
 use winit::window::WindowId;
@@ -111,9 +112,7 @@ impl EventLoopRunner {
   #[cfg(not(target_arch = "wasm32"))]
   pub fn run(mut self, app_thread_join_handle: JoinHandle<()>) -> Result<(), EventLoopRunError> {
     self.event_handler.app_thread_join_handle = Some(app_thread_join_handle);
-    self.context.event_loop.run(move |event, target| {
-      self.event_handler.event_cycle_handle_exit(event, target);
-    })?;
+    self.context.event_loop.run_app(&mut self.event_handler)?;
     Ok(())
   }
 
@@ -137,146 +136,154 @@ impl EventLoopRunner {
 
 // Event loop cycle
 
-impl EventLoopHandler {
-  /// Run one cycle of the event loop, handling exits out of the event loop.
-  fn event_cycle_handle_exit(&mut self, event: WinitEvent<()>, event_loop: &ActiveEventLoop) {
-    if let Err(Exit) = self.event_cycle(event, event_loop) {
-      // Exit the event loop if sending a message fails.
-      event_loop.exit()
-    }
-    if let Some(join_handle) = &self.app_thread_join_handle {
-      // If the application thread has finished, also exit the event loop. This additional check is required because
-      // not all events result in sending a message, thus the above error would never be triggered.
-      if join_handle.is_finished() {
-        event_loop.exit();
+impl ApplicationHandler for EventLoopHandler {
+  fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
+
+  fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+    if window_id == self.window_id {
+      if let Err(Exit) = self.handle_window_event(event_loop, event) {
+        // Exit the event loop if sending a message fails.
+        event_loop.exit()
       }
     }
   }
 
-  /// Run one cycle of the event loop.
+  fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    if let Some(join_handle) = &self.app_thread_join_handle {
+      // If the application thread has finished, also exit the event loop. This additional check is required because:
+      // - Not all window events result in sending a message, thus the error in `window_event` would not be triggered.
+      // - The application thread may have finished, but no window events are being raised, so `window_event` would not
+      //   be called.
+      if join_handle.is_finished() {
+        event_loop.exit();
+      }
+
+      // TODO: `about_to_wait` may not even be called even when the application thread has finished. A user-event should
+      //       be sent from the application thread to this event loop when the application thread finishes.
+    }
+  }
+
+  fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+    let join_handle = self.app_thread_join_handle.take();
+    if let Some(join_handle) = join_handle {
+      if let Err(e) = join_handle.join() {
+        std::panic::resume_unwind(e);
+      }
+    }
+  }
+}
+
+impl EventLoopHandler {
+  /// Handle a window event.
   ///
   /// Returns `Err(Exit)` if sending a message to the application fails due to the receiver end being dropped,
   /// indicating that the application is exiting.
   #[profiling::function]
-  fn event_cycle(&mut self, event: WinitEvent<()>, event_loop: &ActiveEventLoop) -> Result<(), Exit> {
+  fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) -> Result<(), Exit> {
     match event {
-      WinitEvent::WindowEvent { event, window_id, .. } if window_id == self.window_id => {
-        match event {
-          WindowEvent::MouseInput { state, button, .. } => {
-            let button = match button {
-              WinitMouseButton::Left => MouseButton::Left,
-              WinitMouseButton::Right => MouseButton::Right,
-              WinitMouseButton::Middle => MouseButton::Middle,
-              WinitMouseButton::Back => MouseButton::Back,
-              WinitMouseButton::Forward => MouseButton::Forward,
-              WinitMouseButton::Other(b) => MouseButton::Other(b),
-            };
-            self.input_event_tx.send(InputEvent::MouseInput { button, state: state.into() })?;
+      WindowEvent::MouseInput { state, button, .. } => {
+        let button = match button {
+          WinitMouseButton::Left => MouseButton::Left,
+          WinitMouseButton::Right => MouseButton::Right,
+          WinitMouseButton::Middle => MouseButton::Middle,
+          WinitMouseButton::Back => MouseButton::Back,
+          WinitMouseButton::Forward => MouseButton::Forward,
+          WinitMouseButton::Other(b) => MouseButton::Other(b),
+        };
+        self.input_event_tx.send(InputEvent::MouseInput { button, state: state.into() })?;
+      }
+      WindowEvent::CursorMoved { position, .. } => {
+        let screen_position = ScreenPosition::from_physical_scale(position.into_common(), self.window_inner_size.scale);
+        self.input_event_tx.send(InputEvent::MouseMoved(screen_position))?;
+      }
+      WindowEvent::CursorEntered { .. } => {
+        self.event_tx.send(Event::MouseEnteredWindow)?;
+      }
+      WindowEvent::CursorLeft { .. } => {
+        self.event_tx.send(Event::MouseLeftWindow)?;
+      }
+      WindowEvent::MouseWheel { delta, .. } => {
+        match delta {
+          MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
+            self.input_event_tx.send(InputEvent::MouseWheelMovedLines {
+              horizontal_delta_lines: horizontal_delta_lines as f64,
+              vertical_delta_lines: vertical_delta_lines as f64,
+            })?,
+          MouseScrollDelta::PixelDelta(WinitPhysicalPosition { x, y }) => {
+            let screen_delta = ScreenDelta::from_physical_scale((x as i64, y as i64), self.window_inner_size.scale);
+            self.input_event_tx.send(InputEvent::MouseWheelMovedPixels(screen_delta))?;
           }
-          WindowEvent::CursorMoved { position, .. } => {
-            let screen_position = ScreenPosition::from_physical_scale(position.into_common(), self.window_inner_size.scale);
-            self.input_event_tx.send(InputEvent::MouseMoved(screen_position))?;
+        };
+      }
+      WindowEvent::KeyboardInput { event: KeyEvent { physical_key, text, state, .. }, .. } => {
+        match physical_key {
+          PhysicalKey::Code(key_code) => {
+            let button: KeyboardButton = unsafe { std::mem::transmute(key_code) };
+            let state = state.into();
+            self.input_event_tx.send(InputEvent::KeyboardInput { button, state })?;
           }
-          WindowEvent::CursorEntered { .. } => {
-            self.event_tx.send(Event::MouseEnteredWindow)?;
+          PhysicalKey::Unidentified(native_key_code) => {
+            debug!("Received unidentified native key code: {:?}", native_key_code);
           }
-          WindowEvent::CursorLeft { .. } => {
-            self.event_tx.send(Event::MouseLeftWindow)?;
-          }
-          WindowEvent::MouseWheel { delta, .. } => {
-            match delta {
-              MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
-                self.input_event_tx.send(InputEvent::MouseWheelMovedLines {
-                  horizontal_delta_lines: horizontal_delta_lines as f64,
-                  vertical_delta_lines: vertical_delta_lines as f64,
-                })?,
-              MouseScrollDelta::PixelDelta(WinitPhysicalPosition { x, y }) => {
-                let screen_delta = ScreenDelta::from_physical_scale((x as i64, y as i64), self.window_inner_size.scale);
-                self.input_event_tx.send(InputEvent::MouseWheelMovedPixels(screen_delta))?;
-              }
-            };
-          }
-          WindowEvent::KeyboardInput { event: KeyEvent { physical_key, text, state, .. }, .. } => {
-            match physical_key {
-              PhysicalKey::Code(key_code) => {
-                let button: KeyboardButton = unsafe { std::mem::transmute(key_code) };
-                let state = state.into();
-                self.input_event_tx.send(InputEvent::KeyboardInput { button, state })?;
-              }
-              PhysicalKey::Unidentified(native_key_code) => {
-                debug!("Received unidentified native key code: {:?}", native_key_code);
-              }
-            }
+        }
 
-            if let Some(text) = text {
-              for c in text.chars() {
-                self.input_event_tx.send(InputEvent::CharacterInput(c))?;
-              }
-            }
+        if let Some(text) = text {
+          for c in text.chars() {
+            self.input_event_tx.send(InputEvent::CharacterInput(c))?;
           }
-          WindowEvent::ModifiersChanged(modifiers) => {
-            let pressed = modifiers.state() - self.modifiers;
-            {
-              let state = ElementState::Pressed;
-              if pressed.contains(ModifiersState::SHIFT) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
-              }
-              if pressed.contains(ModifiersState::CONTROL) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
-              }
-              if pressed.contains(ModifiersState::ALT) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
-              }
-              if pressed.contains(ModifiersState::SUPER) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
-              }
-            }
-
-            let released = self.modifiers - modifiers.state();
-            {
-              let state = ElementState::Released;
-              if released.contains(ModifiersState::SHIFT) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
-              }
-              if released.contains(ModifiersState::CONTROL) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
-              }
-              if released.contains(ModifiersState::ALT) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
-              }
-              if released.contains(ModifiersState::SUPER) {
-                self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
-              }
-            }
-
-            self.modifiers = modifiers.state();
-          }
-          WindowEvent::CloseRequested => {
-            event_loop.exit();
-            self.event_tx.send(Event::TerminateRequested)?;
-          }
-          WindowEvent::Resized(inner_size) => {
-            self.window_inner_size = ScreenSize::from_physical_scale(inner_size.into_common(), self.window_inner_size.scale);
-            self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
-          }
-          WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-            self.window_inner_size = ScreenSize::from_physical_scale(self.window_inner_size.physical, scale_factor);
-            self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
-          }
-          _ => {}
         }
       }
-      WinitEvent::LoopExiting => {
-        let join_handle = self.app_thread_join_handle.take();
-        if let Some(join_handle) = join_handle {
-          if let Err(e) = join_handle.join() {
-            std::panic::resume_unwind(e);
+      WindowEvent::ModifiersChanged(modifiers) => {
+        let pressed = modifiers.state() - self.modifiers;
+        {
+          let state = ElementState::Pressed;
+          if pressed.contains(ModifiersState::SHIFT) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
+          }
+          if pressed.contains(ModifiersState::CONTROL) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
+          }
+          if pressed.contains(ModifiersState::ALT) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
+          }
+          if pressed.contains(ModifiersState::SUPER) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
           }
         }
+
+        let released = self.modifiers - modifiers.state();
+        {
+          let state = ElementState::Released;
+          if released.contains(ModifiersState::SHIFT) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
+          }
+          if released.contains(ModifiersState::CONTROL) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
+          }
+          if released.contains(ModifiersState::ALT) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
+          }
+          if released.contains(ModifiersState::SUPER) {
+            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
+          }
+        }
+
+        self.modifiers = modifiers.state();
+      }
+      WindowEvent::CloseRequested => {
+        event_loop.exit();
+        self.event_tx.send(Event::TerminateRequested)?;
+      }
+      WindowEvent::Resized(inner_size) => {
+        self.window_inner_size = ScreenSize::from_physical_scale(inner_size.into_common(), self.window_inner_size.scale);
+        self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
+      }
+      WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+        self.window_inner_size = ScreenSize::from_physical_scale(self.window_inner_size.physical, scale_factor);
+        self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
       }
       _ => {}
     }
-
     Ok(())
   }
 }
