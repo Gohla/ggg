@@ -7,16 +7,15 @@ publish = false
 
 [dependencies]
 common = { path = "../../core/common" }
-raw-window-handle = { workspace = true }
 wgpu = { workspace = true }
 egui = { workspace = true, optional = true }
 gui_widget = { path = "../../core/gui_widget", optional = true }
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 image = { version = "0.23", default-features = false }
-ultraviolet = "0.9"
-bytemuck = "1.5"
-thiserror = "1"
-profiling = "1"
+ultraviolet.workspace = true
+bytemuck.workspace = true
+thiserror.workspace = true
+profiling.workspace = true
 
 [build-dependencies]
 gfxc = { path = "../gfxc" }

@@ -10,10 +10,10 @@ common = { path = "../../core/common" }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
 egui = { workspace = true, features = ["bytemuck"] }
-wgpu = { workspace = true }
-bytemuck = { version = "1.5", features = ["derive"] }
-thiserror = "1"
-profiling = "1"
+wgpu.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+profiling.workspace = true
 
 [build-dependencies]
 gfxc = { path = "../../core/gfxc" }

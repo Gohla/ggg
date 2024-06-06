@@ -24,19 +24,19 @@ pub mod debug_renderer;
 pub mod full_screen_triangle;
 
 #[derive(Debug)]
-pub struct Gfx<'w> {
+pub struct Gfx {
   pub instance: Instance,
   pub adapter: Adapter,
   pub device: Device,
   pub queue: Queue,
-  pub surface: GfxSurface<'w>,
+  pub surface: GfxSurface<'static>,
 
   pub depth_stencil_texture: Option<GfxTexture>,
   pub multisampled_framebuffer: Option<GfxTexture>,
   pub sample_count: u32,
 }
 
-impl Gfx<'_> {
+impl Gfx {
   pub fn resize_surface(&mut self, size: ScreenSize) {
     self.surface.resize(&self.adapter, &self.device, size);
     if let Some(depth_texture) = &mut self.depth_stencil_texture {

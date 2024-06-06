@@ -106,7 +106,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "console_error_panic_hook",
- "dotenv",
  "egui",
  "gfx",
  "gui",
@@ -119,11 +118,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
- "tracing-appender",
- "tracing-log 0.1.4",
- "tracing-subscriber",
  "tracing-wasm",
- "tracy-client 0.13.2",
  "wgpu 0.13.1",
  "wgpu 0.19.4",
 ]
@@ -651,24 +646,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "directories-next"
-version = "2.0.0"
+name = "directories"
+version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "339ee130d97a610ea5a5872d2bbb130fdf68884ff09d3028b81bec8a1ac23bbc"
+checksum = "9a49173b84e034382284f27f1af4dcbbd231ffa358c0fe316541a7337f376a35"
 dependencies = [
- "cfg-if 1.0.0",
- "dirs-sys-next",
+ "dirs-sys",
 ]
 
 [[package]]
-name = "dirs-sys-next"
-version = "0.1.2"
+name = "dirs-sys"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
 dependencies = [
  "libc",
+ "option-ext",
  "redox_users",
- "winapi",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -687,10 +682,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotenv"
-version = "0.15.0"
+name = "dotenvy"
+version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
+name = "dotenvy_macro"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb0235d912a8c749f4e0c9f18ca253b4c28cfefc1d2518096016d6e3230b6424"
+dependencies = [
+ "dotenvy",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "downcast-rs"
@@ -851,12 +858,10 @@ dependencies = [
 name = "gadgets"
 version = "0.1.0"
 dependencies = [
- "dotenv",
  "job_queue",
+ "os",
  "profiling",
  "tracing",
- "tracing-subscriber",
- "tracy-client 0.13.2",
 ]
 
 [[package]]
@@ -920,7 +925,6 @@ dependencies = [
  "gui_widget",
  "image",
  "profiling",
- "raw-window-handle 0.6.2",
  "serde",
  "thiserror",
  "ultraviolet",
@@ -1707,6 +1711,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
 name = "orbclient"
 version = "0.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1720,10 +1730,15 @@ name = "os"
 version = "0.1.0"
 dependencies = [
  "common",
- "directories-next",
+ "directories",
+ "dotenvy",
+ "dotenvy_macro",
  "profiling",
  "thiserror",
  "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tracy-client 0.13.2",
  "wasm-bindgen",
  "web-sys",
  "winit",
@@ -2606,17 +2621,6 @@ dependencies = [
 
 [[package]]
 name = "tracing-log"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f751112709b4e791d8ce53e32c4ed2d353565a795ce84da2285393f41557bdf2"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-log"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
@@ -2641,7 +2645,7 @@ dependencies = [
  "thread_local",
  "tracing",
  "tracing-core",
- "tracing-log 0.2.0",
+ "tracing-log",
 ]
 
 [[package]]

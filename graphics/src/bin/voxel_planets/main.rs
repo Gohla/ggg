@@ -1,13 +1,14 @@
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3};
-use wgpu::{CommandBuffer, Features, PowerPreference};
+use wgpu::CommandBuffer;
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
+use os::Os;
 use voxel::chunk::size::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
 use voxel::render::VoxelRenderer;
@@ -165,10 +166,9 @@ impl app::Application for VoxelPlanets {
 }
 
 fn main() {
-  app::run::<VoxelPlanets>(Options {
-    name: "Voxel Planets".to_string(),
-    graphics_adapter_power_preference: PowerPreference::HighPerformance,
-    request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Voxel Planets")
+    .with_high_power_graphics_adapter()
+    .request_graphics_device_features(DebugRenderer::request_features())
+    .run::<VoxelPlanets>()
+    .unwrap();
 }

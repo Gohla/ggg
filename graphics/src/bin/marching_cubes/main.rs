@@ -1,13 +1,14 @@
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
-use wgpu::{CommandBuffer, Features};
+use wgpu::CommandBuffer;
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
+use os::Os;
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::size::ChunkSize1;
 use voxel::render::VoxelRenderer;
@@ -146,10 +147,9 @@ impl app::Application for MarchingCubesDemo {
 }
 
 fn main() {
-  app::run::<MarchingCubesDemo>(Options {
-    name: "Marching Cubes".to_string(),
-    request_graphics_device_features: Features::empty() | DebugRenderer::request_features(),
-    sample_count: 4,
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Marching Cubes")
+    .request_graphics_device_features(DebugRenderer::request_features())
+    .with_sample_count(4)
+    .run::<MarchingCubesDemo>()
+    .unwrap();
 }

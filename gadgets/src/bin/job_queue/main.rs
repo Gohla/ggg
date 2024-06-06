@@ -1,20 +1,14 @@
 use std::iter::FusedIterator;
 
 use tracing::{info, trace};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use job_queue::JobQueue;
 
 fn main() {
-  profiling::register_thread!();
-  dotenv::dotenv().ok();
-  let filter_layer = EnvFilter::from_env("MAIN_LOG");
-  tracing_subscriber::registry()
-    .with(filter_layer)
-    .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-    .init();
+  // TODO: "featurize" os. Because this depends on `os` which has stuff like creating windows, which is not needed for
+  // this app.
+  os::init();
+  let _tracing = os::init_tracing();
 
   let job_queue = JobQueue::new(
     8,
@@ -85,7 +79,7 @@ impl Iterator for JobDependencyIterator {
         let dependency_key = previous_job_key as f32 / 2.0;
         self.0 = None;
         Some((dependency_key, Job(previous_job_key)))
-      },
+      }
       _ => None,
     }
   }

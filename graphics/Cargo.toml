@@ -16,14 +16,14 @@ wgpu = { workspace = true, features = ["spirv"] }
 egui = { workspace = true }
 image = { version = "0.23", default-features = false, features = ["bmp", "png"] }
 rand = { version = "0.8", default-features = false, features = ["small_rng"] }
-ultraviolet = { version = "0.9", features = ["bytemuck", "int"] }
-bytemuck = { version = "1.5", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
-tracing = "0.1"
-profiling = "1"
+ultraviolet = { workspace = true, features = ["bytemuck", "int"] }
+bytemuck = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+tracing.workspace = true
+profiling.workspace = true
 
 [build-dependencies]
 gfxc = { path = "../core/gfxc" }
 
 [features]
-profile-with-tracy = ["app/profile-with-tracy"]
+profile-with-tracy = ["os/profile-with-tracy"]

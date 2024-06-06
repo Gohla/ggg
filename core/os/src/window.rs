@@ -3,25 +3,25 @@ use std::sync::Arc;
 
 use thiserror::Error;
 use winit::error::OsError;
-use winit::window::{Window, WindowBuilder};
+use winit::window::WindowBuilder;
 
 use common::screen::{LogicalSize, ScreenSize};
 
-use crate::context::OsContext;
+use crate::context::Context;
 use crate::screen_ext::*;
 
 #[derive(Debug)]
-pub struct OsWindow {
-  window: Arc<Window>,
+pub struct Window {
+  window: Arc<winit::window::Window>,
 }
 
 #[derive(Debug, Error)]
-#[error("Could not create window")]
+#[error("Could not create window: {0}")]
 pub struct WindowCreateError(#[from] OsError);
 
-impl OsWindow {
+impl Window {
   pub fn new<S: Into<String>>(
-    os_context: &OsContext,
+    os_context: &Context,
     inner_size: LogicalSize,
     min_inner_size: LogicalSize,
     title: S,
@@ -31,7 +31,7 @@ impl OsWindow {
       .with_min_inner_size(min_inner_size.into_winit())
       .with_title(title)
       .build(&os_context.event_loop)?;
-    let window = Arc::new(window);
+
     #[cfg(target_arch = "wasm32")] {
       use winit::platform::web::WindowExtWebSys;
       let canvas = window.canvas();
@@ -55,13 +55,17 @@ impl OsWindow {
         .unwrap();
       closure.forget();
     }
-    Ok(Self { window })
+
+    Ok(Self { window: Arc::new(window) })
   }
 
-
   #[inline]
-  pub fn get_inner(&self) -> &Window {
+  pub fn as_winit_window(&self) -> &winit::window::Window {
     &self.window
+  }
+  #[inline]
+  pub fn cloned_winit_window(&self) -> Arc<winit::window::Window> {
+    self.window.clone()
   }
 
 
@@ -72,11 +76,11 @@ impl OsWindow {
   }
 }
 
-impl Deref for OsWindow {
-  type Target = Window;
+impl Deref for Window {
+  type Target = winit::window::Window;
 
   #[inline]
-  fn deref(&self) -> &Self::Target { self.get_inner() }
+  fn deref(&self) -> &Self::Target { self.as_winit_window() }
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -9,7 +9,7 @@ use rand::prelude::*;
 use ultraviolet::Mat4;
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::idx_assigner::Item;
 use common::input::RawInput;
 use common::screen::ScreenSize;
@@ -20,6 +20,7 @@ use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
+use os::Os;
 
 const NUM_QUAD_INDICES: usize = 6;
 const NUM_QUAD_VERTICES: usize = 4;
@@ -214,9 +215,8 @@ impl app::Application for QuadGrid {
 }
 
 fn main() {
-  app::run::<QuadGrid>(Options {
-    name: "Quad grid".to_string(),
-    depth_stencil_texture_format: None,
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Quad grid")
+    .without_depth_stencil_texture()
+    .run::<QuadGrid>()
+    .unwrap();
 }

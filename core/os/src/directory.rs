@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use directories_next::ProjectDirs;
+use directories::ProjectDirs;
 
 #[derive(Clone, Debug)]
 pub struct Directories {

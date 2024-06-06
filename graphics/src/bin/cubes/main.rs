@@ -8,9 +8,9 @@ use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{Backends, BindGroup, BufferAddress, CommandBuffer, IndexFormat, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
@@ -20,6 +20,7 @@ use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gui_widget::UiWidgetsExt;
+use os::Os;
 
 const NUM_CUBE_INDICES: usize = 3 * 3 * 2;
 const NUM_CUBE_VERTICES: usize = 8;
@@ -234,10 +235,8 @@ impl app::Application for Cubes {
 }
 
 fn main() {
-  app::run::<Cubes>(Options {
-    name: "Cubes".to_string(),
-    graphics_backends: Backends::all(),
-    graphics_adapter_power_preference: PowerPreference::HighPerformance,
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Cubes")
+    .with_high_power_graphics_adapter()
+    .run::<Cubes>()
+    .unwrap();
 }

@@ -2,18 +2,17 @@ use thiserror::Error;
 use winit::error::EventLoopError;
 use winit::event_loop::{EventLoop, EventLoopBuilder};
 
-pub struct OsContext {
+pub struct Context {
   pub(crate) event_loop: EventLoop<()>,
 }
 
 #[derive(Debug, Error)]
-#[error("Could not create OS context")]
-pub struct OsContextCreateError(#[from] EventLoopError);
+#[error("Could not create OS context: {0}")]
+pub struct ContextCreateError(#[from] EventLoopError);
 
-impl OsContext {
-  pub fn new() -> Result<Self, OsContextCreateError> {
+impl Context {
+  pub fn new() -> Result<Self, ContextCreateError> {
     let event_loop = EventLoopBuilder::new().build()?;
-    let os_context = Self { event_loop };
-    Ok(os_context)
+    Ok(Self { event_loop })
   }
 }

@@ -2,9 +2,9 @@
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Features, PowerPreference, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, CommandBuffer, Features, RenderPipeline, ShaderStages};
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::{KeyboardButton, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
@@ -12,6 +12,7 @@ use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
 use gfx::render_pass::RenderPassBuilder;
+use os::Os;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -100,22 +101,22 @@ impl app::Application for RayTracing {
 
   fn process_input(&mut self, raw_input: RawInput) -> Input {
     let mut input = Input::default();
-    if raw_input.is_keyboard_button_down(KeyboardButton::W) {
+    if raw_input.is_keyboard_button_down(KeyboardButton::KeyW) {
       input.forward = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::S) {
+    if raw_input.is_keyboard_button_down(KeyboardButton::KeyS) {
       input.backward = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::A) {
+    if raw_input.is_keyboard_button_down(KeyboardButton::KeyA) {
       input.left = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::D) {
+    if raw_input.is_keyboard_button_down(KeyboardButton::KeyD) {
       input.right = true;
     }
     if raw_input.is_keyboard_button_down(KeyboardButton::Space) {
       input.up = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::C) {
+    if raw_input.is_keyboard_button_down(KeyboardButton::KeyC) {
       input.down = true;
     }
     if raw_input.is_keyboard_modifier_down(KeyboardModifier::Control) {
@@ -152,11 +153,10 @@ impl app::Application for RayTracing {
 }
 
 fn main() {
-  app::run::<RayTracing>(Options {
-    name: "Ray tracing".to_string(),
-    graphics_adapter_power_preference: PowerPreference::HighPerformance,
-    require_graphics_device_features: Features::SPIRV_SHADER_PASSTHROUGH,
-    depth_stencil_texture_format: None,
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Ray tracing")
+    .with_high_power_graphics_adapter()
+    .require_graphics_device_features(Features::SPIRV_SHADER_PASSTHROUGH)
+    .without_depth_stencil_texture()
+    .run::<RayTracing>()
+    .unwrap();
 }

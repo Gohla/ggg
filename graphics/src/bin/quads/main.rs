@@ -7,7 +7,7 @@ use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{GuiFrame, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
@@ -19,6 +19,7 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
+use os::Os;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -245,4 +246,8 @@ impl app::Application for Quads {
   }
 }
 
-fn main() { app::run_with_defaults::<Quads>("Quads").unwrap(); }
+fn main() {
+  AppRunner::from_name("Quads")
+    .run::<Quads>()
+    .unwrap();
+}

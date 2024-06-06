@@ -1,12 +1,7 @@
-use std::sync::mpsc::Receiver;
-
-use dotenv;
 use egui::TopBottomPanel;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::prelude::*;
 use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, SurfaceError};
 
 use common::screen::ScreenSize;
@@ -16,20 +11,15 @@ use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
 use gui::Gui;
-use os::context::{OsContext, OsContextCreateError};
-use os::directory::Directories;
-use os::event_sys::{EventSysRunError, OsEvent, OsEventSys};
-use os::input_sys::OsInputSys;
-use os::window::{OsWindow, WindowCreateError};
+use os::CreateError;
+use os::event::{Event, EventLoopRunner, EventLoopRunError};
 
 use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
 
 #[derive(Error, Debug)]
-pub enum CreateError {
-  #[error(transparent)]
-  OsContextCreateFail(#[from] OsContextCreateError),
-  #[error(transparent)]
-  WindowCreateFail(#[from] WindowCreateError),
+pub enum RunError {
+  #[error("Failed to create OS interface")]
+  CreateOsFail(#[from] CreateError),
   #[error("Failed to create graphics surface")]
   CreateSurfaceFail(#[from] CreateSurfaceError),
   #[error("Failed to request graphics adapter because no adapters were found that meet the required options")]
@@ -39,74 +29,23 @@ pub enum CreateError {
   #[error(transparent)]
   ThreadCreateFail(#[from] std::io::Error),
   #[error(transparent)]
-  EventSysRunFail(#[from] EventSysRunError),
+  EventSysRunFail(#[from] EventLoopRunError),
 }
 
 #[profiling::function]
-pub async fn run<A: Application + 'static>(options: Options) -> Result<(), CreateError> {
-  profiling::register_thread!();
-
-  #[cfg(target_arch = "wasm32")] {
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-  }
-
-  dotenv::dotenv().ok();
-
-  let directories = Directories::new(&options.name);
-
-  let main_filter_layer = EnvFilter::from_env("MAIN_LOG");
-  let layered = tracing_subscriber::registry();
-
-  #[cfg(not(target_arch = "wasm32"))] let _guard = {
-    let layered = layered.with(
-      tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_filter(main_filter_layer)
-    );
-    let log_path = directories.log_dir().join("log.txt");
-    std::fs::create_dir_all(directories.log_dir()).unwrap();
-    let log_file = std::fs::File::create(log_path).unwrap();
-    let writer = std::io::BufWriter::new(log_file);
-    let (non_blocking, guard) = tracing_appender::non_blocking(writer);
-    let layered = layered.with(
-      tracing_subscriber::fmt::layer()
-        .with_writer(non_blocking)
-        .with_ansi(false)
-        .with_filter(EnvFilter::from_env("FILE_LOG"))
-    );
-    layered.init();
-    guard
-  };
-  #[cfg(target_arch = "wasm32")] {
-    layered
-      .with(main_filter_layer)
-      .with(tracing_wasm::WASMLayer::new(tracing_wasm::WASMLayerConfig::default()))
-      .init();
-  }
-
-  let os_context = OsContext::new()?;
-  let window = {
-    OsWindow::new(&os_context, options.window_inner_size, options.window_min_inner_size, options.name.clone())?
-  };
-
-  let (os_event_sys, os_event_rx, os_input_sys) = {
-    let (event_sys, input_event_rx, event_rx) = OsEventSys::new(&window);
-    let input_sys = OsInputSys::new(input_event_rx);
-    (event_sys, event_rx, input_sys)
-  };
-  let os = Os { window, directories };
-
+pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, options: Options) -> Result<(), RunError> {
   let instance_descriptor = InstanceDescriptor {
     backends: options.graphics_backends,
     ..InstanceDescriptor::default()
   };
   let instance = Instance::new(instance_descriptor);
-  let surface = instance.create_surface(os.window.get_inner())?;
+
+  let surface = instance.create_surface(os.window.cloned_winit_window())?;
   let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),
     ..RequestAdapterOptions::default()
-  }).await.ok_or(CreateError::AdapterRequestFail)?;
+  }).await.ok_or(RunError::AdapterRequestFail)?;
 
   let supported_features = adapter.features();
   let required_but_unsupported_features = options.require_graphics_device_features.difference(supported_features);
@@ -155,7 +94,7 @@ pub async fn run<A: Application + 'static>(options: Options) -> Result<(), Creat
 
   let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
 
-  run_app::<A>(options.name, os_context, os_event_sys, os_event_rx, os_input_sys, os, gfx, gui, screen_size, config)
+  run_app::<A>(os, event_loop_runner, gfx, gui, screen_size, config)
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -168,35 +107,31 @@ struct Config<A: Default> {
 // Native codepath
 
 #[cfg(not(target_arch = "wasm32"))]
-fn run_app<A: Application + 'static>(
-  name: String,
-  os_context: OsContext,
-  os_event_sys: OsEventSys,
-  os_event_rx: Receiver<OsEvent>,
-  os_input_sys: OsInputSys,
+fn run_app<A: Application>(
   os: Os,
-  gfx: Gfx<'static>,
+  event_loop_runner: EventLoopRunner,
+  gfx: Gfx,
   gui: Gui,
   screen_size: ScreenSize,
   config: Config<A::Config>,
-) -> Result<(), CreateError> {
-  // TODO: winit does not take over the thread any more on native
-  // Run app loop in a new thread, while Winit takes over the current thread.
+) -> Result<(), RunError> {
+  // Run application in a thread.
   let app_thread_join_handle = std::thread::Builder::new()
-    .name(name)
+    .name(os.options.name.clone())
     .spawn(move || {
       profiling::register_thread!();
-      run_app_in_loop::<A>(os_event_rx, os_input_sys, os, gfx, gui, screen_size, config);
+      run_app_in_loop::<A>(os, gfx, gui, screen_size, config);
     })?;
-  os_event_sys.run(os_context, app_thread_join_handle)?;
+
+  // Run event loop on the main thread, blocking the main thread until the event loop is stopped.
+  event_loop_runner.run(app_thread_join_handle)?;
+
   Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn run_app_in_loop<A: Application>(
-  os_event_rx: Receiver<OsEvent>,
-  mut os_input_sys: OsInputSys,
-  os: Os,
+  mut os: Os,
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
@@ -212,9 +147,7 @@ fn run_app_in_loop<A: Application>(
 
   loop {
     let stop = run_app_cycle(
-      &os_event_rx,
-      &mut os_input_sys,
-      &os,
+      &mut os,
       &mut gfx,
       &mut gui,
       &mut screen_size,
@@ -239,16 +172,16 @@ fn run_app_in_loop<A: Application>(
 #[cfg(target_arch = "wasm32")]
 fn run_app<A: Application + 'static>(
   _name: String,
-  os_context: OsContext,
-  os_event_sys: OsEventSys,
-  os_event_rx: Receiver<OsEvent>,
-  mut os_input_sys: OsInputSys,
+  os_context: Context,
+  os_event_sys: EventLoopHandler,
+  os_event_rx: Receiver<Event>,
+  mut os_input_sys: InputSys,
   os: Os,
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
   app_config: A::Config,
-) -> Result<!, CreateError> {
+) -> Result<!, RunError> {
   // We do not have control over the loop in WASM, and there are no threads. Let Winit take control and run app cycle
   // as part of the Winit event loop.
   let mut app = A::new(&os, &gfx, app_config);
@@ -259,7 +192,7 @@ fn run_app<A: Application + 'static>(
   let mut resized = false;
   let mut minimized = false;
 
-  os_event_sys.run(os_context, move || run_app_cycle(
+  os_event_sys.run_event_loop(os_context, move || run_app_cycle(
     &os_event_rx,
     &mut os_input_sys,
     &os,
@@ -280,9 +213,7 @@ fn run_app<A: Application + 'static>(
 
 #[profiling::function]
 fn run_app_cycle<A: Application>(
-  os_event_rx: &Receiver<OsEvent>,
-  os_input_sys: &mut OsInputSys,
-  os: &Os,
+  os: &mut Os,
   gfx: &mut Gfx,
   gui: &mut Gui,
   screen_size: &mut ScreenSize,
@@ -302,10 +233,10 @@ fn run_app_cycle<A: Application>(
   tick_timer.update_lag(frame_time.delta);
 
   // Process OS events
-  for os_event in os_event_rx.try_iter() {
-    match os_event {
-      OsEvent::TerminateRequested => return true, // Stop the loop.
-      OsEvent::WindowResized(_) => *resized = true,
+  for event in os.event_rx.try_iter() {
+    match event {
+      Event::TerminateRequested => return true, // Stop the loop.
+      Event::WindowResized(_) => *resized = true,
       _ => {}
     }
   }
@@ -326,7 +257,7 @@ fn run_app_cycle<A: Application>(
   }
 
   // Get raw input
-  let mut raw_input = os_input_sys.update();
+  let mut raw_input = os.input_sys.update();
 
   // Let the GUI process input, letting the application prevent processing keyboard or mouse events if captured.
   let gui_process_keyboard_events = !app.is_capturing_keyboard();

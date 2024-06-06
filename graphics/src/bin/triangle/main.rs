@@ -6,12 +6,13 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
 use wgpu::{Buffer, BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{GuiFrame, Options, Os};
+use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::buffer::BufferBuilder;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
+use os::Os;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -85,9 +86,8 @@ impl app::Application for Triangle {
 }
 
 fn main() {
-  app::run::<Triangle>(Options {
-    name: "Triangle".to_string(),
-    depth_stencil_texture_format: None,
-    ..Options::default()
-  }).unwrap();
+  AppRunner::from_name("Triangle")
+    .without_depth_stencil_texture()
+    .run::<Triangle>()
+    .unwrap();
 }

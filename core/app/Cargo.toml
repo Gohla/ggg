@@ -11,20 +11,15 @@ os = { path = "../os" }
 gfx = { path = "../gfx" }
 gui = { path = "../gui" }
 gui_widget = { path = "../gui_widget" }
-raw-window-handle = { workspace = true }
-wgpu = { workspace = true }
+raw-window-handle.workspace = true
+wgpu.workspace = true
 egui = { workspace = true, features = ["persistence"] }
 pollster = "0.2"
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 ron = "0.7"
-dotenv = "0.15"
-thiserror = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
-tracing-appender = "0.2"
-tracing-log = "0.1"
-profiling = "1"
-tracy-client = { version = "0.13", optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+profiling.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.tracing-wasm]
 version = "0.2"
@@ -35,6 +30,3 @@ version = "0.1"
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
 version = "0.13"
 features = ["webgl"]
-
-[features]
-profile-with-tracy = ["profiling/profile-with-tracy", "dep:tracy-client"]

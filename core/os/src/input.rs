@@ -3,19 +3,16 @@ use std::sync::mpsc::Receiver;
 use common::input::RawInput;
 use common::screen::ScreenDelta;
 
-use crate::event_sys::{ElementState, OsInputEvent};
+use crate::event::{ElementState, InputEvent};
 
-pub struct OsInputSys {
-  input_event_rx: Receiver<OsInputEvent>,
+pub struct InputSys {
+  input_event_rx: Receiver<InputEvent>,
   prev_state: Option<RawInput>,
 }
 
-impl OsInputSys {
-  pub fn new(input_event_rx: Receiver<OsInputEvent>) -> OsInputSys {
-    return OsInputSys {
-      input_event_rx,
-      prev_state: None,
-    };
+impl InputSys {
+  pub fn new(input_event_rx: Receiver<InputEvent>) -> Self {
+    Self { input_event_rx, prev_state: None }
   }
 
   #[profiling::function]
@@ -30,7 +27,7 @@ impl OsInputSys {
 
     for event in self.input_event_rx.try_iter() {
       match event {
-        OsInputEvent::MouseInput { button, state } => {
+        InputEvent::MouseInput { button, state } => {
           match state {
             ElementState::Pressed => {
               input_state.mouse_buttons.insert(button);
@@ -42,17 +39,17 @@ impl OsInputSys {
             }
           };
         }
-        OsInputEvent::MouseMoved(position) => {
+        InputEvent::MouseMoved(position) => {
           input_state.mouse_position = position;
         }
-        OsInputEvent::MouseWheelMovedPixels(screen_delta) => {
+        InputEvent::MouseWheelMovedPixels(screen_delta) => {
           input_state.mouse_wheel_pixel_delta += screen_delta;
         }
-        OsInputEvent::MouseWheelMovedLines { horizontal_delta_lines, vertical_delta_lines } => {
+        InputEvent::MouseWheelMovedLines { horizontal_delta_lines, vertical_delta_lines } => {
           input_state.mouse_wheel_line_delta.horizontal += horizontal_delta_lines;
           input_state.mouse_wheel_line_delta.vertical += vertical_delta_lines;
         }
-        OsInputEvent::KeyboardModifierChange { modifier, state } => {
+        InputEvent::KeyboardModifierChange { modifier, state } => {
           match state {
             ElementState::Pressed => {
               input_state.keyboard_modifiers.insert(modifier);
@@ -64,7 +61,7 @@ impl OsInputSys {
             }
           };
         }
-        OsInputEvent::KeyboardInput { button, state } => {
+        InputEvent::KeyboardInput { button, state } => {
           match state {
             ElementState::Pressed => {
               input_state.keyboard_buttons.insert(button);
@@ -76,7 +73,7 @@ impl OsInputSys {
             }
           };
         }
-        OsInputEvent::CharacterInput(c) => {
+        InputEvent::CharacterInput(c) => {
           input_state.characters_pressed.push(c);
         }
       }

@@ -11,5 +11,5 @@ petgraph = { version = "0.6", default-features = false, features = ["graphmap"] 
 linked_hash_set = "0.1"
 linked-hash-map = "0.5"
 rustc-hash = "1"
-tracing = "0.1"
-profiling = "1"
+tracing.workspace = true
+profiling.workspace = true
