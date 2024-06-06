@@ -1,4 +1,3 @@
-pub mod prelude;
 pub mod screen;
 pub mod input;
 pub mod timing;
