@@ -418,7 +418,7 @@ impl Gui {
       };
       let alpha_srgb_pixels: Option<Vec<_>> = match &image_delta.image {
         ImageData::Color(_) => None,
-        ImageData::Font(f) => Some(f.srgba_pixels(1.0).collect()),
+        ImageData::Font(f) => Some(f.srgba_pixels(None).collect()),
       };
       let image_data: &[u8] = match &image_delta.image {
         ImageData::Color(c) => bytemuck::cast_slice(c.pixels.as_slice()),
