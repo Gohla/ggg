@@ -8,8 +8,7 @@ publish = false
 [dependencies]
 flume = "0.10"
 petgraph = { version = "0.6", default-features = false, features = ["graphmap"] }
-linked_hash_set = "0.1"
-linked-hash-map = "0.5"
+hashlink = "0.9"
 rustc-hash = "1"
 tracing.workspace = true
 profiling.workspace = true

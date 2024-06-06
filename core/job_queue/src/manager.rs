@@ -4,8 +4,8 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use flume::{Receiver, Sender};
-use linked_hash_map::LinkedHashMap;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashMap;
+use hashlink::LinkedHashSet;
 use petgraph::prelude::*;
 use rustc_hash::{FxHasher, FxHashMap, FxHashSet};
 use tracing::trace;
