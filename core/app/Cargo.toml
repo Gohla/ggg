@@ -28,5 +28,5 @@ version = "0.2"
 version = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
-version = "0.13"
+workspace = true
 features = ["webgl"]
