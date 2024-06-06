@@ -12,7 +12,7 @@ use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
 use gui::Gui;
 use os::CreateError;
-use os::event::{Event, EventLoopRunner, EventLoopRunError};
+use os::event::{Event, EventLoopRunError, EventLoopRunner};
 
 use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
 
@@ -164,7 +164,7 @@ fn run_app_in_loop<A: Application>(
 
   let config = Config { app_config: app.into_config(), debug_gui };
   config::serialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH, &config);
-  config::serialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH, &gui.context.memory());
+  gui.context.memory(|m| config::serialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH, m));
 }
 
 // WASM codepath

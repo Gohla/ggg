@@ -22,7 +22,7 @@ impl DebugGui {
       add_contents(ui);
       ui.separator();
       if ui.button("Reset GUI state (double click)").double_clicked() {
-        *ui.ctx().memory() = egui::Memory::default();
+        ui.ctx().memory_mut(|m| *m = egui::Memory::default());
       }
     });
   }

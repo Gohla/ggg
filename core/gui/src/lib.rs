@@ -43,7 +43,7 @@ impl Gui {
   ) -> Self {
     let context = Context::default();
     if let Some(memory) = memory {
-      *context.memory() = memory;
+      context.memory_mut(|m|*m=memory);
     }
 
     let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
@@ -209,12 +209,12 @@ impl Gui {
       }
       for button in &input.keyboard_buttons_pressed {
         if let Some(key) = convert_keyboard_button(*button) {
-          self.input.events.push(Event::Key { key, pressed: true, modifiers })
+          self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
         }
       }
       for button in &input.keyboard_buttons_released {
         if let Some(key) = convert_keyboard_button(*button) {
-          self.input.events.push(Event::Key { key, pressed: false, modifiers })
+          self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
         }
       }
 
