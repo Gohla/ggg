@@ -5,7 +5,7 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedPrimitive, Context, Event, ImageData, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta, Vec2};
+use egui::{ClippedPrimitive, Context, Event, ImageData, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
@@ -234,7 +234,7 @@ impl Gui {
     elapsed_seconds: f64,
     delta_seconds: f64,
   ) -> Context {
-    let screen_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(screen_size.physical.width as f32, screen_size.physical.height as f32));
+    let screen_rect = Rect::from_min_size(Pos2::ZERO, screen_size.physical.into());
     self.input.screen_rect = Some(screen_rect);
     let pixels_per_point: f64 = screen_size.scale.into();
     self.input.pixels_per_point = Some(pixels_per_point as f32);
@@ -499,6 +499,7 @@ fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]
 struct Uniform {
+  // Note: array of size 4 due to alignment requirements for uniform buffers.
   screen_size: [f32; 4],
 }
 
