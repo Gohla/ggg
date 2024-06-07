@@ -29,7 +29,8 @@ impl Window {
       .with_inner_size(inner_size)
       .with_min_inner_size(min_inner_size)
       .with_title(title);
-    let window = os_context.event_loop.create_window(window_attributes)?;
+    #[allow(deprecated)]
+      let window = os_context.event_loop.create_window(window_attributes)?;
 
     #[cfg(target_arch = "wasm32")] {
       use winit::platform::web::WindowExtWebSys;
