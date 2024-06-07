@@ -256,8 +256,11 @@ impl Gui {
   ) -> Context {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, screen_size.physical.into());
     self.input.screen_rect = Some(screen_rect);
-    let pixels_per_point: f64 = screen_size.scale.into();
-    self.input.pixels_per_point = Some(pixels_per_point as f32);
+
+    let native_pixels_per_point: f64 = screen_size.scale.into();
+    if let Some(viewport) = self.input.viewports.get_mut(&self.input.viewport_id) {
+      viewport.native_pixels_per_point = Some(native_pixels_per_point as f32);
+    }
 
     self.input.time = Some(elapsed_seconds);
     self.input.predicted_dt = delta_seconds as f32;
@@ -288,7 +291,7 @@ impl Gui {
     self.set_textures(device, queue, &full_output.textures_delta);
 
     // Get primitives to render.
-    let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes);
+    let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
     // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
     let index_buffer = {

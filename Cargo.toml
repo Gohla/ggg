@@ -15,7 +15,7 @@ resolver = "2"
 raw-window-handle = "0.6"
 winit = "0.30"
 wgpu = "0.19"
-egui = "0.23"
+egui = "0.24"
 ultraviolet = "0.9"
 image = { version = "0.25", default-features = false }
 bytemuck = "1"
