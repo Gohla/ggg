@@ -5,7 +5,7 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedPrimitive, Context, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
+use egui::{ClippedPrimitive, Context, CursorIcon, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
@@ -19,11 +19,15 @@ use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
 use os::clipboard::{get_clipboard, TextClipboard};
+use os::open_url::open_url;
+use os::window::Window;
 
 pub struct Gui {
   pub context: Context,
   clipboard: Box<dyn TextClipboard + Send + 'static>,
+
   input: EguiRawInput,
+  current_cursor_icon: Option<CursorIcon>,
 
   index_buffer: Option<GfxBuffer>,
   vertex_buffer: Option<GfxBuffer>,
@@ -113,8 +117,11 @@ impl Gui {
 
     Self {
       context,
-      input: EguiRawInput::default(),
       clipboard: get_clipboard(),
+
+      input: EguiRawInput::default(),
+      current_cursor_icon: None,
+
       index_buffer: None,
       vertex_buffer: None,
       uniform_buffer,
@@ -254,13 +261,24 @@ impl Gui {
   pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
 
-  fn handle_platform_output(&mut self, platform_output: PlatformOutput) {
-    // TODO: cursor icon
-    // TODO: open URL
+  fn handle_platform_output(&mut self, window: &Window, platform_output: PlatformOutput) {
+    self.set_cursor_icon(window, platform_output.cursor_icon);
+
+    if let Some(url) = platform_output.open_url {
+      open_url(&url.url, url.new_tab);
+    }
 
     if !platform_output.copied_text.is_empty() {
       self.clipboard.set(&platform_output.copied_text)
     }
+  }
+
+  fn set_cursor_icon(&mut self, _window: &Window, cursor_icon: CursorIcon) {
+    if self.current_cursor_icon == Some(cursor_icon) {
+      return;
+    }
+
+    // TODO: implement
   }
 
 
@@ -299,6 +317,7 @@ impl Gui {
   #[profiling::function]
   pub fn render(
     &mut self,
+    window: &Window,
     screen_size: ScreenSize,
     device: &Device,
     queue: &Queue,
@@ -307,7 +326,7 @@ impl Gui {
   ) {
     // End the frame to get output.
     let full_output = self.context.end_frame();
-    self.handle_platform_output(full_output.platform_output);
+    self.handle_platform_output(window, full_output.platform_output);
 
     // Update textures
     self.set_textures(device, queue, &full_output.textures_delta);

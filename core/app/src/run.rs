@@ -342,7 +342,7 @@ fn run_app_cycle<A: Application>(
     time: frame_time,
   };
   let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
-  gui.render(*screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
+  gui.render(&os.window, *screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
 
   // Submit command buffers
   let command_buffer = encoder.finish();

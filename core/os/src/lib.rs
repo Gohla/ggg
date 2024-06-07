@@ -7,6 +7,8 @@
 //! - [Create windows](windows)
 //! - [Handle OS events](event)
 //! - [Handle mouse and keyboard input](input)
+//! - [Handle getting and setting clipboard text](clipboard)
+//! - [Handle opening a URL with a web browser](open_url)
 
 use std::sync::mpsc::Receiver;
 
@@ -29,6 +31,7 @@ pub mod window;
 pub mod event;
 pub mod input;
 pub mod clipboard;
+pub mod open_url;
 
 // Light initialization TODO: extract subparts into features and enable only needed features.
 
