@@ -68,10 +68,7 @@ impl InputSys {
             if let Some(semantic_key) = semantic_key {
               input_state.semantic_keys.insert(semantic_key);
             }
-            input_state.keys_pressed.push(Key::new(keyboard_key, semantic_key));
-            if let Some(text) = text {
-              input_state.text_inserted.push_str(&text);
-            }
+            input_state.keys_pressed.push(Key::new(keyboard_key, semantic_key, text));
           } else {
             if let Some(keyboard_key) = keyboard_key {
               input_state.keyboard_keys.remove(&keyboard_key);
@@ -79,7 +76,7 @@ impl InputSys {
             if let Some(semantic_key) = semantic_key {
               input_state.semantic_keys.remove(&semantic_key);
             }
-            input_state.keys_released.push(Key::new(keyboard_key, semantic_key));
+            input_state.keys_released.push(Key::new(keyboard_key, semantic_key, text));
           }
         }
       }

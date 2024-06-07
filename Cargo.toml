@@ -20,6 +20,7 @@ ultraviolet = "0.9"
 image = { version = "0.25", default-features = false }
 bytemuck = "1"
 serde = "1"
+smol_str = "0.2"
 tracing = "0.1"
 profiling = "1"
 thiserror = "1"

@@ -5,7 +5,7 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedPrimitive, Context, Event, ImageData, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
+use egui::{ClippedPrimitive, Context, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
@@ -18,9 +18,11 @@ use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
+use os::clipboard::{get_clipboard, TextClipboard};
 
 pub struct Gui {
   pub context: Context,
+  clipboard: Box<dyn TextClipboard + Send + 'static>,
   input: EguiRawInput,
 
   index_buffer: Option<GfxBuffer>,
@@ -112,6 +114,7 @@ impl Gui {
     Self {
       context,
       input: EguiRawInput::default(),
+      clipboard: get_clipboard(),
       index_buffer: None,
       vertex_buffer: None,
       uniform_buffer,
@@ -137,26 +140,21 @@ impl Gui {
       let is_control_down = input.is_keyboard_modifier_down(KeyboardModifier::Control);
       self.input.modifiers.ctrl = is_control_down;
       self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
-      let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Super);
-      self.input.modifiers.mac_cmd = if cfg!(target_os = "macos") {
-        is_meta_down
-      } else {
-        false
-      };
-      self.input.modifiers.command = is_meta_down;
+      let is_super_down = input.is_keyboard_modifier_down(KeyboardModifier::Super);
+      self.input.modifiers.mac_cmd = cfg!(target_os = "macos") && is_super_down;
+      self.input.modifiers.command = if cfg!(target_os = "macos") { is_super_down } else { is_control_down };
     }
     let modifiers = self.input.modifiers;
 
     if process_mouse_input {
       // Mouse wheel delta
-      // TODO: handle horizontal scrolling when shift is pressed?
       if !input.mouse_wheel_pixel_delta.is_zero() {
-        self.input.events.push(Event::Scroll(input.mouse_wheel_pixel_delta.logical.into()));
+        let delta = input.mouse_wheel_pixel_delta.logical.into();
+        self.input.events.push(Event::MouseWheel { unit: MouseWheelUnit::Point, delta, modifiers });
       }
       if !input.mouse_wheel_line_delta.is_zero() {
-        // TODO: properly handle line to pixel conversion?
-        let lines_to_logical_pixels = input.mouse_wheel_line_delta * 24.0;
-        self.input.events.push(Event::Scroll(lines_to_logical_pixels.into()));
+        let delta = input.mouse_wheel_line_delta.into();
+        self.input.events.push(Event::MouseWheel { unit: MouseWheelUnit::Line, delta, modifiers });
       }
 
       // Mouse movement
@@ -179,40 +177,21 @@ impl Gui {
     }
 
     if process_keyboard_input {
-      // TODO: use in later egui version
-      // fn is_cut_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-      //   keycode == egui::Key::Cut
-      //     || (modifiers.command && keycode == egui::Key::X)
-      //     || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Delete)
-      // }
-      //
-      // fn is_copy_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-      //   keycode == egui::Key::Copy
-      //     || (modifiers.command && keycode == egui::Key::C)
-      //     || (cfg!(target_os = "windows") && modifiers.ctrl && keycode == egui::Key::Insert)
-      // }
-      //
-      // fn is_paste_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-      //   keycode == egui::Key::Paste
-      //     || (modifiers.command && keycode == egui::Key::V)
-      //     || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Insert)
-      // }
-
-      // Keyboard keys
-      for Key { keyboard, semantic } in input.keys_pressed() {
-        if let Some(key) = semantic.and_then(|s| s.into()) {
-          let physical_key = keyboard.and_then(|k| k.into());
-          self.input.events.push(Event::Key { key, physical_key, pressed: true, repeat: false, modifiers })
-        }
+      fn is_cut_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+        keycode == egui::Key::Cut
+          || (modifiers.command && keycode == egui::Key::X)
+          || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Delete)
       }
-      for Key { keyboard, semantic } in input.keys_released() {
-        if let Some(key) = semantic.and_then(|s| s.into()) {
-          let physical_key = keyboard.and_then(|k| k.into());
-          self.input.events.push(Event::Key { key, physical_key, pressed: false, repeat: false, modifiers })
-        }
+      fn is_copy_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+        keycode == egui::Key::Copy
+          || (modifiers.command && keycode == egui::Key::C)
+          || (cfg!(target_os = "windows") && modifiers.ctrl && keycode == egui::Key::Insert)
       }
-
-      // Text
+      fn is_paste_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+        keycode == egui::Key::Paste
+          || (modifiers.command && keycode == egui::Key::V)
+          || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Insert)
+      }
       /// Ignore special keys (backspace, delete, F1, …) that winit sends as characters. Also ignore '\r', '\n', '\t'
       /// since newlines are handled by the `Key::Enter` event.
       ///
@@ -223,14 +202,66 @@ impl Gui {
           || '\u{100000}' <= chr && chr <= '\u{10fffd}';
         !is_in_private_use_area && !chr.is_ascii_control()
       }
-      if !input.text_inserted.is_empty() && input.text_inserted.chars().all(is_printable_char) {
-        self.input.events.push(Event::Text(input.text_inserted.clone()))
+
+      // Keyboard keys
+      for Key { keyboard, semantic, text } in input.keys_pressed() {
+        let physical_key: Option<egui::Key> = keyboard.and_then(|k| k.into());
+        let logical_key: Option<egui::Key> = semantic.and_then(|s| s.into());
+        let handle_text = if let Some(key) = logical_key.or(physical_key) {
+          if is_cut_command(modifiers, key) {
+            self.input.events.push(Event::Cut);
+            false
+          } else if is_copy_command(modifiers, key) {
+            self.input.events.push(Event::Copy);
+            false
+          } else if is_paste_command(modifiers, key) {
+            if let Some(contents) = self.clipboard.get() {
+              let contents = contents.replace("\r\n", "\n");
+              if !contents.is_empty() {
+                self.input.events.push(Event::Paste(contents));
+              }
+            }
+            false
+          } else {
+            self.input.events.push(Event::Key { key, physical_key, pressed: true, repeat: false, modifiers });
+            true
+          }
+        } else {
+          true
+        };
+
+        // On some platforms we get here when the user presses Cmd-C (copy), ctrl-W, etc. We need to ignore these
+        // characters that are side effects of commands.
+        let is_cmd = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
+        if handle_text && !is_cmd {
+          if let Some(text) = text {
+            if !text.is_empty() && text.chars().all(is_printable_char) {
+              self.input.events.push(Event::Text(text.to_string()))
+            }
+          }
+        }
+      }
+      for Key { keyboard, semantic, .. } in input.keys_released() {
+        let physical_key: Option<egui::Key> = keyboard.and_then(|k| k.into());
+        let logical_key: Option<egui::Key> = semantic.and_then(|s| s.into());
+        if let Some(key) = logical_key.or(physical_key) {
+          self.input.events.push(Event::Key { key, physical_key, pressed: false, repeat: false, modifiers });
+        }
+        // Note: not handling text as egui doesn't need it for released keys.
       }
     }
   }
-
   pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
+
+  fn handle_platform_output(&mut self, platform_output: PlatformOutput) {
+    // TODO: cursor icon
+    // TODO: open URL
+
+    if !platform_output.copied_text.is_empty() {
+      self.clipboard.set(&platform_output.copied_text)
+    }
+  }
 
 
   //
@@ -276,6 +307,7 @@ impl Gui {
   ) {
     // End the frame to get output.
     let full_output = self.context.end_frame();
+    self.handle_platform_output(full_output.platform_output);
 
     // Update textures
     self.set_textures(device, queue, &full_output.textures_delta);

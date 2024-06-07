@@ -28,6 +28,7 @@ pub mod context;
 pub mod window;
 pub mod event;
 pub mod input;
+pub mod clipboard;
 
 // Light initialization TODO: extract subparts into features and enable only needed features.
 

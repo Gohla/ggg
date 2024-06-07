@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use smol_str::SmolStr;
 
 use crate::line::LineDelta;
 use crate::screen::{ScreenDelta, ScreenPosition};
@@ -23,20 +24,6 @@ pub struct RawInput {
 
   pub keys_pressed: Vec<Key>,
   pub keys_released: Vec<Key>,
-
-  pub text_inserted: String,
-}
-
-#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct Key {
-  pub keyboard: Option<KeyboardKey>,
-  pub semantic: Option<SemanticKey>,
-}
-impl Key {
-  #[inline]
-  pub fn new(keyboard: Option<KeyboardKey>, semantic: Option<SemanticKey>) -> Self {
-    Self { keyboard, semantic }
-  }
 }
 
 impl RawInput {
@@ -93,21 +80,12 @@ impl RawInput {
   }
 
   #[inline]
-  pub fn keys_pressed(&self) -> impl Iterator<Item=Key> + '_ {
-    self.keys_pressed.iter().copied()
+  pub fn keys_pressed(&self) -> impl Iterator<Item=&Key> {
+    self.keys_pressed.iter()
   }
   #[inline]
-  pub fn keys_released(&self) -> impl Iterator<Item=Key> + '_ {
-    self.keys_released.iter().copied()
-  }
-
-  #[inline]
-  pub fn text_inserted(&self) -> Option<&str> {
-    if !self.text_inserted.is_empty() {
-      Some(&self.text_inserted)
-    } else {
-      None
-    }
+  pub fn keys_released(&self) -> impl Iterator<Item=&Key> {
+    self.keys_released.iter()
   }
 
 
@@ -128,7 +106,6 @@ impl RawInput {
     self.semantic_keys.clear();
     self.keys_pressed.clear();
     self.keys_released.clear();
-    self.text_inserted.clear();
   }
 
   pub fn clear_deltas(&mut self) {
@@ -141,10 +118,26 @@ impl RawInput {
     self.keyboard_modifiers_released.clear();
     self.keys_pressed.clear();
     self.keys_released.clear();
-    self.text_inserted.clear();
   }
 }
 
+/// Key that was pressed or released, represented by one or more of:
+/// - a [physical keyboard key](KeyboardKey)
+/// - a [semantic key](SemanticKey)
+/// - a text sequence
+#[derive(Default, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct Key {
+  pub keyboard: Option<KeyboardKey>,
+  pub semantic: Option<SemanticKey>,
+  pub text: Option<SmolStr>,
+}
+impl Key {
+  #[inline]
+  pub fn new(keyboard: Option<KeyboardKey>, semantic: Option<SemanticKey>, text: Option<SmolStr>) -> Self {
+    debug_assert!(keyboard.is_some() || semantic.is_some() || text.is_some(), "at least one field must be set to `Some`");
+    Self { keyboard, semantic, text }
+  }
+}
 
 /// Symbolic representation of a mouse button.
 ///
@@ -693,8 +686,7 @@ impl Into<Option<egui::Key>> for KeyboardKey {
       // KeyboardKey::Colon => Key::Colon, // NOTE: there is no physical colon key on an american keyboard
       KeyboardKey::Semicolon => Key::Semicolon,
       KeyboardKey::Backslash => Key::Backslash,
-      // TODO: enable in later egui version
-      //KeyboardKey::Slash | KeyboardKey::NumpadDivide => Key::Slash,
+      KeyboardKey::Slash | KeyboardKey::NumpadDivide => Key::Slash,
       KeyboardKey::BracketLeft => Key::OpenBracket,
       KeyboardKey::BracketRight => Key::CloseBracket,
       KeyboardKey::Backquote => Key::Backtick,
@@ -764,22 +756,21 @@ impl Into<Option<egui::Key>> for KeyboardKey {
       KeyboardKey::F18 => Key::F18,
       KeyboardKey::F19 => Key::F19,
       KeyboardKey::F20 => Key::F20,
-      // TODO: enable in later egui version
-      // KeyboardKey::F21 => Key::F21,
-      // KeyboardKey::F22 => Key::F22,
-      // KeyboardKey::F23 => Key::F23,
-      // KeyboardKey::F24 => Key::F24,
-      // KeyboardKey::F25 => Key::F25,
-      // KeyboardKey::F26 => Key::F26,
-      // KeyboardKey::F27 => Key::F27,
-      // KeyboardKey::F28 => Key::F28,
-      // KeyboardKey::F29 => Key::F29,
-      // KeyboardKey::F30 => Key::F30,
-      // KeyboardKey::F31 => Key::F31,
-      // KeyboardKey::F32 => Key::F32,
-      // KeyboardKey::F33 => Key::F33,
-      // KeyboardKey::F34 => Key::F34,
-      // KeyboardKey::F35 => Key::F35,
+      KeyboardKey::F21 => Key::F21,
+      KeyboardKey::F22 => Key::F22,
+      KeyboardKey::F23 => Key::F23,
+      KeyboardKey::F24 => Key::F24,
+      KeyboardKey::F25 => Key::F25,
+      KeyboardKey::F26 => Key::F26,
+      KeyboardKey::F27 => Key::F27,
+      KeyboardKey::F28 => Key::F28,
+      KeyboardKey::F29 => Key::F29,
+      KeyboardKey::F30 => Key::F30,
+      KeyboardKey::F31 => Key::F31,
+      KeyboardKey::F32 => Key::F32,
+      KeyboardKey::F33 => Key::F33,
+      KeyboardKey::F34 => Key::F34,
+      KeyboardKey::F35 => Key::F35,
       _ => return None,
     };
     Some(key)
@@ -1556,22 +1547,21 @@ impl Into<Option<egui::Key>> for SemanticKey {
       SemanticKey::F18 => Key::F18,
       SemanticKey::F19 => Key::F19,
       SemanticKey::F20 => Key::F20,
-      // TODO: enable in later egui version
-      // SemanticKey::F21 => Key::F21,
-      // SemanticKey::F22 => Key::F22,
-      // SemanticKey::F23 => Key::F23,
-      // SemanticKey::F24 => Key::F24,
-      // SemanticKey::F25 => Key::F25,
-      // SemanticKey::F26 => Key::F26,
-      // SemanticKey::F27 => Key::F27,
-      // SemanticKey::F28 => Key::F28,
-      // SemanticKey::F29 => Key::F29,
-      // SemanticKey::F30 => Key::F30,
-      // SemanticKey::F31 => Key::F31,
-      // SemanticKey::F32 => Key::F32,
-      // SemanticKey::F33 => Key::F33,
-      // SemanticKey::F34 => Key::F34,
-      // SemanticKey::F35 => Key::F35,
+      SemanticKey::F21 => Key::F21,
+      SemanticKey::F22 => Key::F22,
+      SemanticKey::F23 => Key::F23,
+      SemanticKey::F24 => Key::F24,
+      SemanticKey::F25 => Key::F25,
+      SemanticKey::F26 => Key::F26,
+      SemanticKey::F27 => Key::F27,
+      SemanticKey::F28 => Key::F28,
+      SemanticKey::F29 => Key::F29,
+      SemanticKey::F30 => Key::F30,
+      SemanticKey::F31 => Key::F31,
+      SemanticKey::F32 => Key::F32,
+      SemanticKey::F33 => Key::F33,
+      SemanticKey::F34 => Key::F34,
+      SemanticKey::F35 => Key::F35,
       _ => return None,
     };
     Some(key)

@@ -16,6 +16,14 @@ use common::screen::{ScreenDelta, ScreenPosition, ScreenSize};
 use crate::context::Context;
 use crate::window::Window;
 
+#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
+pub enum Event {
+  TerminateRequested,
+  CursorEntered,
+  CursorLeft,
+  WindowSizeChange(ScreenSize),
+}
+
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum InputEvent {
   MouseButton { button: MouseButton, state: ElementState },
@@ -36,14 +44,6 @@ pub enum InputEvent {
   MouseWheelLine(LineDelta),
   KeyboardModifier { modifier: KeyboardModifier, state: ElementState },
   KeyboardKey { keyboard_key: Option<KeyboardKey>, semantic_key: Option<SemanticKey>, text: Option<SmolStr>, state: ElementState },
-}
-
-#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
-pub enum Event {
-  TerminateRequested,
-  CursorEntered,
-  CursorLeft,
-  WindowSizeChange(ScreenSize),
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
