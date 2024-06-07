@@ -123,11 +123,12 @@ impl Gui {
       render_pipeline,
     }
   }
-}
 
-// Input processing.
 
-impl Gui {
+  //
+  // Input processing.
+  //
+
   #[profiling::function]
   pub fn process_input(&mut self, input: &RawInput, process_keyboard_input: bool, process_mouse_input: bool) {
     if process_keyboard_input {
@@ -178,6 +179,25 @@ impl Gui {
     }
 
     if process_keyboard_input {
+      // TODO: use in later egui version
+      // fn is_cut_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+      //   keycode == egui::Key::Cut
+      //     || (modifiers.command && keycode == egui::Key::X)
+      //     || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Delete)
+      // }
+      //
+      // fn is_copy_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+      //   keycode == egui::Key::Copy
+      //     || (modifiers.command && keycode == egui::Key::C)
+      //     || (cfg!(target_os = "windows") && modifiers.ctrl && keycode == egui::Key::Insert)
+      // }
+      //
+      // fn is_paste_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
+      //   keycode == egui::Key::Paste
+      //     || (modifiers.command && keycode == egui::Key::V)
+      //     || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Insert)
+      // }
+
       // Keyboard keys
       for keyboard_key in input.keyboard_keys_pressed() {
         if let Some(key) = keyboard_key.into() {
@@ -220,13 +240,13 @@ impl Gui {
   }
 
   pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
-
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
-}
 
-// Begin GUI frame, returning the context to start building the GUI.
 
-impl Gui {
+  //
+  // Begin GUI frame, returning the context to start building the GUI.
+  //
+
   #[profiling::function]
   pub fn begin_frame(
     &mut self,
@@ -246,11 +266,12 @@ impl Gui {
     self.context.begin_frame(input);
     self.context.clone()
   }
-}
 
-// Rendering the built GUI.
 
-impl Gui {
+  //
+  // Rendering the built GUI.
+  //
+
   #[profiling::function]
   pub fn render(
     &mut self,

@@ -112,16 +112,6 @@ impl PhysicalSize {
   #[inline]
   pub fn new(width: u64, height: u64) -> Self { Self { width, height } }
 
-  /// Note: rounds f64 to u64.
-  #[inline]
-  pub fn from_logical<L: Into<LogicalSize>, S: Into<Scale>>(logical: L, scale: S) -> Self {
-    logical.into() * scale.into()
-  }
-  #[inline]
-  pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalSize {
-    self / scale.into()
-  }
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.width == 0 && self.height == 0 }
   #[inline]
@@ -236,16 +226,6 @@ impl LogicalSize {
     debug_assert!(height.is_finite(), "Height {} is not finite", height);
     debug_assert!(!height.is_nan(), "Height is NaN");
     Self { width, height }
-  }
-
-  #[inline]
-  pub fn from_physical<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self {
-    physical.into() / scale.into()
-  }
-  /// Note: rounds f64 into u64.
-  #[inline]
-  pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalSize {
-    self * scale.into()
   }
 
   #[inline]
@@ -432,16 +412,6 @@ impl PhysicalPosition {
   #[inline]
   pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
-  /// Note: rounds f64 to i64.
-  #[inline]
-  pub fn from_logical<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self {
-    logical.into() * scale.into()
-  }
-  #[inline]
-  pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalPosition {
-    self / scale.into()
-  }
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
 }
@@ -566,16 +536,6 @@ impl LogicalPosition {
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
     Self { x, y }
-  }
-
-  #[inline]
-  pub fn from_physical<P: Into<PhysicalPosition>, S: Into<Scale>>(physical: P, scale: S) -> Self {
-    physical.into() / scale.into()
-  }
-  /// Note: rounds f64 to i64.
-  #[inline]
-  pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalPosition {
-    self * scale.into()
   }
 
   #[inline]
@@ -770,16 +730,6 @@ impl PhysicalDelta {
   #[inline]
   pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
-  /// Note: rounds from f64 to i64.
-  #[inline]
-  pub fn from_logical<L: Into<LogicalDelta>, S: Into<Scale>>(logical: L, scale: S) -> Self {
-    logical.into() * scale.into()
-  }
-  #[inline]
-  pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalDelta {
-    self / scale.into()
-  }
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
 }
@@ -867,16 +817,6 @@ impl LogicalDelta {
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
     Self { x, y }
-  }
-
-  #[inline]
-  pub fn from_physical<P: Into<PhysicalDelta>, S: Into<Scale>>(physical: P, scale: S) -> Self {
-    physical.into() / scale.into()
-  }
-  /// Note: rounds from f64 to i64.
-  #[inline]
-  pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalDelta {
-    self * scale.into()
   }
 
   #[inline]

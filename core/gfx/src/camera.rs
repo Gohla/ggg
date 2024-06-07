@@ -360,16 +360,16 @@ pub struct CameraInput {
 impl From<&RawInput> for CameraInput {
   fn from(input: &RawInput) -> Self {
     CameraInput {
-      primary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Left),
-      secondary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Right),
+      primary_mouse_button_down: input.is_mouse_button_down(MouseButton::Left),
+      secondary_mouse_button_down: input.is_mouse_button_down(MouseButton::Right),
       mouse_position_delta: input.mouse_position_delta,
       mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.y as f32,
-      forward_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyW),
-      left_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyA),
-      backward_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyS),
-      right_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyD),
-      up_key_down: input.keyboard_keys.contains(&KeyboardKey::Space),
-      down_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyC)
+      forward_key_down: input.is_keyboard_key_down(KeyboardKey::KeyW),
+      left_key_down: input.is_keyboard_key_down(KeyboardKey::KeyA),
+      backward_key_down: input.is_keyboard_key_down(KeyboardKey::KeyS),
+      right_key_down: input.is_keyboard_key_down(KeyboardKey::KeyD),
+      up_key_down: input.is_keyboard_key_down(KeyboardKey::Space),
+      down_key_down: input.is_keyboard_key_down(KeyboardKey::KeyC),
     }
   }
 }
@@ -436,7 +436,7 @@ impl CameraDebugging {
     selected_camera: &mut usize,
     default_settings: &CameraSettings,
     cameras: &[Camera],
-    settings: &mut [CameraSettings]
+    settings: &mut [CameraSettings],
   ) {
     use egui::ComboBox;
     use gui_widget::*;

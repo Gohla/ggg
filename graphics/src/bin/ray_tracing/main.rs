@@ -120,9 +120,9 @@ impl app::Application for RayTracing {
       input.down = true;
     }
     if raw_input.is_keyboard_modifier_down(KeyboardModifier::Control) {
-      input.aperture_delta = (raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.vertical as f32) * 0.1;
+      input.aperture_delta = (raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.y as f32) * 0.1;
     } else {
-      input.v_fov_delta = raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.vertical as f32;
+      input.v_fov_delta = raw_input.mouse_wheel_pixel_delta.physical.y as f32 + raw_input.mouse_wheel_line_delta.y as f32;
     }
     input
   }

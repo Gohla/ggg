@@ -31,8 +31,8 @@ pub struct TextureIdx(u16);
 
 #[derive(Error, Debug)]
 pub enum AddTextureError {
-  #[error("Adding a texture failed because the dimensions of the texture ({width}, {height}) are larger than the maximum dimensions of the texture array ({max_width}, {max_height})"
-  )]
+  #[error("Adding a texture failed because the dimensions of the texture ({width}, {height}) are larger than the \
+  maximum dimensions of the texture array ({max_width}, {max_height})")]
   IncorrectDimensionsFail { width: u32, height: u32, max_width: u32, max_height: u32 },
 }
 
@@ -51,7 +51,16 @@ impl ArrayTextureDefBuilder {
 // Building the texture array
 
 impl ArrayTextureDefBuilder {
-  pub fn build<'a>(self, device: &Device, queue: &Queue, texture_label: &'a str, texture_view_label: &'a str, sampler_label: &'a str, bind_group_layout_label: &'a str, bind_group_label: &'a str) -> ArrayTextureDef {
+  pub fn build<'a>(
+    self,
+    device: &Device,
+    queue: &Queue,
+    texture_label: &'a str,
+    texture_view_label: &'a str,
+    sampler_label: &'a str,
+    bind_group_layout_label: &'a str,
+    bind_group_label: &'a str,
+  ) -> ArrayTextureDef {
     let texture = TextureBuilder::new()
       .with_2d_array_size(self.width, self.height, self.data.len() as u32)
       .with_rgba8_unorm_srgb_format()
