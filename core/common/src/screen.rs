@@ -2,7 +2,10 @@
 
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-/// Scale (DPI) factor. The number of physical pixels per logical point.
+/// Scale factor. The number of physical pixels per logical point.
+///
+/// Sometimes called DPI (Dots Per Inch), but this is a misnomer because this scale has nothing to do with the surface
+/// area of the screen.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Scale(f64);
@@ -15,9 +18,13 @@ impl Scale {
     Scale(scale)
   }
 
-
   #[inline]
   pub fn is_identity(&self) -> bool { self.0 == 1.0 }
+}
+
+impl Default for Scale {
+  #[inline]
+  fn default() -> Self { Scale(1.0) }
 }
 
 impl Mul<Scale> for f64 {
@@ -25,31 +32,27 @@ impl Mul<Scale> for f64 {
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self * rhs.0 }
 }
-
-impl Div<Scale> for f64 {
-  type Output = f64;
-  #[inline]
-  fn div(self, rhs: Scale) -> f64 { self / rhs.0 }
-}
-
 impl Mul<Scale> for u64 {
   type Output = f64;
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
-
-impl Div<Scale> for u64 {
-  type Output = f64;
-  #[inline]
-  fn div(self, rhs: Scale) -> f64 { self as f64 / rhs.0 }
-}
-
 impl Mul<Scale> for i64 {
   type Output = f64;
   #[inline]
   fn mul(self, rhs: Scale) -> f64 { self as f64 * rhs.0 }
 }
 
+impl Div<Scale> for f64 {
+  type Output = f64;
+  #[inline]
+  fn div(self, rhs: Scale) -> f64 { self / rhs.0 }
+}
+impl Div<Scale> for u64 {
+  type Output = f64;
+  #[inline]
+  fn div(self, rhs: Scale) -> f64 { self as f64 / rhs.0 }
+}
 impl Div<Scale> for i64 {
   type Output = f64;
   #[inline]
@@ -60,17 +63,14 @@ impl From<f64> for Scale {
   #[inline]
   fn from(scale: f64) -> Self { Scale(scale) }
 }
-
 impl From<u64> for Scale {
   #[inline]
   fn from(scale: u64) -> Self { Scale(scale as _) }
 }
-
 impl From<f32> for Scale {
   #[inline]
   fn from(scale: f32) -> Self { Scale(scale as _) }
 }
-
 impl From<u32> for Scale {
   #[inline]
   fn from(scale: u32) -> Self { Scale(scale as _) }
@@ -81,17 +81,13 @@ impl From<Scale> for f64 {
   fn from(scale: Scale) -> Self { scale.0 }
 }
 
-impl Default for Scale {
-  #[inline]
-  fn default() -> Self { Scale(1.0) }
-}
-
 
 //
 // Size
 //
 
-/// Physical size: size in physical (real) pixels on the device.
+/// Physical size: size measured in physical (actual/real) pixels on the device. For example, the resolution of your
+/// monitor.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalSize {
@@ -103,20 +99,19 @@ impl PhysicalSize {
   #[inline]
   pub fn new(width: u64, height: u64) -> Self { Self { width, height } }
 
-  /// Note: loss of precision in physical size: conversion from f64 into u32.
+  /// Note: rounds f64 to u64.
   #[inline]
-  pub fn from_logical<L: Into<LogicalSize>, S: Into<Scale>>(logical: L, scale: S) -> Self { logical.into().into_physical(scale) }
-
+  pub fn from_logical<L: Into<LogicalSize>, S: Into<Scale>>(logical: L, scale: S) -> Self {
+    logical.into().into_physical(scale)
+  }
   #[inline]
   pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalSize {
     let scale = scale.into();
     LogicalSize::new(self.width / scale, self.height / scale)
   }
 
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.width == 0 && self.height == 0 }
-
   #[inline]
   pub fn ratio(&self) -> f64 { self.width as f64 / self.height as f64 }
 }
@@ -125,42 +120,18 @@ impl From<(u64, u64)> for PhysicalSize {
   #[inline]
   fn from((width, height): (u64, u64)) -> Self { Self::new(width, height) }
 }
-
 impl From<(u32, u32)> for PhysicalSize {
   #[inline]
   fn from((width, height): (u32, u32)) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<[u64; 2]> for PhysicalSize {
   #[inline]
   fn from([width, height]: [u64; 2]) -> Self { Self::new(width, height) }
 }
-
 impl From<[u32; 2]> for PhysicalSize {
   #[inline]
   fn from([width, height]: [u32; 2]) -> Self { Self::new(width as _, height as _) }
 }
-
-impl From<PhysicalSize> for (u64, u64) {
-  #[inline]
-  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
-}
-
-impl From<PhysicalSize> for (f64, f64) {
-  #[inline]
-  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
-}
-
-impl From<PhysicalSize> for [u64; 2] {
-  #[inline]
-  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
-}
-
-impl From<PhysicalSize> for [f64; 2] {
-  #[inline]
-  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
-}
-
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalSize<P>> for PhysicalSize {
   #[inline]
@@ -170,11 +141,27 @@ impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalSize<P>> for PhysicalSize {
   }
 }
 
+impl From<PhysicalSize> for (u64, u64) {
+  #[inline]
+  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
+}
+impl From<PhysicalSize> for (f64, f64) {
+  #[inline]
+  fn from(p: PhysicalSize) -> Self { (p.width as _, p.height as _) }
+}
+impl From<PhysicalSize> for [u64; 2] {
+  #[inline]
+  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
+}
+impl From<PhysicalSize> for [f64; 2] {
+  #[inline]
+  fn from(p: PhysicalSize) -> Self { [p.width as _, p.height as _] }
+}
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> Into<winit::dpi::PhysicalSize<P>> for PhysicalSize {
   #[inline]
   fn into(self) -> winit::dpi::PhysicalSize<P> {
-    // Note: loss of precision: conversion from u64 into u32.
+    // Note: loss of precision due to conversion from u64 into u32.
     winit::dpi::PhysicalSize::from((self.width as u32, self.height as u32))
   }
 }
@@ -182,13 +169,14 @@ impl<P: winit::dpi::Pixel> Into<winit::dpi::PhysicalSize<P>> for PhysicalSize {
 impl Into<winit::dpi::Size> for PhysicalSize {
   #[inline]
   fn into(self) -> winit::dpi::Size {
-    // Note: loss of precision: conversion from u64 into u32.
+    // Note: loss of precision due to conversion from u64 into u32.
     winit::dpi::Size::Physical(self.into())
   }
 }
 
 
-/// Logical size: size after scaling. That is, the physical size divided by the scale factor.
+/// Logical size: size measured in logical (software) pixels. For example, the resolution of a framebuffer which may
+/// differ from the resolution of your monitor, and thus require scaling to fit to your monitor.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -213,13 +201,12 @@ impl LogicalSize {
   pub fn from_physical<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self {
     physical.into().into_logical(scale)
   }
-
+  /// Note: rounds f64 into u64.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalSize {
     let scale = scale.into();
     PhysicalSize::new((self.width * scale).round() as _, (self.height * scale).round() as _)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.width == 0.0 && self.height == 0.0 }
@@ -229,52 +216,34 @@ impl From<(f64, f64)> for LogicalSize {
   #[inline]
   fn from((width, height): (f64, f64)) -> Self { Self::new(width, height) }
 }
-
 impl From<(f32, f32)> for LogicalSize {
   #[inline]
   fn from((width, height): (f32, f32)) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<(u64, u64)> for LogicalSize {
   #[inline]
   fn from((width, height): (u64, u64)) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<(u32, u32)> for LogicalSize {
   #[inline]
   fn from((width, height): (u32, u32)) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<[f64; 2]> for LogicalSize {
   #[inline]
   fn from([width, height]: [f64; 2]) -> Self { Self::new(width, height) }
 }
-
 impl From<[f32; 2]> for LogicalSize {
   #[inline]
   fn from([width, height]: [f32; 2]) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<[u64; 2]> for LogicalSize {
   #[inline]
   fn from([width, height]: [u64; 2]) -> Self { Self::new(width as _, height as _) }
 }
-
 impl From<[u32; 2]> for LogicalSize {
   #[inline]
   fn from([width, height]: [u32; 2]) -> Self { Self::new(width as _, height as _) }
 }
-
-impl From<LogicalSize> for (f64, f64) {
-  #[inline]
-  fn from(l: LogicalSize) -> Self { (l.width, l.height) }
-}
-
-impl From<LogicalSize> for [f64; 2] {
-  #[inline]
-  fn from(l: LogicalSize) -> Self { [l.width, l.height] }
-}
-
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalSize<P>> for LogicalSize {
   #[inline]
@@ -284,6 +253,14 @@ impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalSize<P>> for LogicalSize {
   }
 }
 
+impl From<LogicalSize> for (f64, f64) {
+  #[inline]
+  fn from(l: LogicalSize) -> Self { (l.width, l.height) }
+}
+impl From<LogicalSize> for [f64; 2] {
+  #[inline]
+  fn from(l: LogicalSize) -> Self { [l.width, l.height] }
+}
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> Into<winit::dpi::LogicalSize<P>> for LogicalSize {
   #[inline]
@@ -321,7 +298,6 @@ impl ScreenSize {
     let physical = logical.into_physical(scale);
     Self::new(physical, scale, logical)
   }
-
   #[inline]
   pub fn from_physical_scale<P: Into<PhysicalSize>, S: Into<Scale>>(physical: P, scale: S) -> Self {
     let physical = physical.into();
@@ -329,7 +305,6 @@ impl ScreenSize {
     let logical = physical.into_logical(scale);
     Self::new(physical, scale, logical)
   }
-
   #[inline]
   pub fn from_unscaled(width: u64, height: u64) -> Self {
     let physical = PhysicalSize::new(width, height);
@@ -337,7 +312,6 @@ impl ScreenSize {
     let logical = physical.into_logical(scale);
     Self::new(physical, scale, logical)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
@@ -347,12 +321,10 @@ impl From<ScreenSize> for LogicalSize {
   #[inline]
   fn from(s: ScreenSize) -> Self { s.logical }
 }
-
 impl From<ScreenSize> for PhysicalSize {
   #[inline]
   fn from(s: ScreenSize) -> Self { s.physical }
 }
-
 impl From<ScreenSize> for Scale {
   #[inline]
   fn from(s: ScreenSize) -> Self { s.scale }
@@ -363,7 +335,7 @@ impl From<ScreenSize> for Scale {
 // Position
 //
 
-/// Position in physical screen space.
+/// Physical position: position measured in physical (actual/real) pixels on the device.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalPosition {
@@ -375,17 +347,16 @@ impl PhysicalPosition {
   #[inline]
   pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
+  /// Note: rounds f64 to i64.
   #[inline]
   pub fn from_logical<L: Into<LogicalPosition>, S: Into<Scale>>(logical: L, scale: S) -> Self {
     logical.into().into_physical(scale)
   }
-
   #[inline]
   pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalPosition {
     let scale = scale.into();
     LogicalPosition::new(self.x / scale, self.y / scale)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
@@ -393,13 +364,11 @@ impl PhysicalPosition {
 
 impl Add<PhysicalPosition> for PhysicalPosition {
   type Output = PhysicalPosition;
-
   #[inline]
   fn add(self, rhs: PhysicalPosition) -> Self::Output {
     PhysicalPosition::new(self.x + rhs.x, self.y + rhs.y)
   }
 }
-
 impl AddAssign<PhysicalPosition> for PhysicalPosition {
   #[inline]
   fn add_assign(&mut self, rhs: PhysicalPosition) {
@@ -410,7 +379,6 @@ impl AddAssign<PhysicalPosition> for PhysicalPosition {
 
 impl Sub<PhysicalPosition> for PhysicalPosition {
   type Output = PhysicalDelta;
-
   #[inline]
   fn sub(self, rhs: PhysicalPosition) -> Self::Output {
     PhysicalDelta::new(self.x - rhs.x, self.y - rhs.y)
@@ -421,42 +389,18 @@ impl From<(i64, i64)> for PhysicalPosition {
   #[inline]
   fn from((x, y): (i64, i64)) -> Self { Self::new(x, y) }
 }
-
 impl From<(i32, i32)> for PhysicalPosition {
   #[inline]
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[i64; 2]> for PhysicalPosition {
   #[inline]
   fn from([x, y]: [i64; 2]) -> Self { Self::new(x, y) }
 }
-
 impl From<[i32; 2]> for PhysicalPosition {
   #[inline]
   fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
 }
-
-impl From<PhysicalPosition> for (i64, i64) {
-  #[inline]
-  fn from(p: PhysicalPosition) -> Self { (p.x, p.y) }
-}
-
-impl From<PhysicalPosition> for (f64, f64) {
-  #[inline]
-  fn from(p: PhysicalPosition) -> Self { (p.x as _, p.y as _) }
-}
-
-impl From<PhysicalPosition> for [i64; 2] {
-  #[inline]
-  fn from(p: PhysicalPosition) -> Self { [p.x, p.y] }
-}
-
-impl From<PhysicalPosition> for [f64; 2] {
-  #[inline]
-  fn from(p: PhysicalPosition) -> Self { [p.x as _, p.y as _] }
-}
-
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalPosition<P>> for PhysicalPosition {
   #[inline]
@@ -466,17 +410,33 @@ impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalPosition<P>> for PhysicalPos
   }
 }
 
+impl From<PhysicalPosition> for (i64, i64) {
+  #[inline]
+  fn from(p: PhysicalPosition) -> Self { (p.x, p.y) }
+}
+impl From<PhysicalPosition> for (f64, f64) {
+  #[inline]
+  fn from(p: PhysicalPosition) -> Self { (p.x as _, p.y as _) }
+}
+impl From<PhysicalPosition> for [i64; 2] {
+  #[inline]
+  fn from(p: PhysicalPosition) -> Self { [p.x, p.y] }
+}
+impl From<PhysicalPosition> for [f64; 2] {
+  #[inline]
+  fn from(p: PhysicalPosition) -> Self { [p.x as _, p.y as _] }
+}
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> Into<winit::dpi::PhysicalPosition<P>> for PhysicalPosition {
   #[inline]
   fn into(self) -> winit::dpi::PhysicalPosition<P> {
-    // Note: loss of precision in physical position: conversion from i64 into i32.
+    // Note: loss of precision due to conversion from i64 to i32.
     winit::dpi::PhysicalPosition::from((self.x as i32, self.y as i32))
   }
 }
 
 
-/// Position in logical screen space.
+/// Logical position: position measured in logical (software) pixels.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -496,15 +456,15 @@ impl LogicalPosition {
   }
 
   #[inline]
-  pub fn from_physical<P: Into<PhysicalPosition>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
-
-  /// Note: loss of precision in physical position: conversion from f64 into i32.
+  pub fn from_physical<P: Into<PhysicalPosition>, S: Into<Scale>>(physical: P, scale: S) -> Self {
+    physical.into().into_logical(scale)
+  }
+  /// Note: rounds f64 to i64.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalPosition {
     let scale = scale.into();
     PhysicalPosition::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
@@ -512,13 +472,11 @@ impl LogicalPosition {
 
 impl Add<LogicalPosition> for LogicalPosition {
   type Output = LogicalPosition;
-
   #[inline]
   fn add(self, rhs: LogicalPosition) -> Self::Output {
     LogicalPosition::new(self.x + rhs.x, self.y + rhs.y)
   }
 }
-
 impl AddAssign<LogicalPosition> for LogicalPosition {
   #[inline]
   fn add_assign(&mut self, rhs: LogicalPosition) {
@@ -529,7 +487,6 @@ impl AddAssign<LogicalPosition> for LogicalPosition {
 
 impl Sub<LogicalPosition> for LogicalPosition {
   type Output = LogicalDelta;
-
   #[inline]
   fn sub(self, rhs: LogicalPosition) -> Self::Output {
     LogicalDelta::new(self.x - rhs.x, self.y - rhs.y)
@@ -540,42 +497,26 @@ impl From<(f64, f64)> for LogicalPosition {
   #[inline]
   fn from((x, y): (f64, f64)) -> Self { Self::new(x, y) }
 }
-
 impl From<(f32, f32)> for LogicalPosition {
   #[inline]
   fn from((x, y): (f32, f32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<(i32, i32)> for LogicalPosition {
   #[inline]
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[f64; 2]> for LogicalPosition {
   #[inline]
   fn from([x, y]: [f64; 2]) -> Self { Self::new(x, y) }
 }
-
 impl From<[f32; 2]> for LogicalPosition {
   #[inline]
   fn from([x, y]: [f32; 2]) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[i32; 2]> for LogicalPosition {
   #[inline]
   fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
 }
-
-impl From<LogicalPosition> for (f64, f64) {
-  #[inline]
-  fn from(l: LogicalPosition) -> Self { (l.x, l.y) }
-}
-
-impl From<LogicalPosition> for [f64; 2] {
-  #[inline]
-  fn from(l: LogicalPosition) -> Self { [l.x, l.y] }
-}
-
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalPosition<P>> for LogicalPosition {
   #[inline]
@@ -585,6 +526,14 @@ impl<P: winit::dpi::Pixel> From<winit::dpi::LogicalPosition<P>> for LogicalPosit
   }
 }
 
+impl From<LogicalPosition> for (f64, f64) {
+  #[inline]
+  fn from(l: LogicalPosition) -> Self { (l.x, l.y) }
+}
+impl From<LogicalPosition> for [f64; 2] {
+  #[inline]
+  fn from(l: LogicalPosition) -> Self { [l.x, l.y] }
+}
 #[cfg(feature = "winit")]
 impl<P: winit::dpi::Pixel> Into<winit::dpi::LogicalPosition<P>> for LogicalPosition {
   #[inline]
@@ -614,7 +563,6 @@ impl ScreenPosition {
     let physical = logical.into_physical(scale);
     Self::new(physical, logical)
   }
-
   #[inline]
   pub fn from_physical_scale<P: Into<PhysicalPosition>, S: Into<Scale>>(physical: P, scale: S) -> Self {
     let physical = physical.into();
@@ -622,7 +570,6 @@ impl ScreenPosition {
     let logical = physical.into_logical(scale);
     Self::new(physical, logical)
   }
-
   #[inline]
   pub fn from_unscaled(x: i64, y: i64) -> Self {
     let physical = PhysicalPosition::new(x, y);
@@ -630,20 +577,17 @@ impl ScreenPosition {
     Self::new(physical, logical)
   }
 
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
 }
 
 impl Add<ScreenPosition> for ScreenPosition {
   type Output = ScreenPosition;
-
   #[inline]
   fn add(self, rhs: ScreenPosition) -> Self::Output {
     ScreenPosition::new(self.physical + rhs.physical, self.logical + rhs.logical)
   }
 }
-
 impl AddAssign<ScreenPosition> for ScreenPosition {
   #[inline]
   fn add_assign(&mut self, rhs: ScreenPosition) {
@@ -651,10 +595,8 @@ impl AddAssign<ScreenPosition> for ScreenPosition {
     self.logical += rhs.logical;
   }
 }
-
 impl Sub<ScreenPosition> for ScreenPosition {
   type Output = ScreenDelta;
-
   #[inline]
   fn sub(self, rhs: ScreenPosition) -> Self::Output {
     ScreenDelta::new(self.physical - rhs.physical, self.logical - rhs.logical)
@@ -665,7 +607,6 @@ impl From<ScreenPosition> for LogicalPosition {
   #[inline]
   fn from(screen_position: ScreenPosition) -> Self { screen_position.logical }
 }
-
 impl From<ScreenPosition> for PhysicalPosition {
   #[inline]
   fn from(screen_position: ScreenPosition) -> Self { screen_position.physical }
@@ -676,7 +617,7 @@ impl From<ScreenPosition> for PhysicalPosition {
 // Delta
 //
 
-/// Delta in physical screen space.
+/// Physical delta: delta (difference) measured in physical (actual/real) pixels on the device.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PhysicalDelta {
@@ -688,16 +629,16 @@ impl PhysicalDelta {
   #[inline]
   pub fn new(x: i64, y: i64) -> Self { Self { x, y } }
 
-  /// Loss of precision in physical delta: conversion from f64 into i32.
+  /// Note: rounds from f64 to i64.
   #[inline]
-  pub fn from_logical<L: Into<LogicalDelta>, S: Into<Scale>>(logical: L, scale: S) -> Self { logical.into().into_physical(scale) }
-
+  pub fn from_logical<L: Into<LogicalDelta>, S: Into<Scale>>(logical: L, scale: S) -> Self {
+    logical.into().into_physical(scale)
+  }
   #[inline]
   pub fn into_logical<S: Into<Scale>>(self, scale: S) -> LogicalDelta {
     let scale = scale.into();
     LogicalDelta::new(self.x / scale, self.y / scale)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0 && self.y == 0 }
@@ -705,13 +646,11 @@ impl PhysicalDelta {
 
 impl Add<PhysicalDelta> for PhysicalDelta {
   type Output = PhysicalDelta;
-
   #[inline]
   fn add(self, rhs: PhysicalDelta) -> Self::Output {
     PhysicalDelta::new(self.x + rhs.x, self.y + rhs.y)
   }
 }
-
 impl AddAssign<PhysicalDelta> for PhysicalDelta {
   #[inline]
   fn add_assign(&mut self, rhs: PhysicalDelta) {
@@ -724,17 +663,14 @@ impl From<(i64, i64)> for PhysicalDelta {
   #[inline]
   fn from((x, y): (i64, i64)) -> Self { Self::new(x, y) }
 }
-
 impl From<(i32, i32)> for PhysicalDelta {
   #[inline]
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[i64; 2]> for PhysicalDelta {
   #[inline]
   fn from([x, y]: [i64; 2]) -> Self { Self::new(x, y) }
 }
-
 impl From<[i32; 2]> for PhysicalDelta {
   #[inline]
   fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
@@ -744,14 +680,13 @@ impl From<PhysicalDelta> for (i64, i64) {
   #[inline]
   fn from(p: PhysicalDelta) -> Self { (p.x, p.y) }
 }
-
 impl From<PhysicalDelta> for [i64; 2] {
   #[inline]
   fn from(p: PhysicalDelta) -> Self { [p.x, p.y] }
 }
 
 
-/// Delta in logical screen space.
+/// Logical delta: delta (difference) measured in logical (software) pixels.
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
@@ -771,14 +706,15 @@ impl LogicalDelta {
   }
 
   #[inline]
-  pub fn from_physical<P: Into<PhysicalDelta>, S: Into<Scale>>(physical: P, scale: S) -> Self { physical.into().into_logical(scale) }
-
+  pub fn from_physical<P: Into<PhysicalDelta>, S: Into<Scale>>(physical: P, scale: S) -> Self {
+    physical.into().into_logical(scale)
+  }
+  /// Note: rounds from f64 to i64.
   #[inline]
   pub fn into_physical<S: Into<Scale>>(self, scale: S) -> PhysicalDelta {
     let scale = scale.into();
     PhysicalDelta::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
-
 
   #[inline]
   pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
@@ -786,13 +722,11 @@ impl LogicalDelta {
 
 impl Add<LogicalDelta> for LogicalDelta {
   type Output = LogicalDelta;
-
   #[inline]
   fn add(self, rhs: LogicalDelta) -> Self::Output {
     LogicalDelta::new(self.x + rhs.x, self.y + rhs.y)
   }
 }
-
 impl AddAssign<LogicalDelta> for LogicalDelta {
   #[inline]
   fn add_assign(&mut self, rhs: LogicalDelta) {
@@ -805,27 +739,22 @@ impl From<(f64, f64)> for LogicalDelta {
   #[inline]
   fn from((x, y): (f64, f64)) -> Self { Self::new(x, y) }
 }
-
 impl From<(f32, f32)> for LogicalDelta {
   #[inline]
   fn from((x, y): (f32, f32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<(i32, i32)> for LogicalDelta {
   #[inline]
   fn from((x, y): (i32, i32)) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[f64; 2]> for LogicalDelta {
   #[inline]
   fn from([x, y]: [f64; 2]) -> Self { Self::new(x, y) }
 }
-
 impl From<[f32; 2]> for LogicalDelta {
   #[inline]
   fn from([x, y]: [f32; 2]) -> Self { Self::new(x as _, y as _) }
 }
-
 impl From<[i32; 2]> for LogicalDelta {
   #[inline]
   fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
@@ -835,7 +764,6 @@ impl From<LogicalDelta> for (f64, f64) {
   #[inline]
   fn from(l: LogicalDelta) -> Self { (l.x, l.y) }
 }
-
 impl From<LogicalDelta> for [f64; 2] {
   #[inline]
   fn from(l: LogicalDelta) -> Self { [l.x, l.y] }
@@ -861,7 +789,6 @@ impl ScreenDelta {
     let physical = logical.into_physical(scale);
     Self::new(physical, logical)
   }
-
   #[inline]
   pub fn from_physical_scale<P: Into<PhysicalDelta>, S: Into<Scale>>(physical: P, scale: S) -> Self {
     let physical = physical.into();
@@ -869,7 +796,6 @@ impl ScreenDelta {
     let logical = physical.into_logical(scale);
     Self::new(physical, logical)
   }
-
   #[inline]
   pub fn from_unscaled(x: i64, y: i64) -> Self {
     let physical = PhysicalDelta::new(x, y);
@@ -877,20 +803,17 @@ impl ScreenDelta {
     Self::new(physical, logical)
   }
 
-
   #[inline]
   pub fn is_zero(&self) -> bool { self.physical.is_zero() && self.logical.is_zero() }
 }
 
 impl Add<ScreenDelta> for ScreenDelta {
   type Output = ScreenDelta;
-
   #[inline]
   fn add(self, rhs: ScreenDelta) -> Self::Output {
     ScreenDelta::new(self.physical + rhs.physical, self.logical + rhs.logical)
   }
 }
-
 impl AddAssign<ScreenDelta> for ScreenDelta {
   #[inline]
   fn add_assign(&mut self, rhs: ScreenDelta) {
@@ -903,7 +826,6 @@ impl From<ScreenDelta> for LogicalDelta {
   #[inline]
   fn from(screen_position: ScreenDelta) -> Self { screen_position.logical }
 }
-
 impl From<ScreenDelta> for PhysicalDelta {
   #[inline]
   fn from(screen_position: ScreenDelta) -> Self { screen_position.physical }

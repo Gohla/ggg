@@ -20,5 +20,5 @@ void main() {
   gl_Position = vec4(2.0 * inPos.x / uScreenSize.x - 1.0, 1.0 - 2.0 * inPos.y / uScreenSize.y, 0.0, 1.0);
   outTex = inTex;
   // [u8; 4] SRGB as u32 -> [r, g, b, a]
-  outCol = vec4(inCol & 0xFFu, (inCol >> 8) & 0xFFu, (inCol >> 16) & 0xFFu, (inCol >> 24) & 0xFFu) / 255.0;
+  outCol = vec4(inCol & 0xFFu, (inCol >> 8u) & 0xFFu, (inCol >> 16u) & 0xFFu, (inCol >> 24u) & 0xFFu) / 255.0;
 }

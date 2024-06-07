@@ -49,24 +49,30 @@ impl Gui {
 
     let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
     let fragment_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
+
+    // Bind group that does not change while rendering (static), containing the uniform buffer and texture sampler.
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("GUI uniform buffer")
       .build_with_data(device, &[Uniform::default()]);
     let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
       uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
+
     let sampler = SamplerBuilder::new()
       .with_mag_filter(FilterMode::Linear)
       .with_min_filter(FilterMode::Linear)
       .with_label("GUI texture sampler")
       .build(device);
     let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
+
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_bind_layout_entry])
       .with_layout_label("GUI static bind group layout")
       .with_entries(&[uniform_buffer_bind_entry, sampler_bind_entry])
       .with_label("GUI static bind group")
       .build(device);
+
+    // Bind group that does change while rendering, containing the current texture.
     let texture_bind_group_layout = BindGroupLayoutBuilder::new()
       .with_entries(&[BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
         .with_binding(0)
@@ -75,7 +81,7 @@ impl Gui {
       ])
       .with_label("GUI texture bind group layout")
       .build(device);
-    let textures = HashMap::new();
+
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
       .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
@@ -112,7 +118,7 @@ impl Gui {
       _static_bind_group_layout: static_bind_group_layout,
       static_bind_group,
       texture_bind_group_layout,
-      textures,
+      textures: HashMap::default(),
       _pipeline_layout: pipeline_layout,
       render_pipeline,
     }
@@ -126,18 +132,17 @@ impl Gui {
   pub fn process_input(&mut self, input: &RawInput, process_keyboard_input: bool, process_mouse_input: bool) {
     if process_keyboard_input {
       // Keyboard modifiers
-      self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
+      self.input.modifiers.alt = input.is_keyboard_modifier_down(KeyboardModifier::Alternate);
       let is_control_down = input.is_keyboard_modifier_down(KeyboardModifier::Control);
       self.input.modifiers.ctrl = is_control_down;
-      #[cfg(not(target_os = "macos"))] {
-        self.input.modifiers.command = is_control_down;
-      }
-      self.input.modifiers.alt = input.is_keyboard_modifier_down(KeyboardModifier::Alternate);
-      #[cfg(target_os = "macos")] {
-        let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Meta);
-        self.input.modifiers.mac_cmd = is_meta_down;
-        self.input.modifiers.command = is_meta_down;
-      }
+      self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
+      let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Meta);
+      self.input.modifiers.mac_cmd = if cfg!(target_os = "macos") {
+        is_meta_down
+      } else {
+        false
+      };
+      self.input.modifiers.command = is_meta_down;
     }
     let modifiers = self.input.modifiers;
 
