@@ -1,4 +1,7 @@
-// Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/shader/egui.vert
+// Taken from:
+// 1) https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/shader/egui.vert
+// 2) // 2) https://github.com/emilk/egui/blob/2545939c150379b85517de691da56a46f5ee0d1d/crates/egui-wgpu/src/egui.wgsl
+
 #version 450
 
 layout(std140, set = 0, binding = 0) uniform Uniform {
@@ -13,17 +16,9 @@ out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec2 outTex;
 layout(location = 1) out vec4 outCol;
 
-vec3 linear_from_srgb(vec3 srgb) {
-  bvec3 cutoff = lessThan(srgb, vec3(10.31475));
-  vec3 lower = srgb / vec3(3294.6);
-  vec3 higher = pow((srgb + vec3(14.025)) / vec3(269.025), vec3(2.4));
-  return mix(higher, lower, cutoff);
-}
-
 void main() {
   gl_Position = vec4(2.0 * inPos.x / uScreenSize.x - 1.0, 1.0 - 2.0 * inPos.y / uScreenSize.y, 0.0, 1.0);
   outTex = inTex;
   // [u8; 4] SRGB as u32 -> [r, g, b, a]
-  vec4 color = vec4(inCol & 0xFFu, (inCol >> 8) & 0xFFu, (inCol >> 16) & 0xFFu, (inCol >> 24) & 0xFFu);
-  outCol = vec4(linear_from_srgb(color.rgb), color.a / 255.0);
+  outCol = vec4(inCol & 0xFFu, (inCol >> 8) & 0xFFu, (inCol >> 16) & 0xFFu, (inCol >> 24) & 0xFFu) / 255.0;
 }
