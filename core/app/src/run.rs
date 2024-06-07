@@ -73,9 +73,10 @@ pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, opt
   }, None).await?;
   let screen_size = os.window.get_inner_size();
   let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
+  tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
   let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
-  let gui = Gui::new(&device, surface.get_texture_format(), Some(egui_memory));
+  let gui = Gui::new(&device, surface.get_format(), Some(egui_memory));
 
   let sample_count = options.sample_count;
   let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {

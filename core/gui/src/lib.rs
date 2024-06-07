@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::mem::size_of;
@@ -5,8 +6,8 @@ use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
 use egui::{ClippedPrimitive, Context, Event, ImageData, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta, Vec2};
-use egui::epaint::{Mesh, Primitive, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
+use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
+use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
 use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
@@ -43,7 +44,7 @@ impl Gui {
   ) -> Self {
     let context = Context::default();
     if let Some(memory) = memory {
-      context.memory_mut(|m|*m=memory);
+      context.memory_mut(|m| *m = memory);
     }
 
     let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
@@ -85,14 +86,14 @@ impl Gui {
       .with_fragment_state(&fragment_shader_module, "main", &[Some(ColorTargetState {
         format: swap_chain_texture_format,
         blend: Some(BlendState {
-          alpha: BlendComponent { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
-            src_factor: BlendFactor::OneMinusDstAlpha,
-            dst_factor: BlendFactor::One,
-            operation: BlendOperation::Add,
-          },
           color: BlendComponent {
             src_factor: BlendFactor::One,
             dst_factor: BlendFactor::OneMinusSrcAlpha,
+            operation: BlendOperation::Add,
+          },
+          alpha: BlendComponent { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
+            src_factor: BlendFactor::OneMinusDstAlpha,
+            dst_factor: BlendFactor::One,
             operation: BlendOperation::Add,
           },
         }),
@@ -352,32 +353,32 @@ impl Gui {
       let physical_width = screen_size.physical.width as u32;
       let physical_height = screen_size.physical.height as u32;
       for Draw { clip_rect, texture_id, indices, base_vertex } in draws {
-        // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
+        // Taken from:
+        // - https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
+        // - https://github.com/emilk/egui/blob/2545939c150379b85517de691da56a46f5ee0d1d/crates/egui-wgpu/src/renderer.rs#L983
+
         // Transform clip rect to physical pixels.
         let clip_min_x = scale_factor * clip_rect.min.x;
         let clip_min_y = scale_factor * clip_rect.min.y;
         let clip_max_x = scale_factor * clip_rect.max.x;
         let clip_max_y = scale_factor * clip_rect.max.y;
 
-        // Make sure clip rect can fit within an `u32`.
-        let clip_min_x = clip_min_x.clamp(0.0, physical_width as f32);
-        let clip_min_y = clip_min_y.clamp(0.0, physical_height as f32);
-        let clip_max_x = clip_max_x.clamp(clip_min_x, physical_width as f32);
-        let clip_max_y = clip_max_y.clamp(clip_min_y, physical_height as f32);
-
+        // Round to integer.
         let clip_min_x = clip_min_x.round() as u32;
         let clip_min_y = clip_min_y.round() as u32;
         let clip_max_x = clip_max_x.round() as u32;
         let clip_max_y = clip_max_y.round() as u32;
 
-        let width = (clip_max_x - clip_min_x).max(1);
-        let height = (clip_max_y - clip_min_y).max(1);
+        // Clamp to physical pixels.
+        let clip_min_x = clip_min_x.clamp(0, physical_width);
+        let clip_min_y = clip_min_y.clamp(0, physical_height);
+        let clip_max_x = clip_max_x.clamp(clip_min_x, physical_width);
+        let clip_max_y = clip_max_y.clamp(clip_min_y, physical_height);
 
-        // Clip scissor rectangle to target size
-        let x = clip_min_x.min(physical_width);
-        let y = clip_min_y.min(physical_height);
-        let width = width.min(physical_width - x);
-        let height = height.min(physical_height - y);
+        let x = clip_min_x;
+        let y = clip_min_y;
+        let width = clip_max_x - clip_min_x;
+        let height = clip_max_y - clip_min_y;
 
         // Skip rendering with zero-sized clip areas.
         if width == 0 || height == 0 {
@@ -390,7 +391,7 @@ impl Gui {
           render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
         }
         // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
-        render_pass.set_vertex_buffer(0, vertex_buffer.offset::<Vertex>(base_vertex));
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice_to_end::<Vertex>(base_vertex));
         render_pass.draw_indexed(indices, 0, 0..1);
       }
       render_pass.pop_debug_group();
@@ -405,85 +406,70 @@ impl Gui {
   }
 
   fn set_textures(&mut self, device: &Device, queue: &Queue, textures_delta: &TexturesDelta) {
-    // From: https://github.com/hasenbanck/egui_wgpu_backend/blob/b2d3e7967351690c6425f37cd6d4ffb083a7e8e6/src/lib.rs#L379
-    for (texture_id, image_delta) in textures_delta.set.iter() {
-      let image_size = image_delta.image.size();
-      let origin = match image_delta.pos {
-        Some([x, y]) => Origin3d {
-          x: x as u32,
-          y: y as u32,
-          z: 0,
-        },
-        None => Origin3d::ZERO,
-      };
-      let alpha_srgb_pixels: Option<Vec<_>> = match &image_delta.image {
-        ImageData::Color(_) => None,
-        ImageData::Font(f) => Some(f.srgba_pixels(None).collect()),
-      };
-      let image_data: &[u8] = match &image_delta.image {
-        ImageData::Color(c) => bytemuck::cast_slice(c.pixels.as_slice()),
-        ImageData::Font(_) => {
-          // unwrap should never fail as alpha_srgb_pixels will have been set to `Some` above.
-          bytemuck::cast_slice(alpha_srgb_pixels.as_ref().unwrap().as_slice())
+    for (texture_id, image_delta) in &textures_delta.set {
+      self.set_texture(device, queue, *texture_id, image_delta);
+    }
+  }
+
+  // From:
+  // 1) https://github.com/hasenbanck/egui_wgpu_backend/blob/b2d3e7967351690c6425f37cd6d4ffb083a7e8e6/src/lib.rs#L379
+  // 2) https://github.com/emilk/egui/blob/2545939c150379b85517de691da56a46f5ee0d1d/crates/egui-wgpu/src/renderer.rs#L500
+  fn set_texture(&mut self, device: &Device, queue: &Queue, id: TextureId, image_delta: &ImageDelta) {
+    let label_base = match id {
+      TextureId::Managed(m) => format!("egui managed texture {}", m),
+      TextureId::User(u) => format!("egui user texture {}", u),
+    };
+
+    let width = image_delta.image.width() as u32;
+    let height = image_delta.image.height() as u32;
+    let size = Extent3d {
+      width,
+      height,
+      depth_or_array_layers: 1,
+    };
+    let layout = ImageDataLayout {
+      offset: 0,
+      bytes_per_row: Some(4 * width),
+      rows_per_image: None,
+    };
+
+    let pixels = match &image_delta.image {
+      ImageData::Color(image) => Cow::Borrowed(&image.pixels),
+      ImageData::Font(image) => Cow::Owned(image.srgba_pixels(None).collect()),
+    };
+    let data = bytemuck::cast_slice(pixels.as_slice());
+
+    match self.textures.entry(id) {
+      Entry::Occupied(mut o) => match image_delta.pos {
+        Some([x, y]) => {
+          let origin = Origin3d { x: x as u32, y: y as u32, z: 0 };
+          write_texture(queue, &o.get().0.texture, origin, data, layout, size);
         }
-      };
-      let image_size = Extent3d {
-        width: image_size[0] as u32,
-        height: image_size[1] as u32,
-        depth_or_array_layers: 1,
-      };
-      let image_data_layout = ImageDataLayout {
-        offset: 0,
-        bytes_per_row: Some(4 * image_size.width),
-        rows_per_image: None,
-      };
-      let label_base = match texture_id {
-        TextureId::Managed(m) => format!("EGUI managed texture {}", m),
-        TextureId::User(u) => format!("EGUI user texture {}", u),
-      };
-      match self.textures.entry(*texture_id) {
-        Entry::Occupied(mut o) => match image_delta.pos {
-          None => {
-            let (texture, bind_group) = create_texture_and_bind_group(
-              device,
-              queue,
-              &label_base,
-              origin,
-              image_data,
-              image_data_layout,
-              image_size,
-              &self.texture_bind_group_layout,
-            );
-            let (texture, _) = o.insert((texture, bind_group));
-            texture.texture.destroy();
-          }
-          Some(_) => {
-            queue.write_texture(
-              ImageCopyTexture {
-                texture: &o.get().0.texture,
-                mip_level: 0,
-                origin,
-                aspect: TextureAspect::All,
-              },
-              image_data,
-              image_data_layout,
-              image_size,
-            );
-          }
-        },
-        Entry::Vacant(v) => {
+        None => {
           let (texture, bind_group) = create_texture_and_bind_group(
             device,
             queue,
             &label_base,
-            origin,
-            image_data,
-            image_data_layout,
-            image_size,
+            size,
+            data,
+            layout,
             &self.texture_bind_group_layout,
           );
-          v.insert((texture, bind_group));
+          let (texture, _) = o.insert((texture, bind_group));
+          texture.texture.destroy();
         }
+      },
+      Entry::Vacant(v) => {
+        let (texture, bind_group) = create_texture_and_bind_group(
+          device,
+          queue,
+          &label_base,
+          size,
+          data,
+          layout,
+          &self.texture_bind_group_layout,
+        );
+        v.insert((texture, bind_group));
       }
     }
   }
@@ -541,33 +527,43 @@ fn create_texture_and_bind_group(
   device: &Device,
   queue: &Queue,
   label_base: &str,
-  origin: Origin3d,
-  image_data: &[u8],
-  image_data_layout: ImageDataLayout,
-  image_size: Extent3d,
+  size: Extent3d,
+  data: &[u8],
+  layout: ImageDataLayout,
   texture_bind_group_layout: &BindGroupLayout,
 ) -> (GfxTexture, BindGroup) {
   let texture = TextureBuilder::new()
-    .with_size(image_size)
+    .with_texture_label(label_base)
+    .with_size(size)
     .with_rgba8_unorm_srgb_format()
     .with_sampled_usage()
-    .with_texture_label(label_base)
     .with_texture_view_label(&format!("{} view", label_base))
     .build(device);
-  queue.write_texture(
-    ImageCopyTexture {
-      texture: &texture.texture,
-      mip_level: 0,
-      origin,
-      aspect: TextureAspect::All,
-    },
-    image_data,
-    image_data_layout,
-    image_size,
-  );
+  write_texture(queue, &texture.texture, Origin3d::ZERO, data, layout, size);
   let bind_group = BindGroupBuilder::new(texture_bind_group_layout)
     .with_entries(&[texture.create_bind_group_entry(0)])
     .with_label(&format!("{} bind group", label_base))
     .build(device);
   (texture, bind_group)
+}
+
+fn write_texture(
+  queue: &Queue,
+  texture: &Texture,
+  origin: Origin3d,
+  data: &[u8],
+  layout: ImageDataLayout,
+  size: Extent3d,
+) {
+  queue.write_texture(
+    ImageCopyTexture {
+      texture,
+      mip_level: 0,
+      origin,
+      aspect: TextureAspect::All,
+    },
+    data,
+    layout,
+    size,
+  );
 }

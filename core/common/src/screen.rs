@@ -2,7 +2,7 @@
 
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-/// Scale (DPI) factor.
+/// Scale (DPI) factor. The number of physical pixels per logical point.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Scale(f64);

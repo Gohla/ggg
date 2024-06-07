@@ -31,7 +31,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         buffers: &[],
       },
       primitive: PrimitiveState {
-        front_face: FrontFace::Cw,
+        front_face: FrontFace::Cw, // TODO: the default is counter clockwise!?
         ..PrimitiveState::default()
       },
       depth_stencil: None,
@@ -160,7 +160,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {
-      target.format = surface.get_texture_format();
+      target.format = surface.get_format();
     }
     self.use_default_fragment_targets = true;
     self
@@ -174,7 +174,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {
-      target.format = surface.get_texture_format();
+      target.format = surface.get_format();
       target.blend = Some(BlendState::ALPHA_BLENDING);
     }
     self.use_default_fragment_targets = true;
@@ -189,7 +189,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {
-      target.format = surface.get_texture_format();
+      target.format = surface.get_format();
       target.blend = Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING);
     }
     self.use_default_fragment_targets = true;

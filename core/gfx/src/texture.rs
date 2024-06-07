@@ -39,7 +39,6 @@ impl<'a> TextureBuilder<'a> {
       .with_rgba8_unorm_srgb_format()
       .with_sampled_usage()
   }
-
   #[inline]
   pub fn new_depth(size: PhysicalSize, format: TextureFormat) -> Self {
     Self::new()
@@ -47,22 +46,26 @@ impl<'a> TextureBuilder<'a> {
       .with_format(format)
       .with_render_attachment_usage()
   }
-
   #[inline]
   pub fn new_depth_32_float(size: PhysicalSize) -> Self {
     Self::new_depth(size, TextureFormat::Depth32Float)
   }
-
   #[inline]
   pub fn new_multisampled_framebuffer(surface: &GfxSurface, sample_count: u32) -> Self {
     let (width, height): (u64, u64) = surface.get_size().physical.into();
     Self::new()
       .with_2d_size(width as u32, height as u32)
       .with_sample_count(sample_count)
-      .with_format(surface.get_texture_format())
+      .with_format(surface.get_format())
       .with_render_attachment_usage()
   }
 
+
+  #[inline]
+  pub fn with_texture_label(mut self, label: &'a str) -> Self {
+    self.texture_descriptor.label = Some(label);
+    self
+  }
 
   #[inline]
   pub fn with_size(mut self, size: Extent3d) -> Self {
@@ -87,14 +90,12 @@ impl<'a> TextureBuilder<'a> {
     self.texture_descriptor.dimension = dimension;
     self
   }
-
   #[inline]
   pub fn with_2d_size(self, width: u32, height: u32) -> Self {
     self
       .with_size(Extent3d { width, height, depth_or_array_layers: 1 })
       .with_dimension(TextureDimension::D2)
   }
-
   #[inline]
   pub fn with_2d_array_size(self, width: u32, height: u32, layer_count: u32) -> Self {
     self
@@ -109,12 +110,10 @@ impl<'a> TextureBuilder<'a> {
     self.texture_descriptor.format = format;
     self
   }
-
   #[inline]
   pub fn with_rgba8_unorm_srgb_format(self) -> Self {
     self.with_format(TextureFormat::Rgba8UnormSrgb)
   }
-
   #[inline]
   pub fn with_depth32_float_format(self) -> Self {
     self.with_format(TextureFormat::Depth32Float)
@@ -125,28 +124,31 @@ impl<'a> TextureBuilder<'a> {
     self.texture_descriptor.usage = usage;
     self
   }
-
   #[inline]
   pub fn with_sampled_usage(self) -> Self {
     self.with_usage(TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST)
   }
-
   #[inline]
   pub fn with_static_sampled_usage(self) -> Self {
     self.with_usage(TextureUsages::TEXTURE_BINDING)
   }
-
   #[inline]
   pub fn with_render_attachment_usage(self) -> Self {
     self.with_usage(TextureUsages::RENDER_ATTACHMENT)
   }
 
   #[inline]
-  pub fn with_texture_label(mut self, label: &'a str) -> Self {
-    self.texture_descriptor.label = Some(label);
+  pub fn with_view_formats(mut self, view_formats: &'a [TextureFormat]) -> Self {
+    self.texture_descriptor.view_formats = view_formats;
     self
   }
 
+
+  #[inline]
+  pub fn with_texture_view_label(mut self, label: &'a str) -> Self {
+    self.texture_view_descriptor.label = Some(label);
+    self
+  }
 
   #[inline]
   pub fn with_view_dimension(mut self, dimension: TextureViewDimension) -> Self {
@@ -157,12 +159,6 @@ impl<'a> TextureBuilder<'a> {
   #[inline]
   pub fn with_view_array_layer_count(mut self, array_layer_count: u32) -> Self {
     self.texture_view_descriptor.array_layer_count = Some(array_layer_count);
-    self
-  }
-
-  #[inline]
-  pub fn with_texture_view_label(mut self, label: &'a str) -> Self {
-    self.texture_view_descriptor.label = Some(label);
     self
   }
 }

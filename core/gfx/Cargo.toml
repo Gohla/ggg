@@ -15,6 +15,7 @@ image = { workspace = true, default-features = false }
 ultraviolet.workspace = true
 bytemuck.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 profiling.workspace = true
 
 [build-dependencies]

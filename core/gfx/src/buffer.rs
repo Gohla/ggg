@@ -174,7 +174,7 @@ impl<'a> GfxBuffer {
 // Slicing
 
 impl GfxBuffer {
-  pub fn offset<T: Sized>(&self, offset: BufferAddress) -> BufferSlice {
+  pub fn slice_to_end<T: Sized>(&self, offset: BufferAddress) -> BufferSlice {
     let offset = offset * std::mem::size_of::<T>() as u64;
     self.buffer.slice(offset..)
   }

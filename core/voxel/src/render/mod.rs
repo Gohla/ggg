@@ -104,7 +104,7 @@ impl VoxelRenderer {
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_index_buffer(lod_mesh.index_buffer.slice(..), IndexFormat::Uint16);
     for draw in &lod_mesh.draws {
-      render_pass.set_vertex_buffer(0, lod_mesh.vertex_buffer.offset::<Vertex>(draw.base_vertex));
+      render_pass.set_vertex_buffer(0, lod_mesh.vertex_buffer.slice_to_end::<Vertex>(draw.base_vertex));
       render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
     }
     render_pass.pop_debug_group();

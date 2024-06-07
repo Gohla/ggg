@@ -15,16 +15,13 @@ impl<'w> GfxSurface<'w> {
     surface.configure(device, &configuration);
     Self { inner: surface, configuration, size }
   }
-
   pub fn new_with_defaults(surface: Surface<'w>, adapter: &Adapter, device: &Device, size: ScreenSize) -> Self {
     Self::new(surface, adapter, device, PresentMode::Mailbox, size)
   }
 
 
-  pub fn get_texture_format(&self) -> TextureFormat {
-    self.configuration.format
-  }
-
+  pub fn get_configuration(&self) -> &SurfaceConfiguration { &self.configuration }
+  pub fn get_format(&self) -> TextureFormat { self.configuration.format }
   pub fn get_size(&self) -> ScreenSize { self.size }
 
 
@@ -37,6 +34,7 @@ impl<'w> GfxSurface<'w> {
 
   fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, size: ScreenSize) -> SurfaceConfiguration {
     let capabilities = surface.get_capabilities(adapter);
+    tracing::debug!(?capabilities, "Queried surface capabilities");
     SurfaceConfiguration {
       usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
       format: *capabilities.formats.get(0)
@@ -44,7 +42,7 @@ impl<'w> GfxSurface<'w> {
       width: size.physical.width as u32,
       height: size.physical.height as u32,
       present_mode, // TODO: check against capabilities?
-      desired_maximum_frame_latency: 2, // TODO: make configurable
+      desired_maximum_frame_latency: 1, // TODO: make configurable
       alpha_mode: CompositeAlphaMode::Auto, // TODO: make configurable
       view_formats: vec![],
     }
