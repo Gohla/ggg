@@ -2,7 +2,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 
 use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
 
-use common::input::{KeyboardButton, MouseButton, RawInput};
+use common::input::{KeyboardKey, MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
 use common::timing::Duration;
 
@@ -363,13 +363,13 @@ impl From<&RawInput> for CameraInput {
       primary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Left),
       secondary_mouse_button_down: input.mouse_buttons.contains(&MouseButton::Right),
       mouse_position_delta: input.mouse_position_delta,
-      mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.vertical as f32,
-      forward_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyW),
-      left_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyA),
-      backward_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyS),
-      right_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyD),
-      up_key_down: input.keyboard_buttons.contains(&KeyboardButton::Space),
-      down_key_down: input.keyboard_buttons.contains(&KeyboardButton::KeyC)
+      mouse_wheel_scroll_delta: input.mouse_wheel_pixel_delta.physical.y as f32 + input.mouse_wheel_line_delta.y as f32,
+      forward_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyW),
+      left_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyA),
+      backward_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyS),
+      right_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyD),
+      up_key_down: input.keyboard_keys.contains(&KeyboardKey::Space),
+      down_key_down: input.keyboard_keys.contains(&KeyboardKey::KeyC)
     }
   }
 }

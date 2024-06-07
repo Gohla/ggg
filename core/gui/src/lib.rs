@@ -9,7 +9,7 @@ use egui::{ClippedPrimitive, Context, Event, ImageData, Key, PointerButton, Pos2
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
-use common::input::{KeyboardButton, KeyboardModifier, MouseButton, RawInput};
+use common::input::{KeyboardKey, KeyboardModifier, MouseButton, RawInput};
 use common::screen::ScreenSize;
 use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -150,8 +150,8 @@ impl Gui {
       // Mouse wheel delta // TODO: properly handle line to pixel conversion?
       if !input.mouse_wheel_pixel_delta.is_zero() || !input.mouse_wheel_line_delta.is_zero() {
         self.input.events.push(Event::Scroll(Vec2::new(
-          (input.mouse_wheel_pixel_delta.logical.x as f64 + input.mouse_wheel_line_delta.horizontal * 24.0) as f32,
-          (input.mouse_wheel_pixel_delta.logical.y as f64 + input.mouse_wheel_line_delta.vertical * 24.0) as f32,
+          (input.mouse_wheel_pixel_delta.logical.x + input.mouse_wheel_line_delta.x * 24.0) as f32,
+          (input.mouse_wheel_pixel_delta.logical.y + input.mouse_wheel_line_delta.y * 24.0) as f32,
         )));
       }
 
@@ -185,8 +185,8 @@ impl Gui {
     if process_keyboard_input {
       // Keyboard buttons
       // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L262-L292
-      fn convert_keyboard_button(button: KeyboardButton) -> Option<Key> {
-        use KeyboardButton::*;
+      fn convert_keyboard_button(button: KeyboardKey) -> Option<Key> {
+        use KeyboardKey::*;
         Some(match button {
           Escape => Key::Escape,
           Insert => Key::Insert,
@@ -213,20 +213,19 @@ impl Gui {
           _ => { return None; }
         })
       }
-      for button in &input.keyboard_buttons_pressed {
+      for button in &input.keyboard_keys_pressed {
         if let Some(key) = convert_keyboard_button(*button) {
           self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
         }
       }
-      for button in &input.keyboard_buttons_released {
+      for button in &input.keyboard_keys_released {
         if let Some(key) = convert_keyboard_button(*button) {
           self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
         }
       }
 
       // Characters
-      for character in &input.characters_pressed {
-        let character = *character;
+      for character in input.text_inserted.chars() {
         // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L312-L320
         let is_in_private_use_area = '\u{e000}' <= character && character <= '\u{f8ff}'
           || '\u{f0000}' <= character && character <= '\u{ffffd}'

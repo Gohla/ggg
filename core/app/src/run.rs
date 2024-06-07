@@ -237,7 +237,7 @@ fn run_app_cycle<A: Application>(
   for event in os.event_rx.try_iter() {
     match event {
       Event::TerminateRequested => return true, // Stop the loop.
-      Event::WindowResized(_) => *resized = true,
+      Event::WindowSizeChange(_) => *resized = true,
       _ => {}
     }
   }

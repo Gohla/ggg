@@ -1,4 +1,5 @@
 pub mod screen;
+pub mod line;
 pub mod input;
 pub mod timing;
 pub mod sampler;

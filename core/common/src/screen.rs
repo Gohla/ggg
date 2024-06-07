@@ -675,6 +675,15 @@ impl From<[i32; 2]> for PhysicalDelta {
   #[inline]
   fn from([x, y]: [i32; 2]) -> Self { Self::new(x as _, y as _) }
 }
+#[cfg(feature = "winit")]
+impl<P: winit::dpi::Pixel> From<winit::dpi::PhysicalPosition<P>> for PhysicalDelta {
+  #[inline]
+  fn from(position_as_delta: winit::dpi::PhysicalPosition<P>) -> Self {
+    let (x, y): (f64, f64) = position_as_delta.into();
+    // Note: rounds f64 to i64.
+    Self::new(x.round() as i64, y.round() as i64)
+  }
+}
 
 impl From<PhysicalDelta> for (i64, i64) {
   #[inline]

@@ -2,44 +2,77 @@ use std::sync::mpsc::{channel, Receiver, Sender, SendError};
 use std::thread::JoinHandle;
 
 use thiserror::Error;
-use tracing::debug;
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalPosition as WinitPhysicalPosition;
 use winit::error::EventLoopError;
 use winit::event::{KeyEvent, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{ModifiersState, PhysicalKey};
+use winit::keyboard::{Key, ModifiersState, PhysicalKey, SmolStr};
 use winit::window::WindowId;
 
-use common::input::{KeyboardButton, KeyboardModifier, MouseButton};
+use common::input::{KeyboardKey, KeyboardModifier, MouseButton, SemanticKey};
+use common::line::LineDelta;
 use common::screen::{ScreenDelta, ScreenPosition, ScreenSize};
 
 use crate::context::Context;
 use crate::window::Window;
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum InputEvent {
-  MouseInput { button: MouseButton, state: ElementState },
-  MouseMoved(ScreenPosition),
-  MouseWheelMovedPixels(ScreenDelta),
-  MouseWheelMovedLines { horizontal_delta_lines: f64, vertical_delta_lines: f64 },
-  KeyboardModifierChange { modifier: KeyboardModifier, state: ElementState },
-  KeyboardInput { button: KeyboardButton, state: ElementState },
-  CharacterInput(char),
+  MouseButton { button: MouseButton, state: ElementState },
+  MousePosition(ScreenPosition),
+  /// Amount in pixels to scroll in the horizontal (x) and vertical (y) direction.
+  ///
+  /// Scroll events are expressed as a `MouseWheelPixelChange` if supported by the device (i.e., touchpad) and platform.
+  ///
+  /// Positive values indicate that the content being scrolled should move right/down.
+  ///
+  /// For a 'natural scrolling' touchpad (that acts like a touch screen) this means moving your fingers right and down
+  /// should give positive values, and move the content right and down (to reveal more things left and up).
+  MouseWheelPixel(ScreenDelta),
+  /// Amount in lines or rows to scroll in the horizontal (x) and vertical (y) directions.
+  ///
+  /// Positive values indicate that the content that is being scrolled should move right and down (revealing more
+  /// content left and up).
+  MouseWheelLine(LineDelta),
+  KeyboardModifier { modifier: KeyboardModifier, state: ElementState },
+  KeyboardKey { keyboard_key: Option<KeyboardKey>, semantic_key: Option<SemanticKey>, text: Option<SmolStr>, state: ElementState },
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub enum Event {
   TerminateRequested,
-  MouseEnteredWindow,
-  MouseLeftWindow,
-  WindowResized(ScreenSize),
+  CursorEntered,
+  CursorLeft,
+  WindowSizeChange(ScreenSize),
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum ElementState {
   Pressed,
   Released,
+}
+impl From<winit::event::ElementState> for ElementState {
+  #[inline]
+  fn from(element_state: winit::event::ElementState) -> Self {
+    use winit::event::ElementState::*;
+    match element_state {
+      Pressed => Self::Pressed,
+      Released => Self::Released,
+    }
+  }
+}
+impl From<bool> for ElementState {
+  #[inline]
+  fn from(pressed: bool) -> Self { if pressed { Self::Pressed } else { Self::Released } }
+}
+impl From<ElementState> for bool {
+  fn from(element_state: ElementState) -> Self { element_state.is_pressed() }
+}
+impl ElementState {
+  #[inline]
+  pub fn is_pressed(self) -> bool { self == Self::Pressed }
+  #[inline]
+  pub fn is_released(self) -> bool { self == Self::Released }
 }
 
 
@@ -181,62 +214,69 @@ impl EventLoopHandler {
   fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) -> Result<(), Exit> {
     match event {
       WindowEvent::MouseInput { state, button, .. } => {
-        self.input_event_tx.send(InputEvent::MouseInput { button: button.into(), state: state.into() })?;
+        self.input_event_tx.send(InputEvent::MouseButton { button: button.into(), state: state.into() })?;
       }
       WindowEvent::CursorMoved { position, .. } => {
         let screen_position = ScreenPosition::from_physical_scale(position, self.window_inner_size.scale);
-        self.input_event_tx.send(InputEvent::MouseMoved(screen_position))?;
+        self.input_event_tx.send(InputEvent::MousePosition(screen_position))?;
       }
       WindowEvent::CursorEntered { .. } => {
-        self.event_tx.send(Event::MouseEnteredWindow)?;
+        self.event_tx.send(Event::CursorEntered)?;
       }
       WindowEvent::CursorLeft { .. } => {
-        self.event_tx.send(Event::MouseLeftWindow)?;
+        self.event_tx.send(Event::CursorLeft)?;
       }
       WindowEvent::MouseWheel { delta, .. } => {
         match delta {
           MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
-            self.input_event_tx.send(InputEvent::MouseWheelMovedLines {
-              horizontal_delta_lines: horizontal_delta_lines as f64,
-              vertical_delta_lines: vertical_delta_lines as f64,
-            })?,
-          MouseScrollDelta::PixelDelta(WinitPhysicalPosition { x, y }) => {
-            let screen_delta = ScreenDelta::from_physical_scale((x as i64, y as i64), self.window_inner_size.scale);
-            self.input_event_tx.send(InputEvent::MouseWheelMovedPixels(screen_delta))?;
+            self.input_event_tx.send(InputEvent::MouseWheelLine(LineDelta::from((horizontal_delta_lines, vertical_delta_lines))))?,
+          MouseScrollDelta::PixelDelta(physical_position) => {
+            let screen_delta = ScreenDelta::from_physical_scale(physical_position, self.window_inner_size.scale);
+            self.input_event_tx.send(InputEvent::MouseWheelPixel(screen_delta))?;
           }
         };
       }
-      WindowEvent::KeyboardInput { event: KeyEvent { physical_key, text, state, .. }, .. } => {
-        match physical_key {
-          PhysicalKey::Code(key_code) => {
-            self.input_event_tx.send(InputEvent::KeyboardInput { button: key_code.into(), state: state.into() })?;
-          }
+      WindowEvent::KeyboardInput { event: KeyEvent { physical_key, logical_key, text, state, .. }, .. } => {
+        let keyboard_key = match physical_key {
+          PhysicalKey::Code(key_code) => Some(key_code.into()),
           PhysicalKey::Unidentified(native_key_code) => {
-            debug!("Received unidentified native key code: {:?}", native_key_code);
+            tracing::warn!("Received unidentified native key code '{:?}' as physical key; ignoring", native_key_code);
+            None
           }
-        }
-
-        if let Some(text) = text {
-          for c in text.chars() {
-            self.input_event_tx.send(InputEvent::CharacterInput(c))?;
+        };
+        let semantic_key = match logical_key {
+          Key::Named(named_key) => Some(named_key.into()),
+          Key::Character(character_name) => {
+            tracing::trace!("Received unnamed character '{:?}' as logical key; ignoring", character_name);
+            None
           }
-        }
+          Key::Unidentified(native_key) => {
+            tracing::warn!("Received unidentified native key '{:?}' as logical key; ignoring", native_key);
+            None
+          }
+          Key::Dead(o) => {
+            tracing::warn!("Received dead key '{:?}' as logical key; ignoring", o);
+            None
+          }
+        };
+        let state = state.into();
+        self.input_event_tx.send(InputEvent::KeyboardKey { keyboard_key, semantic_key, text, state })?;
       }
       WindowEvent::ModifiersChanged(modifiers) => {
         let pressed = modifiers.state() - self.modifiers;
         {
           let state = ElementState::Pressed;
           if pressed.contains(ModifiersState::SHIFT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
           }
           if pressed.contains(ModifiersState::CONTROL) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
           }
           if pressed.contains(ModifiersState::ALT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
           }
           if pressed.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Meta, state })?;
           }
         }
 
@@ -244,16 +284,16 @@ impl EventLoopHandler {
         {
           let state = ElementState::Released;
           if released.contains(ModifiersState::SHIFT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Shift, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
           }
           if released.contains(ModifiersState::CONTROL) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Control, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
           }
           if released.contains(ModifiersState::ALT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Alternate, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
           }
           if released.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifierChange { modifier: KeyboardModifier::Meta, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Meta, state })?;
           }
         }
 
@@ -265,26 +305,15 @@ impl EventLoopHandler {
       }
       WindowEvent::Resized(inner_size) => {
         self.window_inner_size = ScreenSize::from_physical_scale(inner_size, self.window_inner_size.scale);
-        self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
+        self.event_tx.send(Event::WindowSizeChange(self.window_inner_size))?;
       }
       WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
         self.window_inner_size = ScreenSize::from_physical_scale(self.window_inner_size.physical, scale_factor);
-        self.event_tx.send(Event::WindowResized(self.window_inner_size))?;
+        self.event_tx.send(Event::WindowSizeChange(self.window_inner_size))?;
       }
       _ => {}
     }
     Ok(())
-  }
-}
-
-impl From<winit::event::ElementState> for ElementState {
-  #[inline]
-  fn from(element_state: winit::event::ElementState) -> Self {
-    use winit::event::ElementState::*;
-    match element_state {
-      Pressed => Self::Pressed,
-      Released => Self::Released,
-    }
   }
 }
 

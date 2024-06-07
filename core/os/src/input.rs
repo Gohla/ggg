@@ -27,7 +27,7 @@ impl InputSys {
 
     for event in self.input_event_rx.try_iter() {
       match event {
-        InputEvent::MouseInput { button, state } => {
+        InputEvent::MouseButton { button, state } => {
           match state {
             ElementState::Pressed => {
               input_state.mouse_buttons.insert(button);
@@ -39,17 +39,16 @@ impl InputSys {
             }
           };
         }
-        InputEvent::MouseMoved(position) => {
+        InputEvent::MousePosition(position) => {
           input_state.mouse_position = position;
         }
-        InputEvent::MouseWheelMovedPixels(screen_delta) => {
+        InputEvent::MouseWheelPixel(screen_delta) => {
           input_state.mouse_wheel_pixel_delta += screen_delta;
         }
-        InputEvent::MouseWheelMovedLines { horizontal_delta_lines, vertical_delta_lines } => {
-          input_state.mouse_wheel_line_delta.horizontal += horizontal_delta_lines;
-          input_state.mouse_wheel_line_delta.vertical += vertical_delta_lines;
+        InputEvent::MouseWheelLine(line_delta) => {
+          input_state.mouse_wheel_line_delta += line_delta;
         }
-        InputEvent::KeyboardModifierChange { modifier, state } => {
+        InputEvent::KeyboardModifier { modifier, state } => {
           match state {
             ElementState::Pressed => {
               input_state.keyboard_modifiers.insert(modifier);
@@ -61,20 +60,30 @@ impl InputSys {
             }
           };
         }
-        InputEvent::KeyboardInput { button, state } => {
-          match state {
-            ElementState::Pressed => {
-              input_state.keyboard_buttons.insert(button);
-              input_state.keyboard_buttons_pressed.insert(button);
+        InputEvent::KeyboardKey { keyboard_key, semantic_key, text, state } => {
+          if let Some(keyboard_key) = keyboard_key {
+            if state.is_pressed() {
+              input_state.keyboard_keys.insert(keyboard_key);
+              input_state.keyboard_keys_pressed.insert(keyboard_key);
+            } else {
+              input_state.keyboard_keys.remove(&keyboard_key);
+              input_state.keyboard_keys_released.insert(keyboard_key);
             }
-            ElementState::Released => {
-              input_state.keyboard_buttons.remove(&button);
-              input_state.keyboard_buttons_released.insert(button);
+          }
+          if let Some(semantic_key) = semantic_key {
+            if state.is_pressed() {
+              input_state.semantic_keys.insert(semantic_key);
+              input_state.semantic_keys_pressed.insert(semantic_key);
+            } else {
+              input_state.semantic_keys.remove(&semantic_key);
+              input_state.semantic_keys_released.insert(semantic_key);
             }
-          };
-        }
-        InputEvent::CharacterInput(c) => {
-          input_state.characters_pressed.push(c);
+          }
+          if let Some(text) = text {
+            if state.is_pressed() {
+              input_state.text_inserted.push_str(&text);
+            }
+          }
         }
       }
     }

@@ -5,7 +5,7 @@ use ultraviolet::{Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, RenderPipeline, ShaderStages};
 
 use app::{AppRunner, GuiFrame};
-use common::input::{KeyboardButton, KeyboardModifier, RawInput};
+use common::input::{KeyboardKey, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
@@ -101,22 +101,22 @@ impl app::Application for RayTracing {
 
   fn process_input(&mut self, raw_input: RawInput) -> Input {
     let mut input = Input::default();
-    if raw_input.is_keyboard_button_down(KeyboardButton::KeyW) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::KeyW) {
       input.forward = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::KeyS) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::KeyS) {
       input.backward = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::KeyA) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::KeyA) {
       input.left = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::KeyD) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::KeyD) {
       input.right = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::Space) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::Space) {
       input.up = true;
     }
-    if raw_input.is_keyboard_button_down(KeyboardButton::KeyC) {
+    if raw_input.is_keyboard_key_down(KeyboardKey::KeyC) {
       input.down = true;
     }
     if raw_input.is_keyboard_modifier_down(KeyboardModifier::Control) {

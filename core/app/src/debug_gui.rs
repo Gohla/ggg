@@ -161,8 +161,11 @@ impl DebugGui {
               ui.label("Modifiers");
               ui.label(format!("{:?}", input.keyboard_modifiers));
               ui.end_row();
-              ui.label("Buttons");
-              ui.label(format!("{:?}", input.keyboard_buttons));
+              ui.label("Keyboard Keys");
+              ui.label(format!("{:?}", input.keyboard_keys));
+              ui.end_row();
+              ui.label("Semantic Keys");
+              ui.label(format!("{:?}", input.semantic_keys));
               ui.end_row();
             });
         });
