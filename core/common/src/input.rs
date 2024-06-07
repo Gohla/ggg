@@ -6,8 +6,8 @@ use crate::screen::{ScreenDelta, ScreenPosition};
 #[derive(Default, Clone, Debug)]
 pub struct RawInput {
   pub mouse_buttons: HashSet<MouseButton>,
-  pub mouse_buttons_pressed: HashSet<MouseButton>,
-  pub mouse_buttons_released: HashSet<MouseButton>,
+  pub mouse_buttons_pressed: Vec<MouseButton>,
+  pub mouse_buttons_released: Vec<MouseButton>,
 
   pub mouse_position: ScreenPosition,
   pub mouse_position_delta: ScreenDelta,
@@ -15,32 +15,34 @@ pub struct RawInput {
   pub mouse_wheel_line_delta: LineDelta,
 
   pub keyboard_modifiers: HashSet<KeyboardModifier>,
-  pub keyboard_modifiers_pressed: HashSet<KeyboardModifier>,
-  pub keyboard_modifiers_released: HashSet<KeyboardModifier>,
+  pub keyboard_modifiers_pressed: Vec<KeyboardModifier>,
+  pub keyboard_modifiers_released: Vec<KeyboardModifier>,
 
   pub keyboard_keys: HashSet<KeyboardKey>,
-  pub keyboard_keys_pressed: HashSet<KeyboardKey>,
-  pub keyboard_keys_released: HashSet<KeyboardKey>,
-
   pub semantic_keys: HashSet<SemanticKey>,
-  pub semantic_keys_pressed: HashSet<SemanticKey>,
-  pub semantic_keys_released: HashSet<SemanticKey>,
+
+  pub keys_pressed: Vec<Key>,
+  pub keys_released: Vec<Key>,
 
   pub text_inserted: String,
+}
+
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct Key {
+  pub keyboard: Option<KeyboardKey>,
+  pub semantic: Option<SemanticKey>,
+}
+impl Key {
+  #[inline]
+  pub fn new(keyboard: Option<KeyboardKey>, semantic: Option<SemanticKey>) -> Self {
+    Self { keyboard, semantic }
+  }
 }
 
 impl RawInput {
   #[inline]
   pub fn is_mouse_button_down(&self, button: MouseButton) -> bool {
     self.mouse_buttons.contains(&button)
-  }
-  #[inline]
-  pub fn is_mouse_button_pressed(&self, button: MouseButton) -> bool {
-    self.mouse_buttons_pressed.contains(&button)
-  }
-  #[inline]
-  pub fn is_mouse_button_released(&self, button: MouseButton) -> bool {
-    self.mouse_buttons_released.contains(&button)
   }
   #[inline]
   pub fn mouse_buttons(&self) -> impl Iterator<Item=MouseButton> + '_ {
@@ -60,14 +62,6 @@ impl RawInput {
     self.keyboard_modifiers.contains(&modifier)
   }
   #[inline]
-  pub fn is_keyboard_modifier_pressed(&self, modifier: KeyboardModifier) -> bool {
-    self.keyboard_modifiers_pressed.contains(&modifier)
-  }
-  #[inline]
-  pub fn is_keyboard_modifier_released(&self, modifier: KeyboardModifier) -> bool {
-    self.keyboard_modifiers_released.contains(&modifier)
-  }
-  #[inline]
   pub fn keyboard_modifiers(&self) -> impl Iterator<Item=KeyboardModifier> + '_ {
     self.keyboard_modifiers.iter().copied()
   }
@@ -85,24 +79,8 @@ impl RawInput {
     self.keyboard_keys.contains(&keyboard_key)
   }
   #[inline]
-  pub fn is_keyboard_key_pressed(&self, keyboard_key: KeyboardKey) -> bool {
-    self.keyboard_keys_pressed.contains(&keyboard_key)
-  }
-  #[inline]
-  pub fn is_keyboard_key_released(&self, keyboard_key: KeyboardKey) -> bool {
-    self.keyboard_keys_released.contains(&keyboard_key)
-  }
-  #[inline]
   pub fn keyboard_keys(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
     self.keyboard_keys.iter().copied()
-  }
-  #[inline]
-  pub fn keyboard_keys_pressed(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
-    self.keyboard_keys_pressed.iter().copied()
-  }
-  #[inline]
-  pub fn keyboard_keys_released(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
-    self.keyboard_keys_released.iter().copied()
   }
 
   #[inline]
@@ -110,24 +88,17 @@ impl RawInput {
     self.semantic_keys.contains(&semantic_key)
   }
   #[inline]
-  pub fn is_semantic_key_pressed(&self, semantic_key: SemanticKey) -> bool {
-    self.semantic_keys_pressed.contains(&semantic_key)
-  }
-  #[inline]
-  pub fn is_semantic_key_released(&self, semantic_key: SemanticKey) -> bool {
-    self.semantic_keys_released.contains(&semantic_key)
-  }
-  #[inline]
   pub fn semantic_keys(&self) -> impl Iterator<Item=SemanticKey> + '_ {
     self.semantic_keys.iter().copied()
   }
+
   #[inline]
-  pub fn semantic_keys_pressed(&self) -> impl Iterator<Item=SemanticKey> + '_ {
-    self.semantic_keys_pressed.iter().copied()
+  pub fn keys_pressed(&self) -> impl Iterator<Item=Key> + '_ {
+    self.keys_pressed.iter().copied()
   }
   #[inline]
-  pub fn semantic_keys_released(&self) -> impl Iterator<Item=SemanticKey> + '_ {
-    self.semantic_keys_released.iter().copied()
+  pub fn keys_released(&self) -> impl Iterator<Item=Key> + '_ {
+    self.keys_released.iter().copied()
   }
 
   #[inline]
@@ -154,11 +125,9 @@ impl RawInput {
     self.keyboard_modifiers_pressed.clear();
     self.keyboard_modifiers_released.clear();
     self.keyboard_keys.clear();
-    self.keyboard_keys_pressed.clear();
-    self.keyboard_keys_released.clear();
     self.semantic_keys.clear();
-    self.semantic_keys_pressed.clear();
-    self.semantic_keys_released.clear();
+    self.keys_pressed.clear();
+    self.keys_released.clear();
     self.text_inserted.clear();
   }
 
@@ -170,10 +139,8 @@ impl RawInput {
     self.mouse_wheel_line_delta = LineDelta::default();
     self.keyboard_modifiers_pressed.clear();
     self.keyboard_modifiers_released.clear();
-    self.keyboard_keys_pressed.clear();
-    self.keyboard_keys_released.clear();
-    self.semantic_keys_pressed.clear();
-    self.semantic_keys_released.clear();
+    self.keys_pressed.clear();
+    self.keys_released.clear();
     self.text_inserted.clear();
   }
 }
@@ -721,24 +688,23 @@ impl Into<Option<egui::Key>> for KeyboardKey {
 
       // Punctuation
       KeyboardKey::Space => Key::Space,
+      KeyboardKey::Comma => Key::Comma,
+      KeyboardKey::Period => Key::Period,
+      // KeyboardKey::Colon => Key::Colon, // NOTE: there is no physical colon key on an american keyboard
+      KeyboardKey::Semicolon => Key::Semicolon,
+      KeyboardKey::Backslash => Key::Backslash,
       // TODO: enable in later egui version
-      // KeyboardKey::Comma => Key::Comma,
-      // KeyboardKey::Period => Key::Period,
-      // // KeyboardKey::Colon => Key::Colon, // NOTE: there is no physical colon key on an american keyboard
-      // KeyboardKey::Semicolon => Key::Semicolon,
-      // KeyboardKey::Backslash => Key::Backslash,
-      // KeyboardKey::Slash | KeyboardKey::NumpadDivide => Key::Slash,
-      // KeyboardKey::BracketLeft => Key::OpenBracket,
-      // KeyboardKey::BracketRight => Key::CloseBracket,
-      // KeyboardKey::Backquote => Key::Backtick,
+      //KeyboardKey::Slash | KeyboardKey::NumpadDivide => Key::Slash,
+      KeyboardKey::BracketLeft => Key::OpenBracket,
+      KeyboardKey::BracketRight => Key::CloseBracket,
+      KeyboardKey::Backquote => Key::Backtick,
 
-      // TODO: enable in later egui version
-      // KeyboardKey::Cut => Key::Cut,
-      // KeyboardKey::Copy => Key::Copy,
-      // KeyboardKey::Paste => Key::Paste,
-      // KeyboardKey::Minus | KeyboardKey::NumpadSubtract => Key::Minus,
-      // KeyboardKey::NumpadAdd => Key::Plus,
-      // KeyboardKey::Equal => Key::Equals,
+      KeyboardKey::Cut => Key::Cut,
+      KeyboardKey::Copy => Key::Copy,
+      KeyboardKey::Paste => Key::Paste,
+      KeyboardKey::Minus | KeyboardKey::NumpadSubtract => Key::Minus,
+      KeyboardKey::NumpadAdd => Key::Plus,
+      KeyboardKey::Equal => Key::Equals,
 
       KeyboardKey::Digit0 | KeyboardKey::Numpad0 => Key::Num0,
       KeyboardKey::Digit1 | KeyboardKey::Numpad1 => Key::Num1,
@@ -1564,10 +1530,9 @@ impl Into<Option<egui::Key>> for SemanticKey {
       SemanticKey::Delete => Key::Delete,
       SemanticKey::Insert => Key::Insert,
       SemanticKey::Escape => Key::Escape,
-      // TODO: enable in later egui version
-      // SemanticKey::Cut => Key::Cut,
-      // SemanticKey::Copy => Key::Copy,
-      // SemanticKey::Paste => Key::Paste,
+      SemanticKey::Cut => Key::Cut,
+      SemanticKey::Copy => Key::Copy,
+      SemanticKey::Paste => Key::Paste,
 
       SemanticKey::Space => Key::Space,
 

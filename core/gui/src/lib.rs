@@ -9,7 +9,7 @@ use egui::{ClippedPrimitive, Context, Event, ImageData, Pos2, RawInput as EguiRa
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
-use common::input::{KeyboardModifier, RawInput};
+use common::input::{Key, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -199,26 +199,16 @@ impl Gui {
       // }
 
       // Keyboard keys
-      for keyboard_key in input.keyboard_keys_pressed() {
-        if let Some(key) = keyboard_key.into() {
-          self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
+      for Key { keyboard, semantic } in input.keys_pressed() {
+        if let Some(key) = semantic.and_then(|s| s.into()) {
+          let physical_key = keyboard.and_then(|k| k.into());
+          self.input.events.push(Event::Key { key, physical_key, pressed: true, repeat: false, modifiers })
         }
       }
-      for keyboard_key in input.keyboard_keys_released() {
-        if let Some(key) = keyboard_key.into() {
-          self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
-        }
-      }
-
-      // Semantic keys
-      for semantic_key in input.semantic_keys_pressed() {
-        if let Some(key) = semantic_key.into() {
-          self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
-        }
-      }
-      for semantic_key in input.semantic_keys_released() {
-        if let Some(key) = semantic_key.into() {
-          self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
+      for Key { keyboard, semantic } in input.keys_released() {
+        if let Some(key) = semantic.and_then(|s| s.into()) {
+          let physical_key = keyboard.and_then(|k| k.into());
+          self.input.events.push(Event::Key { key, physical_key, pressed: false, repeat: false, modifiers })
         }
       }
 

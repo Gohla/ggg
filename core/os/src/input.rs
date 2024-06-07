@@ -1,6 +1,6 @@
 use std::sync::mpsc::Receiver;
 
-use common::input::RawInput;
+use common::input::{Key, RawInput};
 use common::screen::ScreenDelta;
 
 use crate::event::{ElementState, InputEvent};
@@ -31,11 +31,11 @@ impl InputSys {
           match state {
             ElementState::Pressed => {
               input_state.mouse_buttons.insert(button);
-              input_state.mouse_buttons_pressed.insert(button);
+              input_state.mouse_buttons_pressed.push(button);
             }
             ElementState::Released => {
               input_state.mouse_buttons.remove(&button);
-              input_state.mouse_buttons_released.insert(button);
+              input_state.mouse_buttons_released.push(button);
             }
           };
         }
@@ -52,37 +52,34 @@ impl InputSys {
           match state {
             ElementState::Pressed => {
               input_state.keyboard_modifiers.insert(modifier);
-              input_state.keyboard_modifiers_pressed.insert(modifier);
+              input_state.keyboard_modifiers_pressed.push(modifier);
             }
             ElementState::Released => {
               input_state.keyboard_modifiers.remove(&modifier);
-              input_state.keyboard_modifiers_released.insert(modifier);
+              input_state.keyboard_modifiers_released.push(modifier);
             }
           };
         }
         InputEvent::KeyboardKey { keyboard_key, semantic_key, text, state } => {
-          if let Some(keyboard_key) = keyboard_key {
-            if state.is_pressed() {
+          if state.is_pressed() {
+            if let Some(keyboard_key) = keyboard_key {
               input_state.keyboard_keys.insert(keyboard_key);
-              input_state.keyboard_keys_pressed.insert(keyboard_key);
-            } else {
-              input_state.keyboard_keys.remove(&keyboard_key);
-              input_state.keyboard_keys_released.insert(keyboard_key);
             }
-          }
-          if let Some(semantic_key) = semantic_key {
-            if state.is_pressed() {
+            if let Some(semantic_key) = semantic_key {
               input_state.semantic_keys.insert(semantic_key);
-              input_state.semantic_keys_pressed.insert(semantic_key);
-            } else {
-              input_state.semantic_keys.remove(&semantic_key);
-              input_state.semantic_keys_released.insert(semantic_key);
             }
-          }
-          if let Some(text) = text {
-            if state.is_pressed() {
+            input_state.keys_pressed.push(Key::new(keyboard_key, semantic_key));
+            if let Some(text) = text {
               input_state.text_inserted.push_str(&text);
             }
+          } else {
+            if let Some(keyboard_key) = keyboard_key {
+              input_state.keyboard_keys.remove(&keyboard_key);
+            }
+            if let Some(semantic_key) = semantic_key {
+              input_state.semantic_keys.remove(&semantic_key);
+            }
+            input_state.keys_released.push(Key::new(keyboard_key, semantic_key));
           }
         }
       }
