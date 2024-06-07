@@ -414,6 +414,7 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "egui",
  "serde",
  "web-sys",
  "winit",

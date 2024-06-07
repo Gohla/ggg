@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::ops::{Add, AddAssign, Div, Mul, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
 /// Scale factor. The number of physical pixels per logical point.
 ///
@@ -470,29 +470,6 @@ impl LogicalPosition {
   pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
 }
 
-impl Add<LogicalPosition> for LogicalPosition {
-  type Output = LogicalPosition;
-  #[inline]
-  fn add(self, rhs: LogicalPosition) -> Self::Output {
-    LogicalPosition::new(self.x + rhs.x, self.y + rhs.y)
-  }
-}
-impl AddAssign<LogicalPosition> for LogicalPosition {
-  #[inline]
-  fn add_assign(&mut self, rhs: LogicalPosition) {
-    self.x += rhs.x;
-    self.y += rhs.y;
-  }
-}
-
-impl Sub<LogicalPosition> for LogicalPosition {
-  type Output = LogicalDelta;
-  #[inline]
-  fn sub(self, rhs: LogicalPosition) -> Self::Output {
-    LogicalDelta::new(self.x - rhs.x, self.y - rhs.y)
-  }
-}
-
 impl From<(f64, f64)> for LogicalPosition {
   #[inline]
   fn from((x, y): (f64, f64)) -> Self { Self::new(x, y) }
@@ -540,6 +517,43 @@ impl<P: winit::dpi::Pixel> Into<winit::dpi::LogicalPosition<P>> for LogicalPosit
   fn into(self) -> winit::dpi::LogicalPosition<P> {
     let position: (f64, f64) = self.into();
     winit::dpi::LogicalPosition::from(position)
+  }
+}
+#[cfg(feature = "egui")]
+impl Into<egui::Pos2> for LogicalPosition {
+  fn into(self) -> egui::Pos2 {
+    // Note: loss of precision due to conversion from f64 into f32.
+    egui::Pos2::new(self.x as f32, self.y as f32)
+  }
+}
+
+impl Add<LogicalPosition> for LogicalPosition {
+  type Output = LogicalPosition;
+  #[inline]
+  fn add(self, rhs: LogicalPosition) -> Self::Output {
+    LogicalPosition::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+impl AddAssign<LogicalPosition> for LogicalPosition {
+  #[inline]
+  fn add_assign(&mut self, rhs: LogicalPosition) {
+    self.x += rhs.x;
+    self.y += rhs.y;
+  }
+}
+
+impl Sub<LogicalPosition> for LogicalPosition {
+  type Output = LogicalDelta;
+  #[inline]
+  fn sub(self, rhs: LogicalPosition) -> Self::Output {
+    LogicalDelta::new(self.x - rhs.x, self.y - rhs.y)
+  }
+}
+impl SubAssign<LogicalPosition> for LogicalPosition {
+  #[inline]
+  fn sub_assign(&mut self, rhs: LogicalPosition) {
+    self.x -= rhs.x;
+    self.y -= rhs.y;
   }
 }
 
@@ -729,21 +743,6 @@ impl LogicalDelta {
   pub fn is_zero(&self) -> bool { self.x == 0.0 && self.y == 0.0 }
 }
 
-impl Add<LogicalDelta> for LogicalDelta {
-  type Output = LogicalDelta;
-  #[inline]
-  fn add(self, rhs: LogicalDelta) -> Self::Output {
-    LogicalDelta::new(self.x + rhs.x, self.y + rhs.y)
-  }
-}
-impl AddAssign<LogicalDelta> for LogicalDelta {
-  #[inline]
-  fn add_assign(&mut self, rhs: LogicalDelta) {
-    self.x += rhs.x;
-    self.y += rhs.y;
-  }
-}
-
 impl From<(f64, f64)> for LogicalDelta {
   #[inline]
   fn from((x, y): (f64, f64)) -> Self { Self::new(x, y) }
@@ -776,6 +775,28 @@ impl From<LogicalDelta> for (f64, f64) {
 impl From<LogicalDelta> for [f64; 2] {
   #[inline]
   fn from(l: LogicalDelta) -> Self { [l.x, l.y] }
+}
+#[cfg(feature = "egui")]
+impl Into<egui::Vec2> for LogicalDelta {
+  fn into(self) -> egui::Vec2 {
+    // Note: loss of precision due to conversion from f64 into f32.
+    egui::Vec2::new(self.x as f32, self.y as f32)
+  }
+}
+
+impl Add<LogicalDelta> for LogicalDelta {
+  type Output = LogicalDelta;
+  #[inline]
+  fn add(self, rhs: LogicalDelta) -> Self::Output {
+    LogicalDelta::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+impl AddAssign<LogicalDelta> for LogicalDelta {
+  #[inline]
+  fn add_assign(&mut self, rhs: LogicalDelta) {
+    self.x += rhs.x;
+    self.y += rhs.y;
+  }
 }
 
 

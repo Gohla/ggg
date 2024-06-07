@@ -30,44 +30,113 @@ pub struct RawInput {
 }
 
 impl RawInput {
+  #[inline]
   pub fn is_mouse_button_down(&self, button: MouseButton) -> bool {
     self.mouse_buttons.contains(&button)
   }
+  #[inline]
   pub fn is_mouse_button_pressed(&self, button: MouseButton) -> bool {
     self.mouse_buttons_pressed.contains(&button)
   }
+  #[inline]
   pub fn is_mouse_button_released(&self, button: MouseButton) -> bool {
     self.mouse_buttons_released.contains(&button)
   }
+  #[inline]
+  pub fn mouse_buttons(&self) -> impl Iterator<Item=MouseButton> + '_ {
+    self.mouse_buttons.iter().copied()
+  }
+  #[inline]
+  pub fn mouse_buttons_pressed(&self) -> impl Iterator<Item=MouseButton> + '_ {
+    self.mouse_buttons_pressed.iter().copied()
+  }
+  #[inline]
+  pub fn mouse_buttons_released(&self) -> impl Iterator<Item=MouseButton> + '_ {
+    self.mouse_buttons_released.iter().copied()
+  }
 
+  #[inline]
   pub fn is_keyboard_modifier_down(&self, modifier: KeyboardModifier) -> bool {
     self.keyboard_modifiers.contains(&modifier)
   }
+  #[inline]
   pub fn is_keyboard_modifier_pressed(&self, modifier: KeyboardModifier) -> bool {
     self.keyboard_modifiers_pressed.contains(&modifier)
   }
+  #[inline]
   pub fn is_keyboard_modifier_released(&self, modifier: KeyboardModifier) -> bool {
     self.keyboard_modifiers_released.contains(&modifier)
   }
+  #[inline]
+  pub fn keyboard_modifiers(&self) -> impl Iterator<Item=KeyboardModifier> + '_ {
+    self.keyboard_modifiers.iter().copied()
+  }
+  #[inline]
+  pub fn keyboard_modifiers_pressed(&self) -> impl Iterator<Item=KeyboardModifier> + '_ {
+    self.keyboard_modifiers_pressed.iter().copied()
+  }
+  #[inline]
+  pub fn keyboard_modifiers_released(&self) -> impl Iterator<Item=KeyboardModifier> + '_ {
+    self.keyboard_modifiers_released.iter().copied()
+  }
 
+  #[inline]
   pub fn is_keyboard_key_down(&self, keyboard_key: KeyboardKey) -> bool {
     self.keyboard_keys.contains(&keyboard_key)
   }
+  #[inline]
   pub fn is_keyboard_key_pressed(&self, keyboard_key: KeyboardKey) -> bool {
     self.keyboard_keys_pressed.contains(&keyboard_key)
   }
+  #[inline]
   pub fn is_keyboard_key_released(&self, keyboard_key: KeyboardKey) -> bool {
     self.keyboard_keys_released.contains(&keyboard_key)
   }
+  #[inline]
+  pub fn keyboard_keys(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
+    self.keyboard_keys.iter().copied()
+  }
+  #[inline]
+  pub fn keyboard_keys_pressed(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
+    self.keyboard_keys_pressed.iter().copied()
+  }
+  #[inline]
+  pub fn keyboard_keys_released(&self) -> impl Iterator<Item=KeyboardKey> + '_ {
+    self.keyboard_keys_released.iter().copied()
+  }
 
+  #[inline]
   pub fn is_semantic_key_down(&self, semantic_key: SemanticKey) -> bool {
     self.semantic_keys.contains(&semantic_key)
   }
+  #[inline]
   pub fn is_semantic_key_pressed(&self, semantic_key: SemanticKey) -> bool {
     self.semantic_keys_pressed.contains(&semantic_key)
   }
+  #[inline]
   pub fn is_semantic_key_released(&self, semantic_key: SemanticKey) -> bool {
     self.semantic_keys_released.contains(&semantic_key)
+  }
+  #[inline]
+  pub fn semantic_keys(&self) -> impl Iterator<Item=SemanticKey> + '_ {
+    self.semantic_keys.iter().copied()
+  }
+  #[inline]
+  pub fn semantic_keys_pressed(&self) -> impl Iterator<Item=SemanticKey> + '_ {
+    self.semantic_keys_pressed.iter().copied()
+  }
+  #[inline]
+  pub fn semantic_keys_released(&self) -> impl Iterator<Item=SemanticKey> + '_ {
+    self.semantic_keys_released.iter().copied()
+  }
+
+  #[inline]
+  pub fn text_inserted(&self) -> Option<&str> {
+    if !self.text_inserted.is_empty() {
+      Some(&self.text_inserted)
+    } else {
+      None
+    }
   }
 
 
@@ -110,7 +179,7 @@ impl RawInput {
 }
 
 
-/// Describes a button of a mouse controller.
+/// Symbolic representation of a mouse button.
 ///
 /// ## Platform-specific
 ///
@@ -140,17 +209,32 @@ impl From<winit::event::MouseButton> for MouseButton {
     }
   }
 }
+#[cfg(feature = "egui")]
+impl Into<Option<egui::PointerButton>> for MouseButton {
+  fn into(self) -> Option<egui::PointerButton> {
+    use MouseButton::*;
+    let pointer_button = match self {
+      Left => egui::PointerButton::Primary,
+      Right => egui::PointerButton::Secondary,
+      Middle => egui::PointerButton::Middle,
+      Back => egui::PointerButton::Extra1,
+      Forward => egui::PointerButton::Extra2,
+      _ => return None,
+    };
+    Some(pointer_button)
+  }
+}
 
-
+/// Symbolic name for a keyboard modifier.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum KeyboardModifier {
   Shift,
   Control,
   Alternate,
-  Meta,
+  Super,
 }
 
-/// A symbolic name for the location of a physical key.
+/// Symbolic representation for the location of a physical keyboard key.
 ///
 /// This mostly conforms to the UI Events Specification's [`KeyboardEvent.code`] with a few exceptions:
 /// - The keys that the specification calls "MetaLeft" and "MetaRight" are named "SuperLeft" and "SuperRight" here.
@@ -610,6 +694,129 @@ impl From<winit::keyboard::KeyCode> for KeyboardKey {
   #[inline]
   fn from(key_code: winit::keyboard::KeyCode) -> Self {
     unsafe { std::mem::transmute(key_code) }
+  }
+}
+#[cfg(feature = "egui")]
+impl Into<Option<egui::Key>> for KeyboardKey {
+  fn into(self) -> Option<egui::Key> {
+    // From: https://github.com/emilk/egui/blob/9f12432bcf8f8275f154cbbb8aabdb8958be9026/crates/egui-winit/src/lib.rs#L1107
+    use egui::Key;
+    let key = match self {
+      KeyboardKey::ArrowDown => Key::ArrowDown,
+      KeyboardKey::ArrowLeft => Key::ArrowLeft,
+      KeyboardKey::ArrowRight => Key::ArrowRight,
+      KeyboardKey::ArrowUp => Key::ArrowUp,
+
+      KeyboardKey::Escape => Key::Escape,
+      KeyboardKey::Tab => Key::Tab,
+      KeyboardKey::Backspace => Key::Backspace,
+      KeyboardKey::Enter | KeyboardKey::NumpadEnter => Key::Enter,
+
+      KeyboardKey::Insert => Key::Insert,
+      KeyboardKey::Delete => Key::Delete,
+      KeyboardKey::Home => Key::Home,
+      KeyboardKey::End => Key::End,
+      KeyboardKey::PageUp => Key::PageUp,
+      KeyboardKey::PageDown => Key::PageDown,
+
+      // Punctuation
+      KeyboardKey::Space => Key::Space,
+      // TODO: enable in later egui version
+      // KeyboardKey::Comma => Key::Comma,
+      // KeyboardKey::Period => Key::Period,
+      // // KeyboardKey::Colon => Key::Colon, // NOTE: there is no physical colon key on an american keyboard
+      // KeyboardKey::Semicolon => Key::Semicolon,
+      // KeyboardKey::Backslash => Key::Backslash,
+      // KeyboardKey::Slash | KeyboardKey::NumpadDivide => Key::Slash,
+      // KeyboardKey::BracketLeft => Key::OpenBracket,
+      // KeyboardKey::BracketRight => Key::CloseBracket,
+      // KeyboardKey::Backquote => Key::Backtick,
+
+      // TODO: enable in later egui version
+      // KeyboardKey::Cut => Key::Cut,
+      // KeyboardKey::Copy => Key::Copy,
+      // KeyboardKey::Paste => Key::Paste,
+      // KeyboardKey::Minus | KeyboardKey::NumpadSubtract => Key::Minus,
+      // KeyboardKey::NumpadAdd => Key::Plus,
+      // KeyboardKey::Equal => Key::Equals,
+
+      KeyboardKey::Digit0 | KeyboardKey::Numpad0 => Key::Num0,
+      KeyboardKey::Digit1 | KeyboardKey::Numpad1 => Key::Num1,
+      KeyboardKey::Digit2 | KeyboardKey::Numpad2 => Key::Num2,
+      KeyboardKey::Digit3 | KeyboardKey::Numpad3 => Key::Num3,
+      KeyboardKey::Digit4 | KeyboardKey::Numpad4 => Key::Num4,
+      KeyboardKey::Digit5 | KeyboardKey::Numpad5 => Key::Num5,
+      KeyboardKey::Digit6 | KeyboardKey::Numpad6 => Key::Num6,
+      KeyboardKey::Digit7 | KeyboardKey::Numpad7 => Key::Num7,
+      KeyboardKey::Digit8 | KeyboardKey::Numpad8 => Key::Num8,
+      KeyboardKey::Digit9 | KeyboardKey::Numpad9 => Key::Num9,
+
+      KeyboardKey::KeyA => Key::A,
+      KeyboardKey::KeyB => Key::B,
+      KeyboardKey::KeyC => Key::C,
+      KeyboardKey::KeyD => Key::D,
+      KeyboardKey::KeyE => Key::E,
+      KeyboardKey::KeyF => Key::F,
+      KeyboardKey::KeyG => Key::G,
+      KeyboardKey::KeyH => Key::H,
+      KeyboardKey::KeyI => Key::I,
+      KeyboardKey::KeyJ => Key::J,
+      KeyboardKey::KeyK => Key::K,
+      KeyboardKey::KeyL => Key::L,
+      KeyboardKey::KeyM => Key::M,
+      KeyboardKey::KeyN => Key::N,
+      KeyboardKey::KeyO => Key::O,
+      KeyboardKey::KeyP => Key::P,
+      KeyboardKey::KeyQ => Key::Q,
+      KeyboardKey::KeyR => Key::R,
+      KeyboardKey::KeyS => Key::S,
+      KeyboardKey::KeyT => Key::T,
+      KeyboardKey::KeyU => Key::U,
+      KeyboardKey::KeyV => Key::V,
+      KeyboardKey::KeyW => Key::W,
+      KeyboardKey::KeyX => Key::X,
+      KeyboardKey::KeyY => Key::Y,
+      KeyboardKey::KeyZ => Key::Z,
+
+      KeyboardKey::F1 => Key::F1,
+      KeyboardKey::F2 => Key::F2,
+      KeyboardKey::F3 => Key::F3,
+      KeyboardKey::F4 => Key::F4,
+      KeyboardKey::F5 => Key::F5,
+      KeyboardKey::F6 => Key::F6,
+      KeyboardKey::F7 => Key::F7,
+      KeyboardKey::F8 => Key::F8,
+      KeyboardKey::F9 => Key::F9,
+      KeyboardKey::F10 => Key::F10,
+      KeyboardKey::F11 => Key::F11,
+      KeyboardKey::F12 => Key::F12,
+      KeyboardKey::F13 => Key::F13,
+      KeyboardKey::F14 => Key::F14,
+      KeyboardKey::F15 => Key::F15,
+      KeyboardKey::F16 => Key::F16,
+      KeyboardKey::F17 => Key::F17,
+      KeyboardKey::F18 => Key::F18,
+      KeyboardKey::F19 => Key::F19,
+      KeyboardKey::F20 => Key::F20,
+      // TODO: enable in later egui version
+      // KeyboardKey::F21 => Key::F21,
+      // KeyboardKey::F22 => Key::F22,
+      // KeyboardKey::F23 => Key::F23,
+      // KeyboardKey::F24 => Key::F24,
+      // KeyboardKey::F25 => Key::F25,
+      // KeyboardKey::F26 => Key::F26,
+      // KeyboardKey::F27 => Key::F27,
+      // KeyboardKey::F28 => Key::F28,
+      // KeyboardKey::F29 => Key::F29,
+      // KeyboardKey::F30 => Key::F30,
+      // KeyboardKey::F31 => Key::F31,
+      // KeyboardKey::F32 => Key::F32,
+      // KeyboardKey::F33 => Key::F33,
+      // KeyboardKey::F34 => Key::F34,
+      // KeyboardKey::F35 => Key::F35,
+      _ => return None,
+    };
+    Some(key)
   }
 }
 
@@ -1335,5 +1542,73 @@ impl From<winit::keyboard::NamedKey> for SemanticKey {
   #[inline]
   fn from(named_key: winit::keyboard::NamedKey) -> Self {
     unsafe { std::mem::transmute(named_key) }
+  }
+}
+#[cfg(feature = "egui")]
+impl Into<Option<egui::Key>> for SemanticKey {
+  fn into(self) -> Option<egui::Key> {
+    // From: https://github.com/emilk/egui/blob/9f12432bcf8f8275f154cbbb8aabdb8958be9026/crates/egui-winit/src/lib.rs#L1040
+    use egui::Key;
+    let key = match self {
+      SemanticKey::Enter => Key::Enter,
+      SemanticKey::Tab => Key::Tab,
+      SemanticKey::ArrowDown => Key::ArrowDown,
+      SemanticKey::ArrowLeft => Key::ArrowLeft,
+      SemanticKey::ArrowRight => Key::ArrowRight,
+      SemanticKey::ArrowUp => Key::ArrowUp,
+      SemanticKey::End => Key::End,
+      SemanticKey::Home => Key::Home,
+      SemanticKey::PageDown => Key::PageDown,
+      SemanticKey::PageUp => Key::PageUp,
+      SemanticKey::Backspace => Key::Backspace,
+      SemanticKey::Delete => Key::Delete,
+      SemanticKey::Insert => Key::Insert,
+      SemanticKey::Escape => Key::Escape,
+      // TODO: enable in later egui version
+      // SemanticKey::Cut => Key::Cut,
+      // SemanticKey::Copy => Key::Copy,
+      // SemanticKey::Paste => Key::Paste,
+
+      SemanticKey::Space => Key::Space,
+
+      SemanticKey::F1 => Key::F1,
+      SemanticKey::F2 => Key::F2,
+      SemanticKey::F3 => Key::F3,
+      SemanticKey::F4 => Key::F4,
+      SemanticKey::F5 => Key::F5,
+      SemanticKey::F6 => Key::F6,
+      SemanticKey::F7 => Key::F7,
+      SemanticKey::F8 => Key::F8,
+      SemanticKey::F9 => Key::F9,
+      SemanticKey::F10 => Key::F10,
+      SemanticKey::F11 => Key::F11,
+      SemanticKey::F12 => Key::F12,
+      SemanticKey::F13 => Key::F13,
+      SemanticKey::F14 => Key::F14,
+      SemanticKey::F15 => Key::F15,
+      SemanticKey::F16 => Key::F16,
+      SemanticKey::F17 => Key::F17,
+      SemanticKey::F18 => Key::F18,
+      SemanticKey::F19 => Key::F19,
+      SemanticKey::F20 => Key::F20,
+      // TODO: enable in later egui version
+      // SemanticKey::F21 => Key::F21,
+      // SemanticKey::F22 => Key::F22,
+      // SemanticKey::F23 => Key::F23,
+      // SemanticKey::F24 => Key::F24,
+      // SemanticKey::F25 => Key::F25,
+      // SemanticKey::F26 => Key::F26,
+      // SemanticKey::F27 => Key::F27,
+      // SemanticKey::F28 => Key::F28,
+      // SemanticKey::F29 => Key::F29,
+      // SemanticKey::F30 => Key::F30,
+      // SemanticKey::F31 => Key::F31,
+      // SemanticKey::F32 => Key::F32,
+      // SemanticKey::F33 => Key::F33,
+      // SemanticKey::F34 => Key::F34,
+      // SemanticKey::F35 => Key::F35,
+      _ => return None,
+    };
+    Some(key)
   }
 }

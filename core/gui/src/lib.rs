@@ -5,11 +5,11 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedPrimitive, Context, Event, ImageData, Key, PointerButton, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta, Vec2};
+use egui::{ClippedPrimitive, Context, Event, ImageData, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta, Vec2};
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
 use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
 
-use common::input::{KeyboardKey, KeyboardModifier, MouseButton, RawInput};
+use common::input::{KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -136,7 +136,7 @@ impl Gui {
       let is_control_down = input.is_keyboard_modifier_down(KeyboardModifier::Control);
       self.input.modifiers.ctrl = is_control_down;
       self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
-      let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Meta);
+      let is_meta_down = input.is_keyboard_modifier_down(KeyboardModifier::Super);
       self.input.modifiers.mac_cmd = if cfg!(target_os = "macos") {
         is_meta_down
       } else {
@@ -147,92 +147,74 @@ impl Gui {
     let modifiers = self.input.modifiers;
 
     if process_mouse_input {
-      // Mouse wheel delta // TODO: properly handle line to pixel conversion?
-      if !input.mouse_wheel_pixel_delta.is_zero() || !input.mouse_wheel_line_delta.is_zero() {
-        self.input.events.push(Event::Scroll(Vec2::new(
-          (input.mouse_wheel_pixel_delta.logical.x + input.mouse_wheel_line_delta.x * 24.0) as f32,
-          (input.mouse_wheel_pixel_delta.logical.y + input.mouse_wheel_line_delta.y * 24.0) as f32,
-        )));
+      // Mouse wheel delta
+      // TODO: handle horizontal scrolling when shift is pressed?
+      if !input.mouse_wheel_pixel_delta.is_zero() {
+        self.input.events.push(Event::Scroll(input.mouse_wheel_pixel_delta.logical.into()));
+      }
+      if !input.mouse_wheel_line_delta.is_zero() {
+        // TODO: properly handle line to pixel conversion?
+        let lines_to_logical_pixels = input.mouse_wheel_line_delta * 24.0;
+        self.input.events.push(Event::Scroll(lines_to_logical_pixels.into()));
       }
 
       // Mouse movement
-      let mouse_position = Pos2::new(input.mouse_position.logical.x as f32, input.mouse_position.logical.y as f32);
+      let mouse_position: Pos2 = input.mouse_position.logical.into();
       if !input.mouse_position_delta.is_zero() {
         self.input.events.push(Event::PointerMoved(mouse_position))
       }
 
       // Mouse buttons
-      fn convert_mouse_button(mouse_button: MouseButton) -> Option<PointerButton> {
-        match mouse_button {
-          MouseButton::Left => Some(PointerButton::Primary),
-          MouseButton::Right => Some(PointerButton::Secondary),
-          MouseButton::Middle => Some(PointerButton::Middle),
-          _ => None
-        }
-      }
-      for button in &input.mouse_buttons_pressed {
-        if let Some(button) = convert_mouse_button(*button) {
+      for button in input.mouse_buttons_pressed() {
+        if let Some(button) = button.into() {
           self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: true, modifiers })
         }
       }
-      for button in &input.mouse_buttons_released {
-        if let Some(button) = convert_mouse_button(*button) {
+      for button in input.mouse_buttons_released() {
+        if let Some(button) = button.into() {
           self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: false, modifiers })
         }
       }
     }
 
     if process_keyboard_input {
-      // Keyboard buttons
-      // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L262-L292
-      fn convert_keyboard_button(button: KeyboardKey) -> Option<Key> {
-        use KeyboardKey::*;
-        Some(match button {
-          Escape => Key::Escape,
-          Insert => Key::Insert,
-          Home => Key::Home,
-          Delete => Key::Delete,
-          End => Key::End,
-          PageDown => Key::PageDown,
-          PageUp => Key::PageUp,
-          ArrowLeft => Key::ArrowLeft,
-          ArrowUp => Key::ArrowUp,
-          ArrowRight => Key::ArrowRight,
-          ArrowDown => Key::ArrowDown,
-          Backspace => Key::Backspace,
-          Enter => Key::Enter,
-          Tab => Key::Tab,
-          Space => Key::Space,
-
-          KeyA => Key::A,
-          KeyK => Key::K,
-          KeyU => Key::U,
-          KeyW => Key::W,
-          KeyZ => Key::Z,
-
-          _ => { return None; }
-        })
-      }
-      for button in &input.keyboard_keys_pressed {
-        if let Some(key) = convert_keyboard_button(*button) {
+      // Keyboard keys
+      for keyboard_key in input.keyboard_keys_pressed() {
+        if let Some(key) = keyboard_key.into() {
           self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
         }
       }
-      for button in &input.keyboard_keys_released {
-        if let Some(key) = convert_keyboard_button(*button) {
+      for keyboard_key in input.keyboard_keys_released() {
+        if let Some(key) = keyboard_key.into() {
           self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
         }
       }
 
-      // Characters
-      for character in input.text_inserted.chars() {
-        // Taken from: https://github.com/hasenbanck/egui_winit_platform/blob/400ebfc2f3e9a564a701406e724096556bb2f8c4/src/lib.rs#L312-L320
-        let is_in_private_use_area = '\u{e000}' <= character && character <= '\u{f8ff}'
-          || '\u{f0000}' <= character && character <= '\u{ffffd}'
-          || '\u{100000}' <= character && character <= '\u{10fffd}';
-        if !is_in_private_use_area && !character.is_ascii_control() {
-          self.input.events.push(Event::Text(character.to_string()))
+      // Semantic keys
+      for semantic_key in input.semantic_keys_pressed() {
+        if let Some(key) = semantic_key.into() {
+          self.input.events.push(Event::Key { key, pressed: true, repeat: false, modifiers })
         }
+      }
+      for semantic_key in input.semantic_keys_released() {
+        if let Some(key) = semantic_key.into() {
+          self.input.events.push(Event::Key { key, pressed: false, repeat: false, modifiers })
+        }
+      }
+
+      // Text
+      /// Ignore special keys (backspace, delete, F1, …) that winit sends as characters. Also ignore '\r', '\n', '\t'
+      /// since newlines are handled by the `Key::Enter` event.
+      ///
+      /// From: https://github.com/emilk/egui/blob/9f12432bcf8f8275f154cbbb8aabdb8958be9026/crates/egui-winit/src/lib.rs#L991-L1001
+      fn is_printable_char(chr: char) -> bool {
+        let is_in_private_use_area = '\u{e000}' <= chr && chr <= '\u{f8ff}'
+          || '\u{f0000}' <= chr && chr <= '\u{ffffd}'
+          || '\u{100000}' <= chr && chr <= '\u{10fffd}';
+        !is_in_private_use_area && !chr.is_ascii_control()
+      }
+      if !input.text_inserted.is_empty() && input.text_inserted.chars().all(is_printable_char) {
+        self.input.events.push(Event::Text(input.text_inserted.clone()))
       }
     }
   }

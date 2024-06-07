@@ -276,7 +276,7 @@ impl EventLoopHandler {
             self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
           }
           if pressed.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Meta, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
           }
         }
 
@@ -293,7 +293,7 @@ impl EventLoopHandler {
             self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
           }
           if released.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Meta, state })?;
+            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
           }
         }
 

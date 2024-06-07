@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 serde = { workspace = true, features = ["derive"], optional = true }
 winit = { workspace = true, optional = true }
+egui = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3"
@@ -16,3 +17,4 @@ version = "0.3"
 default = []
 serde = ["dep:serde"]
 winit = ["dep:winit"]
+egui = ["dep:egui"]

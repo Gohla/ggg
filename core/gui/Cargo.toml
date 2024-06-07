@@ -6,7 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-common = { path = "../../core/common" }
+common = { path = "../../core/common", features = ["egui"] }
 os = { path = "../../core/os" }
 gfx = { path = "../../core/gfx" }
 egui = { workspace = true, features = ["bytemuck"] }
