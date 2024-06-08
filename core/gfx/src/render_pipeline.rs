@@ -28,6 +28,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       vertex: VertexState {
         module: vertex_shader_module,
         entry_point: "main",
+        compilation_options: Default::default(),
         buffers: &[],
       },
       primitive: PrimitiveState {
@@ -146,6 +147,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.fragment = Some(FragmentState {
       module,
       entry_point,
+      compilation_options: Default::default(),
       targets,
     });
     self.use_default_fragment_targets = false;
@@ -157,6 +159,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.fragment = Some(FragmentState {
       module,
       entry_point: "main",
+      compilation_options: Default::default(),
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {
@@ -171,6 +174,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.fragment = Some(FragmentState {
       module,
       entry_point: "main",
+      compilation_options: Default::default(),
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {
@@ -186,6 +190,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.fragment = Some(FragmentState {
       module,
       entry_point: "main",
+      compilation_options: Default::default(),
       targets: &[],
     });
     if let Some(target) = &mut self.default_fragment_targets[0] {

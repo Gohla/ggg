@@ -15,7 +15,7 @@ resolver = "2"
 raw-window-handle = "0.6"
 cursor-icon = "1"
 winit = "0.30"
-wgpu = "0.19"
+wgpu = "0.20"
 egui = { git = "https://github.com/emilk/egui.git", rev = "9f12432" }
 ultraviolet = "0.9"
 image = { version = "0.25", default-features = false }
