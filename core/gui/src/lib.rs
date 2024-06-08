@@ -27,7 +27,9 @@ pub struct Gui {
   clipboard: Box<dyn TextClipboard + Send + 'static>,
 
   input: EguiRawInput,
-  current_cursor_icon: Option<CursorIcon>,
+
+  cursor_icon: Option<CursorIcon>,
+  cursor_in_window: bool,
 
   index_buffer: Option<GfxBuffer>,
   vertex_buffer: Option<GfxBuffer>,
@@ -120,7 +122,9 @@ impl Gui {
       clipboard: get_clipboard(),
 
       input: EguiRawInput::default(),
-      current_cursor_icon: None,
+
+      cursor_icon: None,
+      cursor_in_window: false,
 
       index_buffer: None,
       vertex_buffer: None,
@@ -167,6 +171,7 @@ impl Gui {
       // Mouse movement
       let mouse_position: Pos2 = input.mouse_position.logical.into();
       if !input.mouse_position_delta.is_zero() {
+        self.cursor_in_window = true;
         self.input.events.push(Event::PointerMoved(mouse_position))
       }
 
@@ -261,6 +266,19 @@ impl Gui {
   pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
 
+  pub fn window_cursor(&mut self, cursor_in_window: bool) {
+    self.cursor_in_window = cursor_in_window;
+    if !cursor_in_window {
+      self.input.events.push(Event::PointerGone);
+    }
+  }
+
+  pub fn window_focus(&mut self, focus: bool) {
+    self.input.focused = focus;
+    self.input.events.push(Event::WindowFocused(focus));
+  }
+
+
   fn handle_platform_output(&mut self, window: &Window, platform_output: PlatformOutput) {
     self.set_cursor_icon(window, platform_output.cursor_icon);
 
@@ -273,12 +291,17 @@ impl Gui {
     }
   }
 
-  fn set_cursor_icon(&mut self, _window: &Window, cursor_icon: CursorIcon) {
-    if self.current_cursor_icon == Some(cursor_icon) {
+  fn set_cursor_icon(&mut self, window: &Window, cursor_icon: CursorIcon) {
+    if self.cursor_icon == Some(cursor_icon) {
       return;
     }
 
-    // TODO: implement
+    if self.cursor_in_window {
+      self.cursor_icon = Some(cursor_icon);
+      window.set_option_cursor(cursor_icon.into())
+    } else {
+      self.cursor_icon = None;
+    }
   }
 
 

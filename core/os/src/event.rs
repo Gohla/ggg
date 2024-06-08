@@ -18,10 +18,10 @@ use crate::window::Window;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub enum Event {
-  TerminateRequested,
-  CursorEntered,
-  CursorLeft,
+  WindowCursor(bool),
+  WindowFocus(bool),
   WindowSizeChange(ScreenSize),
+  Stop,
 }
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
@@ -213,6 +213,9 @@ impl EventLoopHandler {
   #[profiling::function]
   fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) -> Result<(), Exit> {
     match event {
+      WindowEvent::Focused(focus) => {
+        self.event_tx.send(Event::WindowFocus(focus))?;
+      }
       WindowEvent::MouseInput { state, button, .. } => {
         self.input_event_tx.send(InputEvent::MouseButton { button: button.into(), state: state.into() })?;
       }
@@ -221,10 +224,10 @@ impl EventLoopHandler {
         self.input_event_tx.send(InputEvent::MousePosition(screen_position))?;
       }
       WindowEvent::CursorEntered { .. } => {
-        self.event_tx.send(Event::CursorEntered)?;
+        self.event_tx.send(Event::WindowCursor(true))?;
       }
       WindowEvent::CursorLeft { .. } => {
-        self.event_tx.send(Event::CursorLeft)?;
+        self.event_tx.send(Event::WindowCursor(false))?;
       }
       WindowEvent::MouseWheel { delta, .. } => {
         match delta {
@@ -299,9 +302,9 @@ impl EventLoopHandler {
 
         self.modifiers = modifiers.state();
       }
-      WindowEvent::CloseRequested => {
+      WindowEvent::CloseRequested | WindowEvent::Destroyed => {
         event_loop.exit();
-        self.event_tx.send(Event::TerminateRequested)?;
+        self.event_tx.send(Event::Stop)?;
       }
       WindowEvent::Resized(inner_size) => {
         self.window_inner_size = ScreenSize::from_physical_scale(inner_size, self.window_inner_size.scale);

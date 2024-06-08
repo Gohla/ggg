@@ -143,6 +143,11 @@ impl AppRunner {
 }
 
 impl AppRunner {
+  pub fn with_graphics_backends(mut self, backends: Backends) -> Self {
+    self.options.graphics_backends = backends;
+    self
+  }
+
   pub fn with_graphics_adapter_power_preference(mut self, power_preference: PowerPreference) -> Self {
     self.options.graphics_adapter_power_preference = power_preference;
     self
