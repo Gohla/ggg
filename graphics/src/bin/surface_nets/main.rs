@@ -45,10 +45,10 @@ const EXTENDS: f32 = C2::CELLS_IN_CHUNK_ROW_F32 / 2.0;
 impl app::Application for SurfaceNetsDemo {
   type Config = Config;
 
-  fn new(os: &Os, gfx: &Gfx, mut config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
     config.update_default_camera_settings();
 
-    let camera = Camera::new(os.window.inner_size().physical, &mut config.camera_settings);
+    let camera = Camera::new(screen_size.physical, &mut config.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());

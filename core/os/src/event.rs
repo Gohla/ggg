@@ -1,25 +1,27 @@
+use std::error::Error;
 use std::sync::mpsc::{channel, Receiver, Sender, SendError};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use thiserror::Error;
 use winit::application::ApplicationHandler;
-use winit::error::EventLoopError;
+pub use winit::error::EventLoopError;
 use winit::event::{KeyEvent, MouseScrollDelta, WindowEvent};
-use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, DeviceEvents, EventLoopProxy};
+pub use winit::event_loop::EventLoopClosed;
 use winit::keyboard::{Key, ModifiersState, PhysicalKey, SmolStr};
 use winit::window::WindowId;
 
 use common::input::{KeyboardKey, KeyboardModifier, MouseButton, SemanticKey};
 use common::line::LineDelta;
-use common::screen::{ScreenDelta, ScreenPosition, ScreenSize};
+use common::screen::{PhysicalSize, Scale, ScreenDelta, ScreenPosition, ScreenSize};
 
-use crate::context::Context;
-use crate::window::Window;
+use crate::window::{Window, WindowCreateError, WindowOptions};
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum Event {
-  WindowCursor(bool),
-  WindowFocus(bool),
+  WindowCursor { cursor_in_window: bool },
+  WindowFocus { window_has_focus: bool },
   WindowSizeChange(ScreenSize),
   Stop,
 }
@@ -76,75 +78,98 @@ impl ElementState {
 }
 
 
-// Create an event loop handler
+// Create an event loop
 
-pub struct EventLoopHandler {
-  input_event_tx: Sender<InputEvent>,
-  event_tx: Sender<Event>,
-
-  window_id: WindowId,
-
-  app_thread_join_handle: Option<JoinHandle<()>>,
-
-  window_inner_size: ScreenSize,
-  modifiers: ModifiersState,
+pub struct EventLoop {
+  event_loop: winit::event_loop::EventLoop<()>,
+  runner: EventLoopRunner,
 }
 
-impl EventLoopHandler {
-  pub fn new(window: &Window) -> (Self, Receiver<InputEvent>, Receiver<Event>) {
+#[derive(Debug, Error)]
+#[error("Failed to create event loop: {0}")]
+pub struct EventLoopCreateError(#[from] EventLoopError);
+
+pub type OnWindowCreatedFn = Box<dyn FnOnce(Window) -> Result<(), Box<dyn Error>> + 'static>;
+
+impl EventLoop {
+  pub fn new(window_options: WindowOptions) -> Result<(Self, Receiver<InputEvent>, Receiver<Event>), EventLoopCreateError> {
+    let event_loop = winit::event_loop::EventLoop::builder()
+      .build()?;
+
     let (input_event_tx, input_event_rx) = channel::<InputEvent>();
     let (event_tx, event_rx) = channel::<Event>();
-    let os_event_sys = Self {
+    let runner = EventLoopRunner {
       input_event_tx,
       event_tx,
 
-      window_id: window.id(),
+      window_options,
+      wait_duration: Duration::from_secs(5),
+      on_window_created: None,
+      join_handle: None,
 
-      app_thread_join_handle: None,
-
-      modifiers: ModifiersState::empty(),
-      window_inner_size: window.inner_size(),
+      window_data: None,
+      keyboard_modifiers: ModifiersState::empty(),
     };
-    (os_event_sys, input_event_rx, event_rx)
+
+    let event_loop = Self { event_loop, runner };
+    Ok((event_loop, input_event_rx, event_rx))
   }
-}
 
-
-// Create an event loop runner
-
-pub struct EventLoopRunner {
-  context: Context,
-  event_handler: EventLoopHandler,
-}
-impl EventLoopRunner {
-  pub fn new(context: Context, event_handler: EventLoopHandler) -> Self {
-    Self { context, event_handler }
+  /// Create an [event loop stopper](EventLoopStopper) to stop the event loop from the outside (e.g., different thread).
+  pub fn create_event_loop_stopper(&self) -> EventLoopStopper {
+    EventLoopStopper(self.event_loop.create_proxy())
   }
-}
-impl EventLoopHandler {
-  pub fn into_runner(self, context: Context) -> EventLoopRunner {
-    EventLoopRunner::new(context, self)
+
+  /// Set the `duration` to wait for after processing events.
+  pub fn with_wait_duration(mut self, duration: Duration) -> Self {
+    self.runner.wait_duration = duration;
+    self
+  }
+
+  /// Sets the `join_handle` to periodically check and to wait for when the event loop stops.
+  pub fn with_join_handle(mut self, join_handle: JoinHandle<()>) -> Self {
+    self.runner.join_handle = Some(join_handle);
+    self
+  }
+
+  /// Sets a callback that gets called once (on the event loop thread) when the event loop creates the window.
+  pub fn with_on_window_created_callback(mut self, on_window_created: OnWindowCreatedFn) -> Self {
+    self.runner.on_window_created = Some(on_window_created);
+    self
   }
 }
 
 
 // Running the event loop
 
+#[derive(Clone)]
+pub struct EventLoopStopper(EventLoopProxy<()>);
+
 #[derive(Debug, Error)]
 #[error("Failed to run event loop: {0}")]
 pub struct EventLoopRunError(#[from] EventLoopError);
 
-impl EventLoopRunner {
+impl EventLoop {
   /// Run the event loop on the current thread, blocking the current thread until the event loop is stopped.
   ///
-  /// The event loop stops:
-  /// - when the window is closed,
-  /// - when the receiver end of the `Event` sender is dropped,
-  /// - when `app_thread_join_handle.is_finished()` returns `true`.
+  /// The event loop waits after processing events, but is woken up after some duration. This duration defaults to 5
+  /// seconds, but can be changed with [`with_wait_duration`](EventLoop::with_wait_duration).
+  ///
+  /// The event loop stops when:
+  /// - The window is closed.
+  /// - [`EventLoopStopper::stop`] is called on a stopper returned from [`Self::create_event_loop_stopper`].
+  /// - The event loop tries to send an input event when the `Receiver<InputEvent>` from [`EventLoop::new`] is dropped.
+  /// - The event loop tries to send an event when the `Receiver<Event>` from [`EventLoop::new`]  is dropped.
+  /// - The event loop is about to wait and the [`is_finished`](JoinHandle::is_finished) method of the
+  ///   [join handle](Self::with_join_handle) (if set) returns `true`. Since the event loop is woken up periodically,
+  ///   this check is performed periodically.
+  ///
+  /// When the event loop stops, if a [join handle](Self::with_join_handle) was set, it will wait for the corresponding
+  /// thread to finish, and propagates any panics from that thread.
   #[cfg(not(target_arch = "wasm32"))]
-  pub fn run(mut self, app_thread_join_handle: JoinHandle<()>) -> Result<(), EventLoopRunError> {
-    self.event_handler.app_thread_join_handle = Some(app_thread_join_handle);
-    self.context.event_loop.run_app(&mut self.event_handler)?;
+  pub fn run(mut self) -> Result<(), EventLoopRunError> {
+    self.event_loop.listen_device_events(DeviceEvents::Never);
+    self.event_loop.run_app(&mut self.runner)?;
     Ok(())
   }
 
@@ -166,162 +191,259 @@ impl EventLoopRunner {
 }
 
 
-// Event loop cycle
+// Stop the event loop
 
-impl ApplicationHandler for EventLoopHandler {
-  fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
+#[derive(Debug, Error)]
+#[error("Failed to stop event loop: {0}")]
+pub struct EventLoopStopError(#[from] EventLoopClosed<()>);
+
+impl EventLoopStopper {
+  /// Stop the event loop, returning an `Err` if the event loop has already stopped.
+  pub fn stop(&self) -> Result<(), EventLoopStopError> {
+    self.0.send_event(())?;
+    Ok(())
+  }
+}
+
+
+// Internals: event loop runner cycle
+
+struct EventLoopRunner {
+  input_event_tx: Sender<InputEvent>,
+  event_tx: Sender<Event>,
+
+  window_options: WindowOptions,
+  wait_duration: Duration,
+  on_window_created: Option<OnWindowCreatedFn>,
+  join_handle: Option<JoinHandle<()>>,
+
+  window_data: Option<WindowData>,
+  keyboard_modifiers: ModifiersState,
+}
+
+struct WindowData {
+  _window: Window,
+  id: WindowId,
+  inner_size: ScreenSize,
+}
+impl WindowData {
+  fn new(window: Window) -> Self {
+    let id = window.id();
+    let inner_size = window.inner_size();
+    Self { _window: window, id, inner_size }
+  }
+
+  #[inline]
+  fn id_matches(&self, id: WindowId) -> bool { self.id == id }
+  #[inline]
+  fn scale_factor(&self) -> Scale { self.inner_size.scale }
+  #[inline]
+  fn physical_size(&self) -> PhysicalSize { self.inner_size.physical }
+
+  #[inline]
+  fn set_inner_size(&mut self, inner_size: ScreenSize) {
+    self.inner_size = inner_size;
+  }
+}
+
+impl ApplicationHandler for EventLoopRunner {
+  fn resumed(&mut self, active_event_loop: &ActiveEventLoop) {
+    match create_window(active_event_loop, &self.window_options, self.on_window_created.take()) {
+      Ok(window) => self.window_data = Some(WindowData::new(window)),
+      Err(cause) => {
+        tracing::error!(?cause, "Failed to create window: {}; stopping event loop", cause);
+        active_event_loop.exit();
+      }
+    }
+  }
+
+  fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: ()) {
+    event_loop.exit();
+  }
 
   fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-    if window_id == self.window_id {
-      if let Err(Exit) = self.handle_window_event(event_loop, event) {
-        // Exit the event loop if sending a message fails.
-        event_loop.exit()
+    if let Some(window_data) = &mut self.window_data {
+      if window_data.id_matches(window_id) {
+        if let Ok(()) = handle_window_event(event_loop, &self.event_tx, &self.input_event_tx, window_data, &mut self.keyboard_modifiers, event) {
+          event_loop.set_control_flow(ControlFlow::wait_duration(self.wait_duration))
+        } else {
+          // Exit the event loop if sending a message fails.
+          event_loop.exit()
+        }
       }
     }
   }
 
   fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-    if let Some(join_handle) = &self.app_thread_join_handle {
-      // If the application thread has finished, also exit the event loop. This additional check is required because:
-      // - Not all window events result in sending a message, thus the error in `window_event` would not be triggered.
-      // - The application thread may have finished, but no window events are being raised, so `window_event` would not
-      //   be called.
+    if let Some(join_handle) = &self.join_handle {
       if join_handle.is_finished() {
         event_loop.exit();
       }
-
-      // TODO: `about_to_wait` may not even be called even when the application thread has finished. A user-event should
-      //       be sent from the application thread to this event loop when the application thread finishes.
     }
   }
 
   fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-    let join_handle = self.app_thread_join_handle.take();
+    let join_handle = self.join_handle.take();
     if let Some(join_handle) = join_handle {
+      // Wait for receiver thread to stop, ensuring our thread outlives the receiver thread.
       if let Err(e) = join_handle.join() {
+        // Propagate panics from receiver thread to the current thread.
         std::panic::resume_unwind(e);
       }
     }
   }
 }
 
-impl EventLoopHandler {
-  /// Handle a window event.
-  ///
-  /// Returns `Err(Exit)` if sending a message to the application fails due to the receiver end being dropped,
-  /// indicating that the application is exiting.
-  #[profiling::function]
-  fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) -> Result<(), Exit> {
-    match event {
-      WindowEvent::Focused(focus) => {
-        self.event_tx.send(Event::WindowFocus(focus))?;
-      }
-      WindowEvent::MouseInput { state, button, .. } => {
-        self.input_event_tx.send(InputEvent::MouseButton { button: button.into(), state: state.into() })?;
-      }
-      WindowEvent::CursorMoved { position, .. } => {
-        let screen_position = ScreenPosition::from_physical_scale(position, self.window_inner_size.scale);
-        self.input_event_tx.send(InputEvent::MousePosition(screen_position))?;
-      }
-      WindowEvent::CursorEntered { .. } => {
-        self.event_tx.send(Event::WindowCursor(true))?;
-      }
-      WindowEvent::CursorLeft { .. } => {
-        self.event_tx.send(Event::WindowCursor(false))?;
-      }
-      WindowEvent::MouseWheel { delta, .. } => {
-        match delta {
-          MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
-            self.input_event_tx.send(InputEvent::MouseWheelLine(LineDelta::from((horizontal_delta_lines, vertical_delta_lines))))?,
-          MouseScrollDelta::PixelDelta(physical_position) => {
-            let screen_delta = ScreenDelta::from_physical_scale(physical_position, self.window_inner_size.scale);
-            self.input_event_tx.send(InputEvent::MouseWheelPixel(screen_delta))?;
-          }
-        };
-      }
-      WindowEvent::KeyboardInput { event: KeyEvent { physical_key, logical_key, text, state, .. }, .. } => {
-        let keyboard_key = match physical_key {
-          PhysicalKey::Code(key_code) => Some(key_code.into()),
-          PhysicalKey::Unidentified(native_key_code) => {
-            tracing::warn!("Received unidentified native key code '{:?}' as physical key; ignoring", native_key_code);
-            None
-          }
-        };
-        let semantic_key = match logical_key {
-          Key::Named(named_key) => Some(named_key.into()),
-          Key::Character(character_name) => {
-            tracing::trace!("Received unnamed character '{:?}' as logical key; ignoring", character_name);
-            None
-          }
-          Key::Unidentified(native_key) => {
-            tracing::warn!("Received unidentified native key '{:?}' as logical key; ignoring", native_key);
-            None
-          }
-          Key::Dead(o) => {
-            tracing::warn!("Received dead key '{:?}' as logical key; ignoring", o);
-            None
-          }
-        };
-        let state = state.into();
-        self.input_event_tx.send(InputEvent::KeyboardKey { keyboard_key, semantic_key, text, state })?;
-      }
-      WindowEvent::ModifiersChanged(modifiers) => {
-        let pressed = modifiers.state() - self.modifiers;
-        {
-          let state = ElementState::Pressed;
-          if pressed.contains(ModifiersState::SHIFT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
-          }
-          if pressed.contains(ModifiersState::CONTROL) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
-          }
-          if pressed.contains(ModifiersState::ALT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
-          }
-          if pressed.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
-          }
-        }
 
-        let released = self.modifiers - modifiers.state();
-        {
-          let state = ElementState::Released;
-          if released.contains(ModifiersState::SHIFT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
-          }
-          if released.contains(ModifiersState::CONTROL) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
-          }
-          if released.contains(ModifiersState::ALT) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
-          }
-          if released.contains(ModifiersState::SUPER) {
-            self.input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
-          }
-        }
-
-        self.modifiers = modifiers.state();
-      }
-      WindowEvent::CloseRequested | WindowEvent::Destroyed => {
-        event_loop.exit();
-        self.event_tx.send(Event::Stop)?;
-      }
-      WindowEvent::Resized(inner_size) => {
-        self.window_inner_size = ScreenSize::from_physical_scale(inner_size, self.window_inner_size.scale);
-        self.event_tx.send(Event::WindowSizeChange(self.window_inner_size))?;
-      }
-      WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-        self.window_inner_size = ScreenSize::from_physical_scale(self.window_inner_size.physical, scale_factor);
-        self.event_tx.send(Event::WindowSizeChange(self.window_inner_size))?;
-      }
-      _ => {}
-    }
-    Ok(())
-  }
+#[derive(Error, Debug)]
+enum CreateWindowError {
+  #[error("Failed to create window: {0}")]
+  WindowCreateFail(#[from] WindowCreateError),
+  // #[error("Failed to get raw window handle: {0}")]
+  // RawWindowHandleFail(#[from] HandleError),
+  #[error("On window created callback failed: {0}")]
+  OnWindowCreatedCallbackFail(#[from] Box<dyn Error>),
 }
 
-struct Exit;
-impl<T> From<SendError<T>> for Exit {
+fn create_window(
+  active_event_loop: &ActiveEventLoop,
+  window_options: &WindowOptions,
+  on_window_created: Option<OnWindowCreatedFn>,
+) -> Result<Window, CreateWindowError> {
+  let window = Window::new(active_event_loop, window_options)?;
+  // let window_handle = window.as_winit_window().window_handle()?.as_raw();
+  if let Some(on_window_created) = on_window_created {
+    on_window_created(window.clone())?;
+  }
+  Ok(window)
+}
+
+
+/// Handle a window event.
+///
+/// Returns `Err(Exit)` if sending an event fails due to the receiver being dropped, indicating that the receiver is
+/// stopping or has stopped.
+#[profiling::function]
+fn handle_window_event(
+  event_loop: &ActiveEventLoop,
+  event_tx: &Sender<Event>,
+  input_event_tx: &Sender<InputEvent>,
+  window_data: &mut WindowData,
+  keyboard_modifiers: &mut ModifiersState,
+  event: WindowEvent,
+) -> Result<(), Stop> {
+  match event {
+    WindowEvent::Focused(focus) => {
+      event_tx.send(Event::WindowFocus { window_has_focus: focus })?;
+    }
+    WindowEvent::MouseInput { state, button, .. } => {
+      input_event_tx.send(InputEvent::MouseButton { button: button.into(), state: state.into() })?;
+    }
+    WindowEvent::CursorMoved { position, .. } => {
+      let screen_position = ScreenPosition::from_physical_scale(position, window_data.inner_size.scale);
+      input_event_tx.send(InputEvent::MousePosition(screen_position))?;
+    }
+    WindowEvent::CursorEntered { .. } => {
+      event_tx.send(Event::WindowCursor { cursor_in_window: true })?;
+    }
+    WindowEvent::CursorLeft { .. } => {
+      event_tx.send(Event::WindowCursor { cursor_in_window: false })?;
+    }
+    WindowEvent::MouseWheel { delta, .. } => {
+      match delta {
+        MouseScrollDelta::LineDelta(horizontal_delta_lines, vertical_delta_lines) =>
+          input_event_tx.send(InputEvent::MouseWheelLine(LineDelta::from((horizontal_delta_lines, vertical_delta_lines))))?,
+        MouseScrollDelta::PixelDelta(physical_position) => {
+          let screen_delta = ScreenDelta::from_physical_scale(physical_position, window_data.inner_size.scale);
+          input_event_tx.send(InputEvent::MouseWheelPixel(screen_delta))?;
+        }
+      };
+    }
+    WindowEvent::KeyboardInput { event: KeyEvent { physical_key, logical_key, text, state, .. }, .. } => {
+      let keyboard_key = match physical_key {
+        PhysicalKey::Code(key_code) => Some(key_code.into()),
+        PhysicalKey::Unidentified(native_key_code) => {
+          tracing::warn!("Received unidentified native key code '{:?}' as physical key; ignoring", native_key_code);
+          None
+        }
+      };
+      let semantic_key = match logical_key {
+        Key::Named(named_key) => Some(named_key.into()),
+        Key::Character(character_name) => {
+          tracing::trace!("Received unnamed character '{:?}' as logical key; ignoring", character_name);
+          None
+        }
+        Key::Unidentified(native_key) => {
+          tracing::warn!("Received unidentified native key '{:?}' as logical key; ignoring", native_key);
+          None
+        }
+        Key::Dead(o) => {
+          tracing::warn!("Received dead key '{:?}' as logical key; ignoring", o);
+          None
+        }
+      };
+      let state = state.into();
+      input_event_tx.send(InputEvent::KeyboardKey { keyboard_key, semantic_key, text, state })?;
+    }
+    WindowEvent::ModifiersChanged(modifiers) => {
+      let pressed = modifiers.state() - *keyboard_modifiers;
+      {
+        let state = ElementState::Pressed;
+        if pressed.contains(ModifiersState::SHIFT) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
+        }
+        if pressed.contains(ModifiersState::CONTROL) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
+        }
+        if pressed.contains(ModifiersState::ALT) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
+        }
+        if pressed.contains(ModifiersState::SUPER) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
+        }
+      }
+
+      let released = *keyboard_modifiers - modifiers.state();
+      {
+        let state = ElementState::Released;
+        if released.contains(ModifiersState::SHIFT) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Shift, state })?;
+        }
+        if released.contains(ModifiersState::CONTROL) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Control, state })?;
+        }
+        if released.contains(ModifiersState::ALT) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Alternate, state })?;
+        }
+        if released.contains(ModifiersState::SUPER) {
+          input_event_tx.send(InputEvent::KeyboardModifier { modifier: KeyboardModifier::Super, state })?;
+        }
+      }
+
+      *keyboard_modifiers = modifiers.state();
+    }
+    WindowEvent::CloseRequested | WindowEvent::Destroyed => {
+      event_loop.exit();
+      event_tx.send(Event::Stop)?;
+    }
+    WindowEvent::Resized(inner_size) => {
+      let inner_size = ScreenSize::from_physical_scale(inner_size, window_data.scale_factor());
+      window_data.set_inner_size(inner_size);
+      event_tx.send(Event::WindowSizeChange(inner_size))?;
+    }
+    WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+      let inner_size = ScreenSize::from_physical_scale(window_data.physical_size(), scale_factor);
+      window_data.set_inner_size(inner_size);
+      event_tx.send(Event::WindowSizeChange(inner_size))?;
+    }
+    _ => {}
+  }
+  Ok(())
+}
+
+// Internal error type for stopping the event loop.
+struct Stop;
+impl<T> From<SendError<T>> for Stop {
   #[inline]
   fn from(_value: SendError<T>) -> Self { Self }
 }

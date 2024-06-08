@@ -45,11 +45,11 @@ const EXTENDS: f32 = 0.5;
 impl app::Application for MarchingCubesDemo {
   type Config = ();
 
-  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
     camera_settings.arcball.distance = 2.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(os.window.inner_size().physical, &mut camera_settings);
+    let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
     let camera_uniform = CameraUniform::from_camera(&camera);
     let mut light_settings = LightSettings::default();

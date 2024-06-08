@@ -45,31 +45,31 @@ impl app::Application for VoxelPlanets {
   type Config = Settings;
 
   #[profiling::function]
-  fn new(os: &Os, gfx: &Gfx, mut settings: Self::Config) -> Self {
-    settings.update_default_camera_settings();
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
+    config.update_default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let viewport = os.window.inner_size().physical;
-    let camera_0 = Camera::new(viewport, &mut settings.camera_settings[0]);
-    let camera_1 = Camera::new(viewport, &mut settings.camera_settings[1]);
+    let viewport = screen_size.physical;
+    let camera_0 = Camera::new(viewport, &mut config.camera_settings[0]);
+    let camera_1 = Camera::new(viewport, &mut config.camera_settings[1]);
     let cameras = vec![camera_0, camera_1];
-    let selected_camera = settings.camera_debugging.get_selected_camera(&cameras);
+    let selected_camera = config.camera_debugging.get_selected_camera(&cameras);
     let camera_uniform = CameraUniform::from_camera(selected_camera);
 
     let stars_renderer = StarsRenderer::new(gfx, selected_camera.get_view_inverse_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
-      settings.light.uniform,
+      config.light.uniform,
       ModelUniform::identity(),
       None,
     );
 
-    let mut lod_render_data_manager = settings.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
-    let lod_render_data = lod_render_data_manager.update(selected_camera.get_position(), &settings.lod_render_data_settings, &gfx.device);
+    let mut lod_render_data_manager = config.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
+    let lod_render_data = lod_render_data_manager.update(selected_camera.get_position(), &config.lod_render_data_settings, &gfx.device);
 
     Self {
-      settings,
+      settings: config,
 
       cameras,
       camera_uniform,

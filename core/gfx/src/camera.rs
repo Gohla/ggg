@@ -4,7 +4,7 @@ use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
 
 use common::input::{KeyboardKey, MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
-use common::timing::Duration;
+use common::timing::Offset;
 
 // Camera settings
 
@@ -199,7 +199,7 @@ impl Camera {
       view_projection: Mat4::identity(),
       view_projection_inverse: Mat4::identity().inversed(),
     };
-    camera.update(settings, &CameraInput::default(), Duration::default());
+    camera.update(settings, &CameraInput::default(), Offset::default());
     camera
   }
 
@@ -254,10 +254,10 @@ impl Camera {
 
 
   pub fn update(
-    &mut self,
-    settings: &mut CameraSettings,
-    input: &CameraInput,
-    frame_delta: Duration,
+      &mut self,
+      settings: &mut CameraSettings,
+      input: &CameraInput,
+      frame_delta: Offset,
   ) {
     let (width, height): (f64, f64) = self.viewport.into();
     let width = width as f32;

@@ -3,19 +3,19 @@ use std::ops::Add;
 use std::ops::Div;
 
 use crate::timing::{
-  Duration,
-  Instant,
+    Offset,
+    Instant,
 };
 
 /// Sampler for figuring out the minimum, maximum, and average value.
 pub struct ValueSampler<T> {
   samples: VecDeque<(Instant, T)>,
-  sample_window: Duration,
+  sample_window: Offset,
   max_samples: usize,
 }
 
 impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default> ValueSampler<T> {
-  pub fn new(sample_window: Duration, max_samples: usize) -> ValueSampler<T> {
+  pub fn new(sample_window: Offset, max_samples: usize) -> ValueSampler<T> {
     ValueSampler {
       samples: VecDeque::with_capacity(max_samples),
       sample_window,
@@ -66,19 +66,19 @@ impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default>
 }
 
 impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default> Default for ValueSampler<T> {
-  fn default() -> Self { ValueSampler::new(Duration::from_s(1), 8192) }
+  fn default() -> Self { ValueSampler::new(Offset::from_s(1), 8192) }
 }
 
 
 /// Sampler for figuring out how many times an event occurs.
 pub struct EventSampler {
   samples: VecDeque<Instant>,
-  sample_window: Duration,
+  sample_window: Offset,
   max_samples: usize,
 }
 
 impl EventSampler {
-  pub fn new(sample_window: Duration, max_samples: usize) -> EventSampler {
+  pub fn new(sample_window: Offset, max_samples: usize) -> EventSampler {
     EventSampler {
       samples: VecDeque::with_capacity(max_samples),
       sample_window,
@@ -111,7 +111,7 @@ impl EventSampler {
   }
 
 
-  pub fn duration(&self) -> Option<Duration> {
+  pub fn duration(&self) -> Option<Offset> {
     let oldest: Instant = {
       let oldest = self.samples.front();
       if oldest.is_none() { return None; };
@@ -130,5 +130,5 @@ impl EventSampler {
 }
 
 impl Default for EventSampler {
-  fn default() -> Self { EventSampler::new(Duration::from_s(1), 8192) }
+  fn default() -> Self { EventSampler::new(Offset::from_s(1), 8192) }
 }

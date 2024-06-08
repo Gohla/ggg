@@ -2,17 +2,39 @@ use std::sync::Arc;
 
 use thiserror::Error;
 use winit::error::OsError;
+use winit::event_loop::ActiveEventLoop;
 use winit::window::WindowAttributes;
 pub use winit::window::WindowId;
 
 use common::cursor;
 use common::screen::{LogicalSize, Scale, ScreenSize};
 
-use crate::context::Context;
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Window {
   window: Arc<winit::window::Window>,
+}
+
+
+// Window creation
+
+#[derive(Clone, Debug)]
+pub struct WindowOptions {
+  pub title: String,
+  pub inner_size: LogicalSize,
+  pub min_inner_size: LogicalSize,
+}
+impl Default for WindowOptions {
+  fn default() -> Self {
+    #[cfg(not(target_arch = "wasm32"))]
+      let size = LogicalSize::new(1920.0, 1080.0);
+    #[cfg(target_arch = "wasm32")]
+      let size = crate::window::get_browser_inner_size();
+    Self {
+      title: "".to_string(),
+      inner_size: size,
+      min_inner_size: size,
+    }
+  }
 }
 
 #[derive(Debug, Error)]
@@ -20,18 +42,17 @@ pub struct Window {
 pub struct WindowCreateError(#[from] OsError);
 
 impl Window {
-  pub fn new<S: Into<String>>(
-    os_context: &Context,
-    inner_size: LogicalSize,
-    min_inner_size: LogicalSize,
-    title: S,
+  pub fn new(
+    active_event_loop: &ActiveEventLoop,
+    options: &WindowOptions,
   ) -> Result<Self, WindowCreateError> {
-    let window_attributes = WindowAttributes::default()
-      .with_inner_size(inner_size)
-      .with_min_inner_size(min_inner_size)
-      .with_title(title);
-    #[allow(deprecated)]
-      let window = os_context.event_loop.create_window(window_attributes)?;
+    let attributes = WindowAttributes::default()
+      .with_inner_size(options.inner_size)
+      .with_min_inner_size(options.min_inner_size)
+      .with_title(&options.title);
+
+    tracing::debug!(?attributes, "Creating window");
+    let window = active_event_loop.create_window(attributes)?;
 
     #[cfg(target_arch = "wasm32")] {
       use winit::platform::web::WindowExtWebSys;

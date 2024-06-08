@@ -3,19 +3,19 @@ use wgpu::{Adapter, CompositeAlphaMode, Device, PresentMode, Surface, SurfaceCon
 use common::screen::ScreenSize;
 
 #[derive(Debug)]
-pub struct GfxSurface<'w> {
-  inner: Surface<'w>,
+pub struct GfxSurface {
+  inner: Surface<'static>,
   configuration: SurfaceConfiguration,
   size: ScreenSize,
 }
 
-impl<'w> GfxSurface<'w> {
-  pub fn new(surface: Surface<'w>, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> Self {
+impl GfxSurface {
+  pub fn new(surface: Surface<'static>, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> Self {
     let configuration = Self::create_configuration(&surface, adapter, present_mode, size);
     surface.configure(device, &configuration);
     Self { inner: surface, configuration, size }
   }
-  pub fn new_with_defaults(surface: Surface<'w>, adapter: &Adapter, device: &Device, size: ScreenSize) -> Self {
+  pub fn new_with_defaults(surface: Surface<'static>, adapter: &Adapter, device: &Device, size: ScreenSize) -> Self {
     Self::new(surface, adapter, device, PresentMode::Mailbox, size)
   }
 
@@ -49,13 +49,13 @@ impl<'w> GfxSurface<'w> {
   }
 }
 
-impl<'w> GfxSurface<'w> {
+impl GfxSurface {
   #[inline]
-  pub fn get_inner(&self) -> &Surface<'w> { &self.inner }
+  pub fn get_inner(&self) -> &Surface<'static> { &self.inner }
 }
 
-impl<'w> std::ops::Deref for GfxSurface<'w> {
-  type Target = Surface<'w>;
+impl std::ops::Deref for GfxSurface {
+  type Target = Surface<'static>;
   #[inline]
   fn deref(&self) -> &Self::Target { &self.get_inner() }
 }

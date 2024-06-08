@@ -29,7 +29,7 @@ pub struct Gfx {
   pub adapter: Adapter,
   pub device: Device,
   pub queue: Queue,
-  pub surface: GfxSurface<'static>,
+  pub surface: GfxSurface,
 
   pub depth_stencil_texture: Option<GfxTexture>,
   pub multisampled_framebuffer: Option<GfxTexture>,

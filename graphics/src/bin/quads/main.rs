@@ -111,10 +111,10 @@ pub struct Input {
 impl app::Application for Quads {
   type Config = ();
 
-  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(os.window.inner_size().physical, &mut camera_settings);
+    let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
     let (diffuse_bind_group_layout, diffuse_bind_group) = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();

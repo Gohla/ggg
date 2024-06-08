@@ -7,9 +7,9 @@ use wgpu::{Backends, CommandBuffer, Features, Limits, PowerPreference, PresentMo
 
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Duration;
+use common::timing::Offset;
 use gfx::{Frame, Gfx};
-use os::Os;
+use os::{ApplicationOptions, Os};
 pub use run::RunError;
 
 use crate::debug_gui::DebugGui;
@@ -20,7 +20,7 @@ mod config;
 
 #[derive(Debug)]
 pub struct Tick {
-  pub time_target: Duration,
+  pub time_target: Offset,
   pub count: u64,
 }
 
@@ -41,8 +41,8 @@ impl std::ops::Deref for GuiFrame {
 pub trait Application: Sized {
   /// Type of configuration that is deserialized and passed into `new`, and gotten from `get_config` to be serialized.
   type Config: Default + Serialize + DeserializeOwned + Send + 'static;
-  /// Creates an instance of the application with given `data`.
-  fn new(os: &Os, gfx: &Gfx, config: Self::Config) -> Self;
+  /// Creates an instance of the application.
+  fn new(os: &Os, gfx: &Gfx, screen_size: ScreenSize, config: Self::Config) -> Self;
   /// Takes the configuration of the application, so that the framework can serialize it.
   fn into_config(self) -> Self::Config { Self::Config::default() }
 
@@ -132,8 +132,11 @@ impl AppRunner {
   }
   pub fn from_name(name: impl Into<String>) -> Self {
     let os_options = os::Options {
-      name: name.into(),
-      ..os::Options::default()
+      application: ApplicationOptions {
+        name: name.into(),
+        ..Default::default()
+      },
+      ..Default::default()
     };
     Self {
       os_options,
@@ -185,11 +188,6 @@ impl AppRunner {
 
 impl AppRunner {
   pub fn run<A: Application>(self) -> Result<(), RunError> {
-    use pollster::FutureExt;
-
-    let (os, event_loop_runner) = Os::new(self.os_options)?;
-    run::run::<A>(os, event_loop_runner, self.options).block_on()?;
-
-    Ok(())
+    run::run::<A>(self.os_options, self.options)
   }
 }

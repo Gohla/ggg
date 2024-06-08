@@ -57,14 +57,14 @@ pub struct RayTracing {
 impl app::Application for RayTracing {
   type Config = ();
 
-  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
     let camera_aperture = 0.1;
     let camera_origin = Vec3::new(0.0, 1.0, 3.0);
     let v_fov = 45.0;
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::new(os.window.inner_size(), 0.0, camera_aperture, camera_origin, v_fov)]);
+      .build_with_data(&gfx.device, &[Uniform::new(screen_size, 0.0, camera_aperture, camera_origin, v_fov)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()

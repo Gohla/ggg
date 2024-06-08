@@ -29,23 +29,23 @@ impl Instant {
   }
 
   #[inline]
-  pub fn to(&self, later: Instant) -> Duration {
-    Duration::from_ns((later.0 - self.0) as i64)
+  pub fn to(&self, later: Instant) -> Offset {
+    Offset::from_ns((later.0 - self.0) as i64)
   }
 }
 
-// Duration
+// Offset
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Default, Hash, Debug)]
-pub struct Duration(i64);
+pub struct Offset(i64);
 
-impl Duration {
-  pub fn zero() -> Duration { Duration(0) }
+impl Offset {
+  pub fn zero() -> Offset { Offset(0) }
 
-  pub fn from_ns(ns: i64) -> Duration { Duration(ns) }
-  pub fn from_us(us: i64) -> Duration { Duration::from_ns(us * 1_000) }
-  pub fn from_ms(ms: i64) -> Duration { Duration::from_ns(ms * 1_000_000) }
-  pub fn from_s(s: i64) -> Duration { Duration::from_ns(s * 1_000_000_000) }
+  pub fn from_ns(ns: i64) -> Offset { Offset(ns) }
+  pub fn from_us(us: i64) -> Offset { Offset::from_ns(us * 1_000) }
+  pub fn from_ms(ms: i64) -> Offset { Offset::from_ns(ms * 1_000_000) }
+  pub fn from_s(s: i64) -> Offset { Offset::from_ns(s * 1_000_000_000) }
 
   pub fn as_ns(&self) -> i64 { self.0 }
   pub fn as_us(&self) -> f64 { self.0 as f64 / 1_000.0 }
@@ -53,52 +53,52 @@ impl Duration {
   pub fn as_s(&self) -> f64 { self.0 as f64 / 1_000_000_000.0 }
 }
 
-impl Add for Duration {
-  type Output = Duration;
-  fn add(self, rhs: Duration) -> Self::Output { Duration(self.0 + rhs.0) }
+impl Add for Offset {
+  type Output = Offset;
+  fn add(self, rhs: Offset) -> Self::Output { Offset(self.0 + rhs.0) }
 }
 
-impl AddAssign for Duration {
-  fn add_assign(&mut self, rhs: Duration) { self.0 += rhs.0 }
+impl AddAssign for Offset {
+  fn add_assign(&mut self, rhs: Offset) { self.0 += rhs.0 }
 }
 
-impl Sub for Duration {
-  type Output = Duration;
-  fn sub(self, rhs: Duration) -> Self::Output { Duration(self.0 - rhs.0) }
+impl Sub for Offset {
+  type Output = Offset;
+  fn sub(self, rhs: Offset) -> Self::Output { Offset(self.0 - rhs.0) }
 }
 
-impl SubAssign for Duration {
-  fn sub_assign(&mut self, rhs: Duration) { self.0 -= rhs.0 }
+impl SubAssign for Offset {
+  fn sub_assign(&mut self, rhs: Offset) { self.0 -= rhs.0 }
 }
 
-impl Mul<i64> for Duration {
-  type Output = Duration;
-  fn mul(self, rhs: i64) -> Self::Output { Duration(self.0 * rhs) }
+impl Mul<i64> for Offset {
+  type Output = Offset;
+  fn mul(self, rhs: i64) -> Self::Output { Offset(self.0 * rhs) }
 }
 
-impl Div<Duration> for Duration {
+impl Div<Offset> for Offset {
   type Output = f64;
-  fn div(self, rhs: Duration) -> Self::Output { self.0 as f64 / rhs.0 as f64 }
+  fn div(self, rhs: Offset) -> Self::Output { self.0 as f64 / rhs.0 as f64 }
 }
 
-impl Div<u64> for Duration {
-  type Output = Duration;
-  fn div(self, rhs: u64) -> Self::Output { Duration(self.0 / rhs as i64) }
+impl Div<u64> for Offset {
+  type Output = Offset;
+  fn div(self, rhs: u64) -> Self::Output { Offset(self.0 / rhs as i64) }
 }
 
-impl Div<usize> for Duration {
-  type Output = Duration;
-  fn div(self, rhs: usize) -> Self::Output { Duration(self.0 / rhs as i64) }
+impl Div<usize> for Offset {
+  type Output = Offset;
+  fn div(self, rhs: usize) -> Self::Output { Offset(self.0 / rhs as i64) }
 }
 
-impl Div<i64> for Duration {
-  type Output = Duration;
-  fn div(self, rhs: i64) -> Self::Output { Duration(self.0 / rhs) }
+impl Div<i64> for Offset {
+  type Output = Offset;
+  fn div(self, rhs: i64) -> Self::Output { Offset(self.0 / rhs) }
 }
 
-impl Div<isize> for Duration {
-  type Output = Duration;
-  fn div(self, rhs: isize) -> Self::Output { Duration(self.0 / rhs as i64) }
+impl Div<isize> for Offset {
+  type Output = Offset;
+  fn div(self, rhs: isize) -> Self::Output { Offset(self.0 / rhs as i64) }
 }
 
 // Timer
@@ -110,8 +110,8 @@ pub struct Timer {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Time {
-  pub elapsed: Duration,
-  pub delta: Duration,
+  pub elapsed: Offset,
+  pub delta: Offset,
 }
 
 impl Timer {
@@ -138,8 +138,8 @@ pub struct FrameTimer {
 
 #[derive(Copy, Clone, Debug)]
 pub struct FrameTime {
-  pub elapsed: Duration,
-  pub delta: Duration,
+  pub elapsed: Offset,
+  pub delta: Offset,
   pub count: u64,
 }
 
@@ -158,31 +158,31 @@ impl FrameTimer {
 
 pub struct TickTimer {
   start: Instant,
-  time_target: Duration,
-  accumulated_lag: Duration,
+  time_target: Offset,
+  accumulated_lag: Offset,
   count: u64,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct TickTime {
-  pub time_target: Duration,
-  pub accumulated_lag: Duration,
-  pub delta: Duration,
+  pub time_target: Offset,
+  pub accumulated_lag: Offset,
+  pub delta: Offset,
   pub count: u64,
 }
 
 impl TickTimer {
-  pub fn new(tick_time_target: Duration) -> TickTimer {
+  pub fn new(tick_time_target: Offset) -> TickTimer {
     TickTimer {
       count: 0,
       start: Instant::now(),
       time_target: tick_time_target,
-      accumulated_lag: Duration::zero(),
+      accumulated_lag: Offset::zero(),
     }
   }
 
 
-  pub fn update_lag(&mut self, frame_time: Duration) -> Duration {
+  pub fn update_lag(&mut self, frame_time: Offset) -> Offset {
     self.accumulated_lag += frame_time;
     self.accumulated_lag
   }
@@ -213,11 +213,11 @@ impl TickTimer {
   }
 
 
-  pub fn time_target(&self) -> Duration {
+  pub fn time_target(&self) -> Offset {
     self.time_target
   }
 
-  pub fn accumulated_lag(&self) -> Duration {
+  pub fn accumulated_lag(&self) -> Offset {
     self.accumulated_lag
   }
 
@@ -233,16 +233,16 @@ impl TickTimer {
 #[derive(Default)]
 pub struct TimingStats {
   // Time
-  pub elapsed_time: Duration,
+  pub elapsed_time: Offset,
   // Frame
   pub frame_count: u64,
-  pub frame_time: ValueSampler<Duration>,
+  pub frame_time: ValueSampler<Offset>,
   // Tick
   pub tick_count: u64,
-  pub tick_time_target: Duration,
-  pub tick_time: ValueSampler<Duration>,
+  pub tick_time_target: Offset,
+  pub tick_time: ValueSampler<Offset>,
   pub tick_rate: EventSampler,
-  pub accumulated_lag: Duration,
+  pub accumulated_lag: Offset,
   // Render
   pub render_extrapolation: f64,
 }
@@ -263,7 +263,7 @@ impl TimingStats {
     self.tick_rate.add(Instant::now())
   }
 
-  pub fn tick_lag(&mut self, accumulated_lag: Duration, gfx_extrapolation: f64) {
+  pub fn tick_lag(&mut self, accumulated_lag: Offset, gfx_extrapolation: f64) {
     self.accumulated_lag = accumulated_lag;
     self.render_extrapolation = gfx_extrapolation;
   }

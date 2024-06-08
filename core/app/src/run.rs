@@ -1,51 +1,120 @@
+use std::sync::mpsc::{Receiver, RecvError, sync_channel};
+
 use egui::TopBottomPanel;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::info;
-use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, SurfaceError};
+use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, Surface, SurfaceError};
 
 use common::screen::ScreenSize;
-use common::timing::{Duration, FrameTimer, TickTimer, TimingStats};
+use common::timing::{FrameTimer, Offset, TickTimer, TimingStats};
 use gfx::{Frame, Gfx};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
 use gui::Gui;
-use os::CreateError;
-use os::event::{Event, EventLoopRunError, EventLoopRunner};
+use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
+use os::OsCreateError;
+use os::window::Window;
 
 use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
 
 #[derive(Error, Debug)]
 pub enum RunError {
-  #[error("Failed to create OS interface")]
-  CreateOsFail(#[from] CreateError),
-  #[error("Failed to create graphics surface")]
-  CreateSurfaceFail(#[from] CreateSurfaceError),
-  #[error("Failed to request graphics adapter because no adapters were found that meet the required options")]
-  AdapterRequestFail,
-  #[error("Failed to request graphics device because no adapters were found that meet the required options")]
-  RequestDeviceFail(#[from] RequestDeviceError),
+  #[error(transparent)]
+  OsCreateFail(#[from] OsCreateError),
   #[error(transparent)]
   ThreadCreateFail(#[from] std::io::Error),
   #[error(transparent)]
-  EventSysRunFail(#[from] EventLoopRunError),
+  EventLoopRunFail(#[from] EventLoopRunError),
 }
 
+#[tracing::instrument(skip_all, err)]
 #[profiling::function]
-pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, options: Options) -> Result<(), RunError> {
+pub fn run<A: Application>(os_options: os::Options, options: Options) -> Result<(), RunError> {
+  // Create the operating system interface.
+  let (os, event_loop) = Os::new(os_options)?;
+
+  // Create graphics instance now, since `options` is still in scope and not moved yet.
   let instance_descriptor = InstanceDescriptor {
     backends: options.graphics_backends,
     ..InstanceDescriptor::default()
   };
   let instance = Instance::new(instance_descriptor);
 
-  let surface = instance.create_surface(os.window.cloned_winit_window())?;
+  // Create channel for synchronizing with the application thread.
+  let (app_thread_tx, app_thread_rx) = sync_channel(1);
+
+  // Run application in a thread.
+  let event_loop_stopper = event_loop.create_event_loop_stopper();
+  let app_thread_join_handle = std::thread::Builder::new()
+    .name("Application Thread".to_string())
+    .spawn(move || {
+      profiling::register_thread!();
+      let _ = run_app::<A>(os, app_thread_rx, options, event_loop_stopper);
+    })?;
+
+  // Make 1) the event loop stop when the application thread finishes, and 2) when the event loop stops, make it wait
+  // for the application thread to finish.
+  let event_loop = event_loop.with_join_handle(app_thread_join_handle);
+  // Make the event loop run this callback on the event loop thread (main thread) when it creates the window.
+  let event_loop = event_loop.with_on_window_created_callback(Box::new(move |window| {
+    // Create the surface here on the event loop thread (main thread). This seems to be an undocumented requirement?
+    let surface = instance.create_surface(window.cloned_winit_window())?;
+    // Send the instance, surface, and window to the application thread.
+    app_thread_tx.send((instance, surface, window))?;
+    Ok(())
+  }));
+
+  // Run the event loop.
+  event_loop.run()?;
+
+  Ok(())
+}
+
+
+#[derive(Error, Debug)]
+enum RunAppError {
+  #[error("Failed to receive window from event loop: {0}")]
+  ReceiveWindowFail(#[from] RecvError),
+  #[error("Failed to create graphics surface: {0}")]
+  CreateSurfaceFail(#[from] CreateSurfaceError),
+  #[error("Failed to request graphics adapter because no adapters were found that meet the required options")]
+  AdapterRequestFail,
+  #[error("Failed to request graphics device because no adapters were found that meet the required options")]
+  RequestDeviceFail(#[from] RequestDeviceError),
+  #[error(transparent)]
+  EventLoopStopFail(#[from] EventLoopStopError),
+}
+
+#[tracing::instrument(name = "app", skip_all, err)]
+#[profiling::function]
+fn run_app<A: Application>(
+  os: Os,
+  rx: Receiver<(Instance, Surface<'static>, Window)>,
+  options: Options,
+  event_loop_stopper: EventLoopStopper,
+) -> Result<(), RunAppError> {
+  use pollster::FutureExt;
+  run_app_async::<A>(os, rx, options).block_on()?;
+  event_loop_stopper.stop()?;
+  Ok(())
+}
+
+async fn run_app_async<A: Application>(
+  os: Os,
+  rx: Receiver<(Instance, Surface<'static>, Window)>,
+  options: Options,
+) -> Result<(), RunAppError> {
+  // Receive, from the event loop (main) thread: the graphics instance, surface, and window. Blocking until received.
+  let (instance, surface, window) = rx.recv()?;
+  tracing::trace!(?instance, ?surface, ?window, "Received data from event loop (main) thread");
+
   let adapter = instance.request_adapter(&RequestAdapterOptions {
     power_preference: options.graphics_adapter_power_preference,
     compatible_surface: Some(&surface),
     ..RequestAdapterOptions::default()
-  }).await.ok_or(RunError::AdapterRequestFail)?;
+  }).await.ok_or(RunAppError::AdapterRequestFail)?;
 
   let supported_features = adapter.features();
   let required_but_unsupported_features = options.require_graphics_device_features.difference(supported_features);
@@ -71,7 +140,7 @@ pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, opt
     label: Some("Device"),
     ..DeviceDescriptor::default()
   }, None).await?;
-  let screen_size = os.window.inner_size();
+  let screen_size = window.inner_size();
   let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
   tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
@@ -95,7 +164,9 @@ pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, opt
 
   let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
 
-  run_app::<A>(os, event_loop_runner, gfx, gui, screen_size, config)
+  run_app_in_loop::<A>(os, window, gfx, gui, screen_size, config);
+
+  Ok(())
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -108,40 +179,19 @@ struct Config<A: Default> {
 // Native codepath
 
 #[cfg(not(target_arch = "wasm32"))]
-fn run_app<A: Application>(
-  os: Os,
-  event_loop_runner: EventLoopRunner,
-  gfx: Gfx,
-  gui: Gui,
-  screen_size: ScreenSize,
-  config: Config<A::Config>,
-) -> Result<(), RunError> {
-  // Run application in a thread.
-  let app_thread_join_handle = std::thread::Builder::new()
-    .name(os.options.name.clone())
-    .spawn(move || {
-      profiling::register_thread!();
-      run_app_in_loop::<A>(os, gfx, gui, screen_size, config);
-    })?;
-
-  // Run event loop on the main thread, blocking the main thread until the event loop is stopped.
-  event_loop_runner.run(app_thread_join_handle)?;
-
-  Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
+#[tracing::instrument(name = "loop", skip_all)]
 fn run_app_in_loop<A: Application>(
   mut os: Os,
+  window: Window,
   mut gfx: Gfx,
   mut gui: Gui,
   mut screen_size: ScreenSize,
   config: Config<A::Config>,
 ) {
-  let mut app = A::new(&os, &gfx, config.app_config);
+  let mut app = A::new(&os, &gfx, screen_size, config.app_config);
   let mut debug_gui = config.debug_gui;
   let mut frame_timer = FrameTimer::new();
-  let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
+  let mut tick_timer = TickTimer::new(Offset::from_ns(16_666_667));
   let mut timing_stats = TimingStats::new();
   let mut resized = false;
   let mut minimized = false;
@@ -149,6 +199,7 @@ fn run_app_in_loop<A: Application>(
   loop {
     let stop = run_app_cycle(
       &mut os,
+      &window,
       &mut gfx,
       &mut gui,
       &mut screen_size,
@@ -188,7 +239,7 @@ fn run_app<A: Application + 'static>(
   let mut app = A::new(&os, &gfx, app_config);
   let mut debug_gui = DebugGui::default();
   let mut frame_timer = FrameTimer::new();
-  let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
+  let mut tick_timer = TickTimer::new(Offset::from_ns(16_666_667));
   let mut timing_stats = TimingStats::new();
   let mut resized = false;
   let mut minimized = false;
@@ -212,9 +263,11 @@ fn run_app<A: Application + 'static>(
 
 // Shared codepath
 
+#[tracing::instrument(name = "cycle", skip_all)]
 #[profiling::function]
 fn run_app_cycle<A: Application>(
   os: &mut Os,
+  window: &Window,
   gfx: &mut Gfx,
   gui: &mut Gui,
   screen_size: &mut ScreenSize,
@@ -236,30 +289,32 @@ fn run_app_cycle<A: Application>(
   // Process OS events
   for event in os.event_rx.try_iter() {
     match event {
-      Event::WindowCursor(cursor_in_window) => {
+      Event::WindowCursor { cursor_in_window } => {
         gui.update_window_cursor(cursor_in_window);
       }
-      Event::WindowFocus(focus) => {
-        gui.update_window_focus(focus);
+      Event::WindowFocus { window_has_focus } => {
+        gui.update_window_focus(window_has_focus);
       }
-      Event::WindowSizeChange(_) => *resized = true,
+      Event::WindowSizeChange(inner_size) => {
+        *screen_size = inner_size;
+        if screen_size.is_zero() {
+          *minimized = true;
+        } else {
+          *minimized = false;
+        }
+        *resized = true;
+      }
       Event::Stop => return true, // Stop the loop.
     }
   }
 
   // Recreate swap chain if needed
   if *resized {
-    let size = os.window.inner_size();
-    if size.is_zero() {
-      *resized = false;
-      *minimized = true;
-    } else {
-      *screen_size = size;
+    if !*minimized {
       gfx.resize_surface(*screen_size);
       app.screen_resize(&os, &gfx, *screen_size);
-      *resized = false;
-      *minimized = false;
     }
+    *resized = false;
   }
 
   // Get raw input.
@@ -319,7 +374,7 @@ fn run_app_cycle<A: Application>(
   // Show timing debugging GUI if enabled.
   debug_gui.show_timing(gui_frame.as_ref().unwrap(), &timing_stats);
 
-  // Get frame to draw into
+  // Get swapchain texture to draw into and present.
   let surface_texture = match gfx.surface.get_current_texture() {
     Ok(surface_texture) => surface_texture,
     Err(cause) => {
@@ -351,7 +406,7 @@ fn run_app_cycle<A: Application>(
     time: frame_time,
   };
   let additional_command_buffers = app.render(&os, &gfx, frame, gui_frame.as_ref().unwrap(), &input);
-  gui.render(&os.window, *screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
+  gui.render(window, *screen_size, &gfx.device, &gfx.queue, &mut encoder, &output_texture);
 
   // Submit command buffers
   let command_buffer = encoder.finish();

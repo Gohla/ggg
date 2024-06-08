@@ -8,9 +8,9 @@ pub struct Directories {
 }
 
 impl Directories {
-  pub fn new(application_name: &str) -> Self {
-    let project_dirs = ProjectDirs::from("", "GGG", application_name)
-      .unwrap_or_else(|| panic!("Could not get project directories for application '{}'", application_name));
+  pub fn new(name: &str, organization: &str, qualifier: &str) -> Self {
+    let project_dirs = ProjectDirs::from(qualifier, organization, name)
+      .unwrap_or_else(|| panic!("Failed to get project directories for application '{}'", name));
     Self { project_dirs }
   }
 

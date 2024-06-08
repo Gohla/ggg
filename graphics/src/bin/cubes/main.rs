@@ -90,11 +90,11 @@ pub struct Input {
 impl app::Application for Cubes {
   type Config = ();
 
-  fn new(os: &Os, gfx: &Gfx, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(os.window.inner_size().physical, &mut camera_settings);
+    let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
