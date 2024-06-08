@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 serde = { workspace = true, features = ["derive"], optional = true }
+cursor-icon = { workspace = true, optional = true }
 winit = { workspace = true, optional = true }
 egui = { workspace = true, optional = true }
 smol_str.workspace = true
@@ -16,6 +17,7 @@ version = "0.3"
 
 [features]
 default = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "cursor-icon?/serde", "winit?/serde", "egui?/serde"]
+cursor_icon = ["dep:cursor-icon"]
 winit = ["dep:winit"]
 egui = ["dep:egui"]

@@ -13,6 +13,7 @@ resolver = "2"
 
 [workspace.dependencies]
 raw-window-handle = "0.6"
+cursor-icon = "1"
 winit = "0.30"
 wgpu = "0.19"
 egui = { git = "https://github.com/emilk/egui.git", rev = "9f12432" }

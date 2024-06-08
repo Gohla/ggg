@@ -5,3 +5,5 @@ pub mod timing;
 pub mod sampler;
 pub mod idx_assigner;
 pub mod idx_allocator;
+#[cfg(feature = "cursor_icon")]
+pub mod cursor;
