@@ -266,14 +266,14 @@ impl Gui {
   pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
   pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
 
-  pub fn window_cursor(&mut self, cursor_in_window: bool) {
+  pub fn update_window_cursor(&mut self, cursor_in_window: bool) {
     self.cursor_in_window = cursor_in_window;
     if !cursor_in_window {
       self.input.events.push(Event::PointerGone);
     }
   }
 
-  pub fn window_focus(&mut self, focus: bool) {
+  pub fn update_window_focus(&mut self, focus: bool) {
     self.input.focused = focus;
     self.input.events.push(Event::WindowFocused(focus));
   }

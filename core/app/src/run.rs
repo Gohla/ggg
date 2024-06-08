@@ -237,10 +237,10 @@ fn run_app_cycle<A: Application>(
   for event in os.event_rx.try_iter() {
     match event {
       Event::WindowCursor(cursor_in_window) => {
-        gui.window_cursor(cursor_in_window);
+        gui.update_window_cursor(cursor_in_window);
       }
       Event::WindowFocus(focus) => {
-        gui.window_focus(focus);
+        gui.update_window_focus(focus);
       }
       Event::WindowSizeChange(_) => *resized = true,
       Event::Stop => return true, // Stop the loop.
