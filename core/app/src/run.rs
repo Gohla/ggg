@@ -71,7 +71,7 @@ pub async fn run<A: Application>(os: Os, event_loop_runner: EventLoopRunner, opt
     label: Some("Device"),
     ..DeviceDescriptor::default()
   }, None).await?;
-  let screen_size = os.window.get_inner_size();
+  let screen_size = os.window.inner_size();
   let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
   tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
@@ -244,7 +244,7 @@ fn run_app_cycle<A: Application>(
 
   // Recreate swap chain if needed
   if *resized {
-    let size = os.window.get_inner_size();
+    let size = os.window.inner_size();
     if size.is_zero() {
       *resized = false;
       *minimized = true;
@@ -257,15 +257,15 @@ fn run_app_cycle<A: Application>(
     }
   }
 
-  // Get raw input
+  // Get raw input.
   let mut raw_input = os.input_sys.update();
 
-  // Let the GUI process input, letting the application prevent processing keyboard or mouse events if captured.
+  // If the app is capturing keyboard and/or mouse inputs, prevent the GUI from capturing those inputs.
   let gui_process_keyboard_events = !app.is_capturing_keyboard();
   let gui_process_mouse_events = !app.is_capturing_mouse();
   gui.process_input(&raw_input, gui_process_keyboard_events, gui_process_mouse_events);
 
-  // Then let the GUI prevent the application from processing keyboard or mouse events if captured.
+  // If the GUI is capturing keyboard and/or mouse inputs, prevent the app from capturing those inputs.
   if gui_process_keyboard_events && gui.is_capturing_keyboard() {
     raw_input.remove_keyboard_input();
   }
@@ -317,13 +317,17 @@ fn run_app_cycle<A: Application>(
   // Get frame to draw into
   let surface_texture = match gfx.surface.get_current_texture() {
     Ok(surface_texture) => surface_texture,
-    Err(e) => {
-      match e {
+    Err(cause) => {
+      match cause {
         SurfaceError::Outdated => *resized = true,
         SurfaceError::Lost => *resized = true,
-        SurfaceError::OutOfMemory => panic!("Allocating swap chain frame reported out of memory; stopping"),
+        SurfaceError::OutOfMemory => panic!("Getting next swapchain texture reported out of memory"),
         _ => {}
-      };
+      }
+      match cause {
+        SurfaceError::Outdated => {}
+        cause => tracing::warn!(?cause, "Failed to get next swapchain texture: {}", cause)
+      }
       return false; // Skip rendering.
     }
   };

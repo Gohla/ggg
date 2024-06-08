@@ -64,7 +64,7 @@ impl app::Application for RayTracing {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::new(os.window.get_inner_size(), 0.0, camera_aperture, camera_origin, v_fov)]);
+      .build_with_data(&gfx.device, &[Uniform::new(os.window.inner_size(), 0.0, camera_aperture, camera_origin, v_fov)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()

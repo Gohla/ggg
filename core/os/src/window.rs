@@ -1,11 +1,12 @@
-use std::ops::Deref;
 use std::sync::Arc;
 
 use thiserror::Error;
 use winit::error::OsError;
 use winit::window::WindowAttributes;
+pub use winit::window::WindowId;
 
-use common::screen::{LogicalSize, ScreenSize};
+use common::cursor;
+use common::screen::{LogicalSize, Scale, ScreenSize};
 
 use crate::context::Context;
 
@@ -61,25 +62,44 @@ impl Window {
   }
 
   #[inline]
-  pub fn as_winit_window(&self) -> &winit::window::Window {
-    &self.window
-  }
+  pub fn as_winit_window(&self) -> &winit::window::Window { &self.window }
   #[inline]
-  pub fn cloned_winit_window(&self) -> Arc<winit::window::Window> {
-    self.window.clone()
-  }
+  pub fn cloned_winit_window(&self) -> Arc<winit::window::Window> { self.window.clone() }
 
   #[inline]
-  pub fn get_inner_size(&self) -> ScreenSize {
-    ScreenSize::from_physical_scale(self.window.inner_size(), self.window.scale_factor())
+  pub fn id(&self) -> WindowId {
+    self.window.id()
   }
-}
-
-impl Deref for Window {
-  type Target = winit::window::Window;
-
   #[inline]
-  fn deref(&self) -> &Self::Target { self.as_winit_window() }
+  pub fn scale_factor(&self) -> Scale {
+    self.window.scale_factor().into()
+  }
+  #[inline]
+  pub fn inner_size(&self) -> ScreenSize {
+    ScreenSize::from_physical_scale(self.window.inner_size(), self.scale_factor())
+  }
+  #[inline]
+  pub fn outer_size(&self) -> ScreenSize {
+    ScreenSize::from_physical_scale(self.window.outer_size(), self.scale_factor())
+  }
+
+  /// Makes the cursor visible and sets it to `icon`.
+  #[inline]
+  pub fn set_cursor(&self, icon: cursor::Icon) {
+    self.window.set_cursor_visible(true);
+    self.window.set_cursor(icon)
+  }
+  /// If `option_icon` is `Some(icon)`, makes the cursor visible and sets it to `icon`. Otherwise, makes the cursor
+  /// invisible.
+  #[inline]
+  pub fn set_option_cursor(&self, option_icon: cursor::OptionIcon) {
+    if let Some(icon) = option_icon.into_option() {
+      self.window.set_cursor_visible(true);
+      self.window.set_cursor(icon)
+    } else {
+      self.window.set_cursor_visible(false);
+    }
+  }
 }
 
 #[cfg(target_arch = "wasm32")]

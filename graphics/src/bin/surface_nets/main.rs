@@ -48,7 +48,7 @@ impl app::Application for SurfaceNetsDemo {
   fn new(os: &Os, gfx: &Gfx, mut config: Self::Config) -> Self {
     config.update_default_camera_settings();
 
-    let camera = Camera::new(os.window.get_inner_size().physical, &mut config.camera_settings);
+    let camera = Camera::new(os.window.inner_size().physical, &mut config.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());

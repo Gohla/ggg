@@ -49,7 +49,7 @@ impl app::Application for VoxelPlanets {
     settings.update_default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let viewport = os.window.get_inner_size().physical;
+    let viewport = os.window.inner_size().physical;
     let camera_0 = Camera::new(viewport, &mut settings.camera_settings[0]);
     let camera_1 = Camera::new(viewport, &mut settings.camera_settings[1]);
     let cameras = vec![camera_0, camera_1];

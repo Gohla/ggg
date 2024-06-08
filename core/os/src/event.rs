@@ -103,7 +103,7 @@ impl EventLoopHandler {
       app_thread_join_handle: None,
 
       modifiers: ModifiersState::empty(),
-      window_inner_size: window.get_inner_size(),
+      window_inner_size: window.inner_size(),
     };
     (os_event_sys, input_event_rx, event_rx)
   }
