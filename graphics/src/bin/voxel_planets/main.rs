@@ -172,3 +172,6 @@ fn main() {
     .run::<VoxelPlanets>()
     .unwrap();
 }
+
+#[global_allocator]
+static GLOBAL: os::profile::Allocator = os::profile::create_allocator();

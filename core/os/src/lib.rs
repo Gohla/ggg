@@ -1,7 +1,8 @@
 //! Interface with the native operating system or web browser environment:
 //!
+//! - [Profile your application](profile)
 //! - [Setup environment variables](env)
-//! - [Setup tracing and outputting it to a console](tracing)
+//! - [Setup tracing and outputting it to a console](trace)
 //! - [Get directories for reading/writing caches, logs, configuration, and data](directory)
 //! - [Instantiate an OS context to create windows and handle OS events](context)
 //! - [Create windows](windows)
@@ -17,11 +18,12 @@ use thiserror::Error;
 use crate::directory::Directories;
 use crate::event::{Event, EventLoop, EventLoopCreateError};
 use crate::input::InputSys;
-use crate::tracing::{Tracing, TracingBuilder};
+use crate::trace::{Tracing, TracingBuilder};
 use crate::window::WindowOptions;
 
+pub mod profile;
 pub mod env;
-pub mod tracing;
+pub mod trace;
 pub mod directory;
 pub mod window;
 pub mod event;
@@ -32,8 +34,7 @@ pub mod open_url;
 // Light initialization
 
 pub fn init() {
-  #[cfg(feature = "profile-with-tracy")]
-  tracy_client::Client::start();
+  profile::start();
 
   profiling::register_thread!();
 
