@@ -188,6 +188,6 @@ impl AppRunner {
 
 impl AppRunner {
   pub fn run<A: Application>(self) -> Result<(), RunError> {
-    run::run::<A>(self.os_options, self.options)
+    run::run_main_thread::<A>(self.os_options, self.options)
   }
 }
