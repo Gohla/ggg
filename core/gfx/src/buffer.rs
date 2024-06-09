@@ -95,13 +95,13 @@ impl<'a> BufferBuilder<'a> {
   #[inline]
   pub fn build_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
     let contents: &[u8] = bytemuck::cast_slice(data);
-    // TODO: create_buffer_init may adjust the size to include padding for alignment, so the size may not be correct?
-    let size = contents.len() as BufferAddress;
     let buffer = device.create_buffer_init(&BufferInitDescriptor {
       label: self.descriptor.label,
       contents,
       usage: self.descriptor.usage,
     });
+    // Get the size of the buffer since `create_buffer_init` may adjust the size to include padding for alignment.
+    let size = buffer.size();
     let len = data.len();
     GfxBuffer { buffer, size, len }
   }

@@ -131,8 +131,8 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
         }
       }
       if settings.debug_render_octree_aabb_closest_points {
-        // Use `aabb_local_position` here because AABBs are in their own local space. Afterwards, we do not have to 
-        // transform back because the debug renderer will transform everything into world space using the 
+        // Use `aabb_local_position` here because AABBs are in their own local space. Afterwards, we do not have to
+        // transform back because the debug renderer will transform everything into world space using the
         // (non-inverse) transform.
         let aabb_local_closest_point = aabb.closest_point(root_half_size, aabb_local_position);
         let color = settings.debug_render_octree_aabb_closest_points_color;
@@ -154,6 +154,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
       }
     }
 
+    // OPTO: don't create new buffers each time, reuse them instead!
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
