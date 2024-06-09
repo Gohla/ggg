@@ -35,15 +35,11 @@ pub fn compile_shaders() -> Result<(), Box<dyn Error>> {
     if !file_name.ends_with(".glsl") { continue; }
 
     let source_file = entry.path();
-    let relative_path = entry.path()
+    let relative_path = source_file
       .parent()
-      .expect("Failed to get parent path")
+      .with_context(|| format!("Failed to get parent path for source file '{}'", source_file.display()))?
       .strip_prefix(&source_directory)
-      .expect("Failed to get relative path");
-
-    let source_text = read_file_to_string(source_file)
-      .with_context(|| format!("Failed to read source file '{}'", source_file.display()))?;
-    let source_text = preprocess_includes(source_text, source_file)?;
+      .with_context(|| format!("Failed create relative path by stripping source directory '{}' from source file '{}'", source_directory.display(), source_file.display()))?;
 
     let (shader_stage, dest_file) = if file_name.ends_with("vert.glsl") {
       let name = file_name.replace("vert.glsl", "");
@@ -56,6 +52,10 @@ pub fn compile_shaders() -> Result<(), Box<dyn Error>> {
     } else {
       continue;
     };
+
+    let source_text = read_file_to_string(source_file)
+      .with_context(|| format!("Failed to read source file '{}'", source_file.display()))?;
+    let source_text = preprocess_includes(source_text, source_file)?;
 
     let glsl_options = GlslOptions::from(shader_stage);
     let module = from_glsl(&mut glsl_frontend, &glsl_options, &source_text, source_file)?;
@@ -75,7 +75,7 @@ pub fn compile_shaders() -> Result<(), Box<dyn Error>> {
       shader_stage,
       entry_point: "main".to_string(),
     });
-    to_spv(&module, &module_info, &spv_options, spv_pipeline_options.as_ref(), &dest_file)?;
+    to_spv(&module, &module_info, source_file, &spv_options, spv_pipeline_options.as_ref(), &dest_file)?;
   }
 
   Ok(())
@@ -116,12 +116,13 @@ fn from_glsl(
 fn to_spv(
   module: &Module,
   module_info: &ModuleInfo,
+  module_source_file: &Path,
   options: &SpvOptions,
   pipeline_options: Option<&SpvPipelineOptions>,
   dest_file: &Path,
 ) -> anyhow::Result<()> {
   let output = spv_to_vec(module, module_info, options, pipeline_options)
-    .with_context(|| format!("Failed to compile module '{:?}' to SPIR-V", module))?;
+    .with_context(|| format!("Failed to compile module (created from source file '{}') to SPIR-V", module_source_file.display()))?;
   let mut writer = create_writer(dest_file)?;
   writer.write_all(cast_slice(&output))
     .with_context(|| format!("Failed to write bytes to destination file '{}'", dest_file.display()))?;
@@ -138,7 +139,7 @@ fn create_writer(file: &Path) -> anyhow::Result<BufWriter<File>> {
   // regenerated again. Could use it if we compare modified times?
   if let Some(parent) = file.parent() {
     fs::create_dir_all(parent)
-      .with_context(|| format!("Failed to recursively create directory '{}'", file.display()))?;
+      .with_context(|| format!("Failed to recursively create directory '{}'", parent.display()))?;
   }
   let writer = OpenOptions::new()
     .write(true)
