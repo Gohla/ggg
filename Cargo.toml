@@ -11,6 +11,12 @@ default-members = [
 ]
 resolver = "2"
 
+[workspace.package]
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2021"
+publish = false
+
 [workspace.dependencies]
 raw-window-handle = "0.6"
 cursor-icon = "1"

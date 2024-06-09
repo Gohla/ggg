@@ -22,7 +22,6 @@ layout(std430, set = 0, binding = 1) readonly buffer Instances {
 
 /// Outputs
 
-out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec3 out_tex;
 
 /// Vertex shader

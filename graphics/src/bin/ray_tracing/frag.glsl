@@ -1,11 +1,10 @@
 #version 450
 
-#include "bin/ray_tracing/common.glsl"
+#include "common.glsl"
 
 #define MAX_RECURSION 10
 #define NUM_SAMPLES 1
 
-in vec4 gl_FragCoord;
 layout(std140, set = 0, binding = 0) uniform Uniform {
   vec4 resolution_and_elapsed_and_aperture;
   vec4 camera_origin_and_vfov;

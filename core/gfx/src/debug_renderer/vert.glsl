@@ -7,7 +7,6 @@ layout(std140, set = 0, binding = 0) uniform Uniform {
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec4 inCol;
 
-out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec4 outCol;
 
 void main() {

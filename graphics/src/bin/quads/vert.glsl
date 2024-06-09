@@ -7,7 +7,6 @@ layout(location = 3) in vec4 inModel2;
 layout(location = 4) in vec4 inModel3;
 layout(location = 5) in vec4 inModel4;
 
-out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec2 outTex;
 
 

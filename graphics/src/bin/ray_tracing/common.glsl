@@ -1,8 +1,11 @@
-#include "bin/ray_tracing/random.glsl"
+#include "random.glsl"
 
+// Cheeky function to get around naga not allowing constants representing infinity.
+float hideFromNagaShaderValidation(float d) {
+  return 1.0 / d;
+}
 // Division by zero creates a value respresenting infinity.
-
-float infinity = 1.0/0.0;
+float infinity = hideFromNagaShaderValidation(0.0);
 
 
 // Ray

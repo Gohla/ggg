@@ -1,11 +1,13 @@
 [package]
 name = "gfxc"
-version = "0.1.0"
-authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
-edition = "2021"
-publish = false
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [dependencies]
-shaderc = "0.8"
-shaderc-sys = "0.8"
-walkdir = "2.3"
+naga = { version = "0.20", features = ["glsl-in", "spv-out"] }
+bytemuck = "1.16"
+walkdir = "2.5"
+regex = "1"
+anyhow = "1"
