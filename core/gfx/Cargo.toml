@@ -1,9 +1,9 @@
 [package]
 name = "gfx"
-version = "0.1.0"
-authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
-edition = "2021"
-publish = false
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [dependencies]
 common = { path = "../../core/common" }
