@@ -4,13 +4,13 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
-use wgpu::{Buffer, BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Frame, Gfx, include_shader_for_bin};
-use gfx::buffer::BufferBuilder;
+use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use os::Os;
@@ -41,7 +41,7 @@ const VERTICES: &[Vertex] = &[
 
 pub struct Triangle {
   render_pipeline: RenderPipeline,
-  vertex_buffer: Buffer,
+  vertex_buffer: GfxBuffer,
 }
 
 impl app::Application for Triangle {
@@ -59,8 +59,7 @@ impl app::Application for Triangle {
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Triangle static vertex buffer")
-      .create_with_data(&gfx.device, VERTICES)
-      .buffer;
+      .create_with_data(&gfx.device, VERTICES);
     Self {
       render_pipeline,
       vertex_buffer,

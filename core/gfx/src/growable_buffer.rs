@@ -1,5 +1,7 @@
 // Buffer builder
 
+use std::mem::size_of_val;
+
 use bytemuck::Pod;
 use wgpu::{BufferAddress, BufferUsages, CommandEncoder, Device};
 use wgpu::util::StagingBelt;
@@ -85,15 +87,13 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     encoder: &mut CommandEncoder,
     staging_belt: &mut StagingBelt,
     bytes: &[u8],
-    count: usize,
   ) -> &GfxBuffer {
     match self.buffer.as_mut() {
-      Some(buffer) if (bytes.len() as BufferAddress) <= buffer.size => {
+      Some(buffer) if (bytes.len() as BufferAddress) <= buffer.size() => {
         buffer.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, 0);
-        buffer.count = count;
       }
       _ => {
-        self.create_with_bytes(device, bytes, count);
+        self.create_with_bytes(device, bytes);
       }
     }
     self.buffer.as_ref().unwrap()
@@ -106,14 +106,20 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     staging_belt: &mut StagingBelt,
     data: &[T],
   ) -> &GfxBuffer {
-    let count = data.len();
-    let bytes: &[u8] = bytemuck::cast_slice(data);
-    self.write_all_bytes(device, encoder, staging_belt, bytes, count)
+    match self.buffer.as_mut() {
+      Some(buffer) if (size_of_val(data) as BufferAddress) <= buffer.size() => {
+        buffer.enqueue_write_data_via_staging_belt(device, encoder, staging_belt, data, 0);
+      }
+      _ => {
+        self.create_with_data(device, data);
+      }
+    }
+    self.buffer.as_ref().unwrap()
   }
 
 
-  pub fn create_with_bytes(&mut self, device: &Device, bytes: &[u8], count: usize) -> &GfxBuffer {
-    let buffer = GfxBuffer::from_bytes(device, bytes, self.label.as_ref().map(|l| l.as_ref()), self.usage, count);
+  pub fn create_with_bytes(&mut self, device: &Device, bytes: &[u8]) -> &GfxBuffer {
+    let buffer = GfxBuffer::from_bytes(device, bytes, self.label.as_ref().map(|l| l.as_ref()), self.usage);
     self.buffer.insert(buffer)
   }
 

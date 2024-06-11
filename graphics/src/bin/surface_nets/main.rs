@@ -1,6 +1,7 @@
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::CommandBuffer;
+use wgpu::util::StagingBelt;
 
 use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
@@ -22,6 +23,8 @@ mod config;
 
 pub struct SurfaceNetsDemo {
   config: Config,
+
+  staging_belt: StagingBelt,
 
   camera: Camera,
   camera_uniform: CameraUniform,
@@ -48,6 +51,8 @@ impl app::Application for SurfaceNetsDemo {
   fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
     config.update_default_camera_settings();
 
+    let staging_belt = StagingBelt::new(4096);
+
     let camera = Camera::new(screen_size.physical, &mut config.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
@@ -65,6 +70,8 @@ impl app::Application for SurfaceNetsDemo {
 
     Self {
       config,
+
+      staging_belt,
 
       camera,
       camera_uniform,
@@ -100,6 +107,8 @@ impl app::Application for SurfaceNetsDemo {
 
 
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    self.staging_belt.recall(); // TODO: should we call this immediately after submit instead of here?
+
     // Update camera
     self.config.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.config.camera_settings);
     self.camera.update(&mut self.config.camera_settings, &input.camera, frame.time.delta);
@@ -124,6 +133,7 @@ impl app::Application for SurfaceNetsDemo {
     self.voxel_renderer.render_chunk_vertices(
       gfx,
       &mut frame,
+      &mut self.staging_belt,
       true,
       &chunk_vertices,
     );
@@ -136,6 +146,8 @@ impl app::Application for SurfaceNetsDemo {
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
     self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+
+    self.staging_belt.finish();
 
     Box::new(std::iter::empty())
   }

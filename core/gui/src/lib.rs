@@ -358,29 +358,29 @@ impl Gui {
     let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
     // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
-    let index_buffer = {
+    let mut index_buffer = { // TODO: replace with growable buffer?
       let count: usize = clipped_primitives.iter()
         .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
         .sum();
       let size = (count * size_of::<u32>()) as BufferAddress;
       let mut buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(size, device));
-      if buffer.size < size {
+      if buffer.size() < size {
         buffer.destroy();
         // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
-        buffer = create_index_buffer(buffer.size.saturating_mul(2).max(size), device);
+        buffer = create_index_buffer(buffer.size().saturating_mul(2).max(size), device);
       }
       buffer
     };
-    let vertex_buffer = {
+    let mut vertex_buffer = { // TODO: replace with growable buffer?
       let count: usize = clipped_primitives.iter()
         .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
         .sum();
       let size = (count * size_of::<Vertex>()) as BufferAddress;
       let mut buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(size, device));
-      if buffer.size < size {
+      if buffer.size() < size {
         buffer.destroy();
         // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
-        buffer = create_vertex_buffer(buffer.size.saturating_mul(2).max(size), device);
+        buffer = create_vertex_buffer(buffer.size().saturating_mul(2).max(size), device);
       }
       buffer
     };

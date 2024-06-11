@@ -5,7 +5,7 @@ use std::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, Buffer, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
@@ -99,9 +99,9 @@ pub struct Quads {
 
   render_pipeline: RenderPipeline,
 
-  vertex_buffer: Buffer,
-  index_buffer: Buffer,
-  instance_buffer: Buffer,
+  vertex_buffer: GfxBuffer,
+  index_buffer: GfxBuffer,
+  instance_buffer: GfxBuffer,
 }
 
 pub struct Input {
@@ -162,13 +162,11 @@ impl app::Application for Quads {
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Quad static vertex buffer")
-      .create_with_data(&gfx.device, VERTICES)
-      .buffer;
+      .create_with_data(&gfx.device, VERTICES);
     let index_buffer = BufferBuilder::new()
       .with_static_index_usage()
       .with_label("Quad static index buffer")
-      .create_with_data(&gfx.device, INDICES)
-      .buffer;
+      .create_with_data(&gfx.device, INDICES);
     let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW).flat_map(|y| {
       let y = y as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
       (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -181,9 +179,7 @@ impl app::Application for Quads {
     let instance_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Quads instance buffer")
-      .create_with_data(&gfx.device, &instances)
-      .buffer
-      ;
+      .create_with_data(&gfx.device, &instances);
 
     Self {
       camera_settings,

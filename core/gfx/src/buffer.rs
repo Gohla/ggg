@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::ops::{Deref, RangeBounds};
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, Device, Queue, ShaderStages};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Queue, ShaderStages};
 use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
 
 // Buffer builder
@@ -74,7 +74,8 @@ impl<'a> BufferBuilder<'a> {
     self
   }
 
-  /// Set the count of the data elements in the buffer. Not used by wgpu but passed to [`GfxBuffer`] for use later.
+  /// Set the count of the data elements in the buffer. Not used by wgpu but stored in [`GfxBuffer`] and retrievable via
+  /// [`last_written_size`](GfxBuffer::last_written_size).
   #[inline]
   pub fn with_count(mut self, count: usize) -> Self {
     self.count = count;
@@ -86,9 +87,23 @@ impl<'a> BufferBuilder<'a> {
 // Buffer
 
 pub struct GfxBuffer {
-  pub buffer: Buffer,
-  pub size: BufferAddress,
-  pub count: usize,
+  buffer: Buffer,
+  count: usize,
+}
+
+impl GfxBuffer {
+  /// Returns the backing [wgpu `Buffer`](Buffer).
+  #[inline]
+  pub fn as_wgpu_buffer(&self) -> &Buffer { &self.buffer }
+
+  /// Returns the element count of the contents in the buffer.
+  ///
+  /// If the buffer is created with a count initially, this returns that count. If instead the buffer is created with
+  /// data initially, this returns the element count of that data.
+  ///
+  /// Methods that write data update this count.
+  #[inline]
+  pub fn count(&self) -> usize { self.count }
 }
 
 impl Deref for GfxBuffer {
@@ -105,42 +120,41 @@ impl<'a> BufferBuilder<'a> {
   #[inline]
   pub fn create(self, device: &Device) -> GfxBuffer {
     let buffer = device.create_buffer(&self.descriptor);
-    GfxBuffer { buffer, size: self.descriptor.size, count: self.count }
+    GfxBuffer { buffer, count: self.count }
   }
 
-  /// Create the buffer on `device`, with `data`. Overrides the previously set [`size`](Self::with_size),
+  /// Create the buffer on `device` with `bytes` as content. Overrides the previously set [`size`](Self::with_size),
+  /// and [`mapped_at_creation`](Self::with_mapped_at_creation) values.
+  #[inline]
+  pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
+    let mut buffer = GfxBuffer::from_bytes(device, bytes, self.descriptor.label, self.descriptor.usage);
+    buffer.count = self.count;
+    buffer
+  }
+
+  /// Create the buffer on `device` with `data` as content. Overrides the previously set [`size`](Self::with_size),
   /// [`mapped_at_creation`](Self::with_mapped_at_creation), and [`count`](Self::count) values.
   #[inline]
   pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
     GfxBuffer::from_data(device, data, self.descriptor.label, self.descriptor.usage)
   }
-
-  /// Create the buffer on `device`, with `bytes`. Overrides the previously set [`size`](Self::with_size), and
-  /// [`mapped_at_creation`](Self::with_mapped_at_creation) values.
-  #[inline]
-  pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
-    GfxBuffer::from_bytes(device, bytes, self.descriptor.label, self.descriptor.usage, self.count)
-  }
 }
 
 impl GfxBuffer {
-  /// Create a buffer on `device` from `data`, with `label` and `usage`.
+  /// Create a buffer on `device` with `bytes` as content, with `label`, `usage`. Element count is set to `0`.
+  #[inline]
+  pub fn from_bytes<'a>(device: &Device, bytes: &[u8], label: wgpu::Label<'a>, usage: BufferUsages) -> Self {
+    let buffer = device.create_buffer_init(&BufferInitDescriptor { label, contents: bytes, usage });
+    Self { buffer, count: 0 }
+  }
+
+  /// Create a buffer on `device` with `data` as content, with `label` and `usage`.
   #[inline]
   pub fn from_data<'a, T: Pod>(device: &Device, data: &[T], label: wgpu::Label<'a>, usage: BufferUsages) -> Self {
     let count = data.len();
-    let bytes: &[u8] = bytemuck::cast_slice(data);
-    Self::from_bytes(device, bytes, label, usage, count)
-  }
-
-  /// Create a buffer on `device` from `bytes`, with `label`, `usage`, and `count`.
-  #[inline]
-  pub fn from_bytes<'a>(device: &Device, bytes: &[u8], label: wgpu::Label<'a>, usage: BufferUsages, count: usize) -> Self {
-    let descriptor = BufferInitDescriptor { label, contents: bytes, usage };
-    let buffer = device.create_buffer_init(&descriptor);
-    // Get the size of the buffer since `create_buffer_init` may adjust the size. This is because the buffer is mapped
-    // at creation, and thus the size must be a multiple of `COPY_BUFFER_ALIGNMENT`.
-    let size = buffer.size();
-    Self { buffer, size, count }
+    let contents = bytemuck::cast_slice(data);
+    let buffer = device.create_buffer_init(&BufferInitDescriptor { label, contents, usage });
+    Self { buffer, count }
   }
 }
 
@@ -148,22 +162,23 @@ impl GfxBuffer {
 // Buffer writing
 
 impl GfxBuffer {
-  /// Enqueue writing `bytes` into this buffer, starting at *byte* `offset` in this buffer. The write occurs at the next
-  /// `queue` [submit](Queue::submit) call.
+  /// Enqueue writing `bytes` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if:
+  /// Starts writing at `offset` of this buffer, with `offset` being interpreted in terms of bytes.
+  ///
+  /// This method fails (and may cause panics) if:
   ///
   /// - `bytes` overruns the end of this buffer starting at `offset`.
   /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
   pub fn enqueue_write_bytes(&self, queue: &Queue, bytes: &[u8], offset: BufferAddress) {
-    queue.write_buffer(&self, offset, bytes);
+    queue.write_buffer(&self.buffer, offset, bytes);
   }
 
   /// Enqueue writing `bytes` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if:
+  /// This method fails (and may cause panics) if:
   ///
   /// - The size of `bytes` is larger than the size of this buffer.
   /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
@@ -172,43 +187,22 @@ impl GfxBuffer {
     self.enqueue_write_bytes(queue, bytes, 0);
   }
 
-  /// Enqueue writing `data` into this buffer, starting at *slice* `offset` in this buffer. The write occurs at the next
-  /// `queue` [submit](Queue::submit) call.
+  /// Enqueue writing `bytes` at `offset` of this buffer. The write occurs when the command `encoder` is submitted.
   ///
-  /// This method fails if:
+  /// Starts writing at `offset` of this buffer, with `offset` being interpreted in terms of bytes.
   ///
-  /// - `data` overruns the end of this buffer starting at `offset`.
-  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
-  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// If the size of `bytes` is 0, nothing happens.
   ///
-  /// This method fails if `bytes` overruns the end of this buffer starting at `offset`.
-  #[inline]
-  pub fn enqueue_write_data<T: Pod>(&self, queue: &Queue, data: &[T], offset: usize) {
-    let bytes = bytemuck::cast_slice(data);
-    let offset = (offset * size_of::<T>()) as BufferAddress;
-    self.enqueue_write_bytes(queue, bytes, offset)
-  }
-
-  /// Enqueue writing `data` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
+  /// In contrast to [enqueue_write_bytes](Self::enqueue_write_bytes), this method supports writing bytes with a size
+  /// that is *not* a multiple of [COPY_BUFFER_ALIGNMENT]. It supports this by first creating a staging buffer with a
+  /// size that *is* aligned, copying `bytes` into that buffer, and then scheduling a buffer copy from the staging
+  /// buffer into this buffer.
   ///
-  /// This method fails if `data` overruns the size of this buffer.
+  /// It is up to the caller of this method to correctly [finish](StagingBelt::finish) and
+  /// [recall](StagingBelt::recall) the `staging_belt`.
   ///
-  /// This method fails if:
+  /// This method fails (and may cause panics) if:
   ///
-  /// - The size of `data` is larger than the size of this buffer.
-  /// - The size of `data` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
-  #[inline]
-  pub fn enqueue_write_all_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
-    self.enqueue_write_data::<T>(queue, data, 0);
-  }
-
-
-  /// Enqueue writing `bytes` into this buffer, starting at *byte* `offset` in this buffer. The write occurs at the next
-  /// `queue` [submit](Queue::submit) call.
-  ///
-  /// This method fails if:
-  ///
-  /// - `bytes` has size 0.
   /// - `bytes` overruns the end of this buffer starting at `offset`.
   /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
@@ -221,32 +215,79 @@ impl GfxBuffer {
     offset: BufferAddress,
   ) {
     let unpadded_size = bytes.len();
-    let padded_size = wgpu::util::align_to(unpadded_size as BufferAddress, wgpu::COPY_BUFFER_ALIGNMENT);
+    if unpadded_size == 0 { return; }
+    let padded_size = wgpu::util::align_to(unpadded_size as BufferAddress, COPY_BUFFER_ALIGNMENT);
     let padded_size = BufferSize::new(padded_size).unwrap();
     let mut buffer_view = staging_belt.write_buffer(encoder, &self.buffer, offset, padded_size, device);
     buffer_view[..unpadded_size].copy_from_slice(bytes);
   }
 
-  /// Enqueue writing `data` into this buffer, starting at *slice* `offset` in this buffer. The write occurs at the next
-  /// `queue` [submit](Queue::submit) call.
+
+  /// Enqueue writing `data` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if:
+  /// Starts writing at `offset` of this buffer, with `offset` being interpreted in terms of `&[T]`.
   ///
-  /// - `data` has size 0.
+  /// Immediately updates the element count of this buffer.
+  ///
+  /// This method fails (and may cause panics) if:
+  ///
+  /// - `data` overruns the end of this buffer starting at `offset`.
+  /// - `offset` converted to a byte offset is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - The size of `data` in bytes is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  #[inline]
+  pub fn enqueue_write_data<T: Pod>(&mut self, queue: &Queue, data: &[T], offset: usize) {
+    self.count = data.len();
+    let bytes = bytemuck::cast_slice(data);
+    let offset = offset * size_of::<T>();
+    self.enqueue_write_bytes(queue, bytes, offset as BufferAddress)
+  }
+
+  /// Enqueue writing `data` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
+  ///
+  /// Immediately updates the element count of this buffer.
+  ///
+  /// This method fails (and may cause panics) if:
+  ///
+  /// - The size of `data` is larger than the size of this buffer.
+  /// - The size of `data` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  #[inline]
+  pub fn enqueue_write_all_data<T: Pod>(&mut self, queue: &Queue, data: &[T]) {
+    self.enqueue_write_data::<T>(queue, data, 0);
+  }
+
+  /// Enqueue writing `data` at `offset` of this buffer. The write occurs when the command `encoder` is submitted.
+  ///
+  /// Immediately updates the element count of this buffer.
+  ///
+  /// Starts writing at `offset` of this buffer, with `offset` being interpreted in terms of `&[T]`.
+  ///
+  /// If the size of `data` is 0, nothing happens.
+  ///
+  /// In contrast to [enqueue_write_data](Self::enqueue_write_data), this method supports writing data with a size
+  /// that is *not* a multiple of [COPY_BUFFER_ALIGNMENT]. It supports this by first creating a staging buffer with a
+  /// size that *is* aligned, copying `data` into that buffer, and then scheduling a buffer copy from the staging
+  /// buffer into this buffer.
+  ///
+  /// It is up to the caller of this method to correctly [finish](StagingBelt::finish) and
+  /// [recall](StagingBelt::recall) the `staging_belt`.
+  ///
+  /// This method fails (and may cause panics) if:
+  ///
   /// - `data` overruns the end of this buffer starting at `offset`.
   /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
   pub fn enqueue_write_data_via_staging_belt<T: Pod>(
-    &self,
+    &mut self,
     device: &Device,
     encoder: &mut CommandEncoder,
     staging_belt: &mut StagingBelt,
     data: &[T],
     offset: usize,
   ) {
+    self.count = data.len();
     let bytes = bytemuck::cast_slice(data);
-    let offset = (offset * size_of::<T>()) as BufferAddress;
-    self.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, offset);
+    let offset = offset * size_of::<T>();
+    self.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, offset as BufferAddress);
   }
 }
 
@@ -267,11 +308,19 @@ impl GfxBuffer {
 
 impl<'a> GfxBuffer {
   #[inline]
-  pub fn create_uniform_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+  pub fn create_uniform_binding_entries(
+    &'a self,
+    binding_index: u32,
+    shader_visibility: ShaderStages,
+  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,
-      ty: BindingType::Buffer { ty: BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+      ty: BindingType::Buffer {
+        ty: BufferBindingType::Uniform,
+        has_dynamic_offset: false,
+        min_binding_size: None,
+      },
       count: None,
     };
     let bind = BindGroupEntry {
@@ -282,11 +331,20 @@ impl<'a> GfxBuffer {
   }
 
   #[inline]
-  pub fn create_storage_binding_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages, read_only: bool) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
+  pub fn create_storage_binding_entries(
+    &'a self,
+    binding_index: u32,
+    shader_visibility: ShaderStages,
+    read_only: bool,
+  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
     let layout = BindGroupLayoutEntry {
       binding: binding_index,
       visibility: shader_visibility,
-      ty: BindingType::Buffer { ty: BufferBindingType::Storage { read_only }, has_dynamic_offset: false, min_binding_size: None },
+      ty: BindingType::Buffer {
+        ty: BufferBindingType::Storage { read_only },
+        has_dynamic_offset: false,
+        min_binding_size: None,
+      },
       count: None,
     };
     let bind = BindGroupEntry {

@@ -134,12 +134,6 @@ impl VoxelRenderer {
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
-    if chunk_vertices.is_empty() {
-      // Writing empty data to a buffer is not allowed, so stop early. We still need to clear if requested, so we do
-      // create and drop the render pass.
-      let _ = Self::create_render_pass(gfx, frame, clear);
-      return;
-    }
     let vertex_buffer = self.vertex_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.vertices());
     let index_buffer = self.index_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.indices());
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
@@ -148,7 +142,7 @@ impl VoxelRenderer {
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..index_buffer.count as u32, 0, 0..1);
+    render_pass.draw_indexed(0..index_buffer.count() as u32, 0, 0..1);
     render_pass.pop_debug_group();
   }
 
