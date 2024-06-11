@@ -33,7 +33,7 @@ impl DebugRenderer {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Debug uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
+      .create_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -263,7 +263,7 @@ impl DebugRenderer {
       return; // Nothing to do
     }
 
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform { model_view_projection }]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
       pipeline.upload_buffers_if_needed(gfx);
@@ -335,12 +335,12 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label(&format!("Debug {} vertex buffer", label))
-      .build_with_data(&gfx.device, &vertices);
+      .create_with_data(&gfx.device, &vertices);
     let indices = Vec::new();
     let index_buffer = BufferBuilder::new()
       .with_static_index_usage()
       .with_label(&format!("Debug {} index buffer", label))
-      .build_with_data(&gfx.device, &indices);
+      .create_with_data(&gfx.device, &indices);
     Self {
       render_pipeline,
       vertex_buffer,
@@ -395,11 +395,11 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
       self.vertex_buffer = BufferBuilder::new()
         .with_static_vertex_usage()
         .with_label(&format!("Debug {} vertex buffer", self.label))
-        .build_with_data(&gfx.device, &self.vertices);
+        .create_with_data(&gfx.device, &self.vertices);
       self.index_buffer = BufferBuilder::new()
         .with_static_index_usage()
         .with_label(&format!("Debug {} index buffer", self.label))
-        .build_with_data(&gfx.device, &self.indices);
+        .create_with_data(&gfx.device, &self.indices);
     }
     self.upload_buffers = false;
   }
@@ -411,9 +411,9 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     if !self.indices.is_empty() {
       render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-      render_pass.draw_indexed(0..self.index_buffer.len as u32, 0, 0..1);
+      render_pass.draw_indexed(0..self.index_buffer.element_count as u32, 0, 0..1);
     } else {
-      render_pass.draw(0..self.vertex_buffer.len as u32, 0..1);
+      render_pass.draw(0..self.vertex_buffer.element_count as u32, 0..1);
     }
     render_pass.pop_debug_group();
   }

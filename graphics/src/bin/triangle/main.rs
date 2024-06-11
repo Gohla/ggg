@@ -59,7 +59,7 @@ impl app::Application for Triangle {
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Triangle static vertex buffer")
-      .build_with_data(&gfx.device, VERTICES)
+      .create_with_data(&gfx.device, VERTICES)
       .buffer;
     Self {
       render_pipeline,

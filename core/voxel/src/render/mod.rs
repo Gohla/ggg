@@ -29,17 +29,17 @@ impl VoxelRenderer {
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Camera uniform buffer")
-      .build_with_data(&gfx.device, &[camera_uniform]);
+      .create_with_data(&gfx.device, &[camera_uniform]);
     let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let light_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
-      .build_with_data(&gfx.device, &[light_uniform]);
+      .create_with_data(&gfx.device, &[light_uniform]);
     let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
     let model_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Model uniform buffer")
-      .build_with_data(&gfx.device, &[model_uniform]);
+      .create_with_data(&gfx.device, &[model_uniform]);
     let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
 
     let vertex_shader_module = gfx.device.create_shader_module(gfx::include_shader!("render/vert"));
@@ -79,15 +79,15 @@ impl VoxelRenderer {
   }
 
   pub fn update_camera_uniform(&mut self, queue: &Queue, camera_uniform: CameraUniform) {
-    self.camera_uniform_buffer.write_whole_data(queue, &[camera_uniform]);
+    self.camera_uniform_buffer.enqueue_write_all_data(queue, &[camera_uniform]);
   }
 
   pub fn update_light_uniform(&mut self, queue: &Queue, light_uniform: LightUniform) {
-    self.light_uniform_buffer.write_whole_data(queue, &[light_uniform]);
+    self.light_uniform_buffer.enqueue_write_all_data(queue, &[light_uniform]);
   }
 
   pub fn update_model_uniform(&mut self, queue: &Queue, model_uniform: ModelUniform) {
-    self.model_uniform_buffer.write_whole_data(queue, &[model_uniform]);
+    self.model_uniform_buffer.enqueue_write_all_data(queue, &[model_uniform]);
   }
 
   #[profiling::function]
@@ -121,18 +121,18 @@ impl VoxelRenderer {
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Transvoxel demo vertex buffer")
-      .build_with_data(&gfx.device, &chunk_vertices.vertices());
+      .create_with_data(&gfx.device, &chunk_vertices.vertices());
     let index_buffer = BufferBuilder::new()
       .with_index_usage()
       .with_label("Transvoxel demo index buffer")
-      .build_with_data(&gfx.device, &chunk_vertices.indices());
+      .create_with_data(&gfx.device, &chunk_vertices.indices());
     let mut render_pass = self.create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..index_buffer.len as u32, 0, 0..1);
+    render_pass.draw_indexed(0..index_buffer.element_count as u32, 0, 0..1);
     render_pass.pop_debug_group();
   }
 

@@ -158,11 +158,11 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
-      .build_with_data(device, &self.vertices);
+      .create_with_data(device, &self.vertices);
     let index_buffer = BufferBuilder::new()
       .with_index_usage()
       .with_label("Voxel meshing index buffer")
-      .build_with_data(device, &self.indices);
+      .create_with_data(device, &self.indices);
     let draws = std::mem::take(&mut self.draws);
     let model = transform.into_homogeneous_matrix();
 

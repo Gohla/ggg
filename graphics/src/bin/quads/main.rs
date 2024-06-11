@@ -138,7 +138,7 @@ impl app::Application for Quads {
 
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
-      .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
+      .create_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -162,12 +162,12 @@ impl app::Application for Quads {
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Quad static vertex buffer")
-      .build_with_data(&gfx.device, VERTICES)
+      .create_with_data(&gfx.device, VERTICES)
       .buffer;
     let index_buffer = BufferBuilder::new()
       .with_static_index_usage()
       .with_label("Quad static index buffer")
-      .build_with_data(&gfx.device, INDICES)
+      .create_with_data(&gfx.device, INDICES)
       .buffer;
     let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW).flat_map(|y| {
       let y = y as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
@@ -181,7 +181,7 @@ impl app::Application for Quads {
     let instance_buffer = BufferBuilder::new()
       .with_static_vertex_usage()
       .with_label("Quads instance buffer")
-      .build_with_data(&gfx.device, &instances)
+      .create_with_data(&gfx.device, &instances)
       .buffer
       ;
 
@@ -224,7 +224,7 @@ impl app::Application for Quads {
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Quads").show(&gui_frame, |ui| {
       ui.label("Hello, world!");

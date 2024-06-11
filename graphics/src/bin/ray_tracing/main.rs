@@ -64,7 +64,7 @@ impl app::Application for RayTracing {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::new(screen_size, 0.0, camera_aperture, camera_origin, v_fov)]);
+      .create_with_data(&gfx.device, &[Uniform::new(screen_size, 0.0, camera_aperture, camera_origin, v_fov)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
@@ -138,7 +138,7 @@ impl app::Application for RayTracing {
     if input.down { self.camera_origin.y -= 1.0 * delta; }
     self.v_fov += input.v_fov_delta;
     self.camera_aperture += input.aperture_delta;
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Ray tracing render pass")

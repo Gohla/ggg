@@ -103,7 +103,7 @@ impl app::Application for Cubes {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("Cubes uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
+      .create_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
@@ -112,7 +112,7 @@ impl app::Application for Cubes {
         .with_storage_usage()
         .with_mapped_at_creation(true)
         .with_label("Cubes instance storage buffer")
-        .build(&gfx.device);
+        .create(&gfx.device);
       {
         let mut view = buffer.slice(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
@@ -153,7 +153,7 @@ impl app::Application for Cubes {
       BufferBuilder::new()
         .with_static_index_usage()
         .with_label("Cubes static index buffer")
-        .build_with_data(&gfx.device, &data)
+        .create_with_data(&gfx.device, &data)
     };
 
     Self {
@@ -199,7 +199,7 @@ impl app::Application for Cubes {
   fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
-    self.uniform_buffer.write_whole_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {
       ui.grid("Grid", |ui| {
@@ -215,7 +215,7 @@ impl app::Application for Cubes {
         let instances: Vec<_> = (0..self.num_cubes_to_generate)
           .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
           .collect();
-        self.instance_buffer.write_whole_data(&gfx.queue, &instances);
+        self.instance_buffer.enqueue_write_all_data(&gfx.queue, &instances);
         self.num_cubes = self.num_cubes_to_generate
       }
     });

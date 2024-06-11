@@ -62,7 +62,7 @@ impl Gui {
     let uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
       .with_label("GUI uniform buffer")
-      .build_with_data(device, &[Uniform::default()]);
+      .create_with_data(device, &[Uniform::default()]);
     let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
       uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
@@ -386,7 +386,7 @@ impl Gui {
     };
 
     // Write to buffers and create draw list.
-    self.uniform_buffer.write_whole_data(queue, &[Uniform::from_screen_size(screen_size)]);
+    self.uniform_buffer.enqueue_write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
     let mut index_offset = 0;
     let mut index_buffer_offset = 0;
     let mut vertex_offset = 0;
@@ -401,13 +401,13 @@ impl Gui {
     let mut draws = Vec::with_capacity(clipped_primitives.len());
     for ClippedPrimitive { clip_rect, primitive } in clipped_primitives {
       if let Primitive::Mesh(Mesh { indices, vertices, texture_id, .. }) = primitive {
-        index_buffer.write_data(queue, index_buffer_offset, &indices);
-        vertex_buffer.write_bytes(queue, vertex_buffer_offset, bytemuck::cast_slice(&vertices));
+        index_buffer.enqueue_write_data(queue, &indices, index_buffer_offset);
+        vertex_buffer.enqueue_write_data(queue, &vertices, vertex_buffer_offset);
         draws.push(Draw { clip_rect, texture_id, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
         index_offset += indices.len() as u32;
-        index_buffer_offset += (indices.len() * size_of::<u32>()) as BufferAddress;
+        index_buffer_offset += indices.len();
         vertex_offset += vertices.len() as u64;
-        vertex_buffer_offset += (vertices.len() * size_of::<Vertex>()) as BufferAddress;
+        vertex_buffer_offset += vertices.len();
       }
     }
 
@@ -572,7 +572,7 @@ fn create_index_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
     .with_index_usage()
     .with_size(size)
     .with_label("GUI index buffer")
-    .build(device)
+    .create(device)
 }
 
 #[inline]
@@ -581,7 +581,7 @@ fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
     .with_vertex_usage()
     .with_size(size)
     .with_label("GUI vertex buffer")
-    .build(device)
+    .create(device)
 }
 
 #[repr(C)]
