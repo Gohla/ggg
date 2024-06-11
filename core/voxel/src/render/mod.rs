@@ -3,6 +3,7 @@ use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, Shad
 use gfx::{Frame, Gfx};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
+use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 
@@ -16,6 +17,8 @@ pub struct VoxelRenderer {
   model_uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
   render_pipeline: RenderPipeline,
+  vertex_buffer: GrowableBuffer,
+  index_buffer: GrowableBuffer,
 }
 
 impl VoxelRenderer {
@@ -69,12 +72,23 @@ impl VoxelRenderer {
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .build(&gfx.device);
 
+    let vertex_buffer = GrowableBufferBuilder::new()
+      .with_vertex_usage()
+      .with_label("Voxel renderer vertex buffer")
+      .create();
+    let index_buffer = GrowableBufferBuilder::new()
+      .with_index_usage()
+      .with_label("Voxel renderer index buffer")
+      .create();
+
     Self {
       camera_uniform_buffer,
       light_uniform_buffer,
       model_uniform_buffer,
       uniform_bind_group,
       render_pipeline,
+      vertex_buffer,
+      index_buffer,
     }
   }
 
@@ -98,7 +112,7 @@ impl VoxelRenderer {
     clear: bool,
     lod_mesh: &LodRenderData,
   ) {
-    let mut render_pass = self.create_render_pass(gfx, frame, clear);
+    let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render LOD mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -112,37 +126,30 @@ impl VoxelRenderer {
 
   #[profiling::function]
   pub fn render_chunk_vertices(
-    &self,
+    &mut self,
     gfx: &Gfx,
     frame: &mut Frame,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
-    let vertex_buffer = BufferBuilder::new()
-      .with_vertex_usage()
-      .with_label("Transvoxel demo vertex buffer")
-      .create_with_data(&gfx.device, &chunk_vertices.vertices());
-    let index_buffer = BufferBuilder::new()
-      .with_index_usage()
-      .with_label("Transvoxel demo index buffer")
-      .create_with_data(&gfx.device, &chunk_vertices.indices());
-    let mut render_pass = self.create_render_pass(gfx, frame, clear);
+    let vertex_buffer = self.vertex_buffer.write_all_data(&gfx.device, &gfx.queue, &chunk_vertices.vertices());
+    let index_buffer = self.index_buffer.write_all_data(&gfx.device, &gfx.queue, &chunk_vertices.indices());
+    let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..index_buffer.element_count as u32, 0, 0..1);
+    render_pass.draw_indexed(0..index_buffer.count as u32, 0, 0..1);
     render_pass.pop_debug_group();
   }
 
   #[profiling::function]
   fn create_render_pass<'a>(
-    &'a self,
     gfx: &'a Gfx,
     frame: &'a mut Frame,
     clear: bool,
-  ) -> RenderPass {
+  ) -> RenderPass<'a> {
     RenderPassBuilder::new()
       .with_label("Voxel render pass")
       .begin_render_pass_for_gfx_frame_simple(gfx, frame, true, clear)

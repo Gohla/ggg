@@ -10,6 +10,7 @@ pub mod prelude;
 pub mod surface;
 pub mod render_pipeline;
 pub mod buffer;
+pub mod growable_buffer;
 pub mod command;
 pub mod render_pass;
 pub mod texture;

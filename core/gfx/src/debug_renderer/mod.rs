@@ -411,9 +411,9 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     if !self.indices.is_empty() {
       render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-      render_pass.draw_indexed(0..self.index_buffer.element_count as u32, 0, 0..1);
+      render_pass.draw_indexed(0..self.index_buffer.count as u32, 0, 0..1);
     } else {
-      render_pass.draw(0..self.vertex_buffer.element_count as u32, 0..1);
+      render_pass.draw(0..self.vertex_buffer.count as u32, 0..1);
     }
     render_pass.pop_debug_group();
   }

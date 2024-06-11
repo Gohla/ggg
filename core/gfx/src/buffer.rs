@@ -2,14 +2,14 @@ use std::mem::size_of;
 use std::ops::{Deref, RangeBounds};
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSlice, BufferUsages, Device, Queue, ShaderStages};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, Device, Queue, ShaderStages};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
 
 // Buffer builder
 
 pub struct BufferBuilder<'a> {
   descriptor: BufferDescriptor<'a>,
-  element_count: usize,
+  count: usize,
 }
 
 impl<'a> BufferBuilder<'a> {
@@ -22,7 +22,7 @@ impl<'a> BufferBuilder<'a> {
         usage: BufferUsages::COPY_DST,
         mapped_at_creation: false,
       },
-      element_count: 0,
+      count: 0,
     }
   }
 
@@ -74,56 +74,76 @@ impl<'a> BufferBuilder<'a> {
     self
   }
 
-  /// Set the element count of the data in the buffer. Not used by wgpu but passed to [`GfxBuffer`] for use later.
+  /// Set the count of the data elements in the buffer. Not used by wgpu but passed to [`GfxBuffer`] for use later.
   #[inline]
-  pub fn with_element_count(mut self, element_count: usize) -> Self {
-    self.element_count = element_count;
+  pub fn with_count(mut self, count: usize) -> Self {
+    self.count = count;
     self
   }
 }
 
-// Buffer creation
+
+// Buffer
 
 pub struct GfxBuffer {
   pub buffer: Buffer,
   pub size: BufferAddress,
-  pub element_count: usize,
+  pub count: usize,
 }
+
+impl Deref for GfxBuffer {
+  type Target = Buffer;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.buffer }
+}
+
+
+// Buffer creation
 
 impl<'a> BufferBuilder<'a> {
   /// Create the buffer on `device` without setting its content.
   #[inline]
   pub fn create(self, device: &Device) -> GfxBuffer {
     let buffer = device.create_buffer(&self.descriptor);
-    GfxBuffer { buffer, size: self.descriptor.size, element_count: self.element_count }
+    GfxBuffer { buffer, size: self.descriptor.size, count: self.count }
   }
 
-  /// Create the buffer on `device`, with `content_data`. Overrides the previously set [`size`](Self::with_size),
-  /// [`mapped_at_creation`](Self::with_mapped_at_creation), and [`element_count`](Self::with_element_count) values.
+  /// Create the buffer on `device`, with `data`. Overrides the previously set [`size`](Self::with_size),
+  /// [`mapped_at_creation`](Self::with_mapped_at_creation), and [`count`](Self::count) values.
   #[inline]
-  pub fn create_with_data<T: Pod>(self, device: &Device, content_data: &[T]) -> GfxBuffer {
-    let element_count = content_data.len();
-    let contents: &[u8] = bytemuck::cast_slice(content_data);
-    self
-      .with_element_count(element_count)
-      .create_with_bytes(device, contents)
+  pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
+    GfxBuffer::from_data(device, data, self.descriptor.label, self.descriptor.usage)
   }
 
-  /// Create the buffer on `device`, with `content`. Overrides the previously set [`size`](Self::with_size), and
+  /// Create the buffer on `device`, with `bytes`. Overrides the previously set [`size`](Self::with_size), and
   /// [`mapped_at_creation`](Self::with_mapped_at_creation) values.
   #[inline]
-  pub fn create_with_bytes(self, device: &Device, contents: &[u8]) -> GfxBuffer {
-    let buffer = device.create_buffer_init(&BufferInitDescriptor {
-      label: self.descriptor.label,
-      contents,
-      usage: self.descriptor.usage,
-    });
+  pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
+    GfxBuffer::from_bytes(device, bytes, self.descriptor.label, self.descriptor.usage, self.count)
+  }
+}
+
+impl GfxBuffer {
+  /// Create a buffer on `device` from `data`, with `label` and `usage`.
+  #[inline]
+  pub fn from_data<'a, T: Pod>(device: &Device, data: &[T], label: wgpu::Label<'a>, usage: BufferUsages) -> Self {
+    let count = data.len();
+    let bytes: &[u8] = bytemuck::cast_slice(data);
+    Self::from_bytes(device, bytes, label, usage, count)
+  }
+
+  /// Create a buffer on `device` from `bytes`, with `label`, `usage`, and `count`.
+  #[inline]
+  pub fn from_bytes<'a>(device: &Device, bytes: &[u8], label: wgpu::Label<'a>, usage: BufferUsages, count: usize) -> Self {
+    let descriptor = BufferInitDescriptor { label, contents: bytes, usage };
+    let buffer = device.create_buffer_init(&descriptor);
     // Get the size of the buffer since `create_buffer_init` may adjust the size. This is because the buffer is mapped
     // at creation, and thus the size must be a multiple of `COPY_BUFFER_ALIGNMENT`.
     let size = buffer.size();
-    GfxBuffer { buffer, size, element_count: self.element_count }
+    Self { buffer, size, count }
   }
 }
+
 
 // Buffer writing
 
@@ -131,7 +151,11 @@ impl GfxBuffer {
   /// Enqueue writing `bytes` into this buffer, starting at *byte* `offset` in this buffer. The write occurs at the next
   /// `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if `bytes` overruns the size of this buffer starting at `offset`.
+  /// This method fails if:
+  ///
+  /// - `bytes` overruns the end of this buffer starting at `offset`.
+  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
   pub fn enqueue_write_bytes(&self, queue: &Queue, bytes: &[u8], offset: BufferAddress) {
     queue.write_buffer(&self, offset, bytes);
@@ -139,7 +163,10 @@ impl GfxBuffer {
 
   /// Enqueue writing `bytes` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if `data` overruns the size of this buffer.
+  /// This method fails if:
+  ///
+  /// - The size of `bytes` is larger than the size of this buffer.
+  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
   pub fn enqueue_write_all_bytes(&self, queue: &Queue, bytes: &[u8]) {
     self.enqueue_write_bytes(queue, bytes, 0);
@@ -148,7 +175,13 @@ impl GfxBuffer {
   /// Enqueue writing `data` into this buffer, starting at *slice* `offset` in this buffer. The write occurs at the next
   /// `queue` [submit](Queue::submit) call.
   ///
-  /// This method fails if `bytes` overruns the size of this buffer starting at `offset`.
+  /// This method fails if:
+  ///
+  /// - `data` overruns the end of this buffer starting at `offset`.
+  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  ///
+  /// This method fails if `bytes` overruns the end of this buffer starting at `offset`.
   #[inline]
   pub fn enqueue_write_data<T: Pod>(&self, queue: &Queue, data: &[T], offset: usize) {
     let bytes = bytemuck::cast_slice(data);
@@ -159,11 +192,75 @@ impl GfxBuffer {
   /// Enqueue writing `data` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
   ///
   /// This method fails if `data` overruns the size of this buffer.
+  ///
+  /// This method fails if:
+  ///
+  /// - The size of `data` is larger than the size of this buffer.
+  /// - The size of `data` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
   #[inline]
   pub fn enqueue_write_all_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
     self.enqueue_write_data::<T>(queue, data, 0);
   }
+
+
+  /// Enqueue writing `bytes` into this buffer, starting at *byte* `offset` in this buffer. The write occurs at the next
+  /// `queue` [submit](Queue::submit) call.
+  ///
+  /// This method fails if:
+  ///
+  /// - `bytes` has size 0.
+  /// - `bytes` overruns the end of this buffer starting at `offset`.
+  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  #[inline]
+  pub fn enqueue_write_bytes_via_staging_belt(
+    &self,
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    staging_belt: &mut StagingBelt,
+    bytes: &[u8],
+    offset: BufferAddress,
+  ) {
+    let unpadded_size = bytes.len();
+    let padded_size = wgpu::util::align_to(unpadded_size as BufferAddress, wgpu::COPY_BUFFER_ALIGNMENT);
+    let mut buffer_view = staging_belt.write_buffer(encoder, &self.buffer, offset, BufferSize::new(padded_size).unwrap(), device);
+    buffer_view[..unpadded_size].copy_from_slice(bytes);
+  }
+
+  /// Enqueue writing `data` into this buffer, starting at *slice* `offset` in this buffer. The write occurs at the next
+  /// `queue` [submit](Queue::submit) call.
+  ///
+  /// This method fails if:
+  ///
+  /// - `data` has size 0.
+  /// - `data` overruns the end of this buffer starting at `offset`.
+  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  #[inline]
+  pub fn enqueue_write_data_via_staging_belt<T: Pod>(
+    &self,
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    staging_belt: &mut StagingBelt,
+    data: &[T],
+    offset: usize,
+  ) {
+    let bytes = bytemuck::cast_slice(data);
+    let offset = (offset * size_of::<T>()) as BufferAddress;
+    self.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, offset);
+  }
 }
+
+
+// Slicing
+
+impl GfxBuffer {
+  /// Create a slice for this buffer between `bounds`. Offsets in `bounds` are in terms of `&[T]`.
+  pub fn slice_data<T: Sized>(&self, bounds: impl RangeBounds<usize>) -> BufferSlice {
+    let start = bounds.start_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
+    let end = bounds.end_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
+    self.buffer.slice((start, end))
+  }
+}
+
 
 // Uniform buffer utilities
 
@@ -197,23 +294,4 @@ impl<'a> GfxBuffer {
     };
     (layout, bind)
   }
-}
-
-// Slicing
-
-impl GfxBuffer {
-  /// Create a slice for this buffer between `bounds`. The offset in `bounds` is in terms of `&[T]`.
-  pub fn slice_data<T: Sized>(&self, bounds: impl RangeBounds<usize>) -> BufferSlice {
-    let start = bounds.start_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
-    let end = bounds.end_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
-    self.buffer.slice((start, end))
-  }
-}
-
-// Deref implementation
-
-impl Deref for GfxBuffer {
-  type Target = Buffer;
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.buffer }
 }
