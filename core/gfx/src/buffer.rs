@@ -222,7 +222,8 @@ impl GfxBuffer {
   ) {
     let unpadded_size = bytes.len();
     let padded_size = wgpu::util::align_to(unpadded_size as BufferAddress, wgpu::COPY_BUFFER_ALIGNMENT);
-    let mut buffer_view = staging_belt.write_buffer(encoder, &self.buffer, offset, BufferSize::new(padded_size).unwrap(), device);
+    let padded_size = BufferSize::new(padded_size).unwrap();
+    let mut buffer_view = staging_belt.write_buffer(encoder, &self.buffer, offset, padded_size, device);
     buffer_view[..unpadded_size].copy_from_slice(bytes);
   }
 

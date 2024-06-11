@@ -1,7 +1,8 @@
 // Buffer builder
 
 use bytemuck::Pod;
-use wgpu::{BufferAddress, BufferUsages, Device, Queue};
+use wgpu::{BufferAddress, BufferUsages, CommandEncoder, Device};
+use wgpu::util::StagingBelt;
 
 use crate::buffer::GfxBuffer;
 
@@ -78,10 +79,17 @@ impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
 }
 
 impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
-  pub fn write_all_bytes(&mut self, device: &Device, queue: &Queue, bytes: &[u8], count: usize) -> &GfxBuffer {
+  pub fn write_all_bytes(
+    &mut self,
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    staging_belt: &mut StagingBelt,
+    bytes: &[u8],
+    count: usize,
+  ) -> &GfxBuffer {
     match self.buffer.as_ref() {
       Some(buffer) if (bytes.len() as BufferAddress) <= buffer.size => {
-        buffer.enqueue_write_all_bytes(queue, bytes);
+        buffer.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, 0);
       }
       _ => {
         self.create_with_bytes(device, bytes, count);
@@ -90,10 +98,16 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     self.buffer.as_ref().unwrap()
   }
 
-  pub fn write_all_data<T: Pod>(&mut self, device: &Device, queue: &Queue, data: &[T]) -> &GfxBuffer {
+  pub fn write_all_data<T: Pod>(
+    &mut self,
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    staging_belt: &mut StagingBelt,
+    data: &[T],
+  ) -> &GfxBuffer {
     let count = data.len();
     let bytes: &[u8] = bytemuck::cast_slice(data);
-    self.write_all_bytes(device, queue, bytes, count)
+    self.write_all_bytes(device, encoder, staging_belt, bytes, count)
   }
 
 

@@ -1,4 +1,5 @@
 use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
+use wgpu::util::StagingBelt;
 
 use gfx::{Frame, Gfx};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
@@ -129,11 +130,18 @@ impl VoxelRenderer {
     &mut self,
     gfx: &Gfx,
     frame: &mut Frame,
+    staging_belt: &mut StagingBelt,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
-    let vertex_buffer = self.vertex_buffer.write_all_data(&gfx.device, &gfx.queue, &chunk_vertices.vertices());
-    let index_buffer = self.index_buffer.write_all_data(&gfx.device, &gfx.queue, &chunk_vertices.indices());
+    if chunk_vertices.is_empty() {
+      // Writing empty data to a buffer is not allowed, so stop early. We still need to clear if requested, so we do
+      // create and drop the render pass.
+      let _ = Self::create_render_pass(gfx, frame, clear);
+      return;
+    }
+    let vertex_buffer = self.vertex_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.vertices());
+    let index_buffer = self.index_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.indices());
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
