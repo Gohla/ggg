@@ -87,9 +87,10 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     bytes: &[u8],
     count: usize,
   ) -> &GfxBuffer {
-    match self.buffer.as_ref() {
+    match self.buffer.as_mut() {
       Some(buffer) if (bytes.len() as BufferAddress) <= buffer.size => {
         buffer.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, 0);
+        buffer.count = count;
       }
       _ => {
         self.create_with_bytes(device, bytes, count);
