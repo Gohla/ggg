@@ -84,8 +84,7 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
         buffer.enqueue_write_all_bytes(queue, bytes);
       }
       _ => {
-        let buffer = GfxBuffer::from_bytes(device, bytes, self.label.as_ref().map(|l| l.as_ref()), self.usage, count);
-        self.buffer = Some(buffer);
+        self.create_with_bytes(device, bytes, count);
       }
     }
     self.buffer.as_ref().unwrap()
