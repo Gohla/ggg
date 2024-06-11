@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BufferAddress, Device};
+use wgpu::Device;
 
 use gfx::{Frame, Gfx};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -71,7 +71,7 @@ pub struct LodRenderData {
 #[derive(Default, Clone, Debug)]
 pub struct LodDraw {
   pub indices: Range<u32>,
-  pub base_vertex: u64,
+  pub base_vertex: usize,
 }
 
 // Implementation
@@ -188,7 +188,7 @@ pub(crate) fn copy_chunk_vertices(
   draws: &mut Vec<LodDraw>,
 ) {
   if !chunk_vertices.is_empty() {
-    let vertex_offset = vertices.len() as BufferAddress;
+    let vertex_offset = vertices.len();
     let index_offset = indices.len() as u32;
     vertices.extend(chunk_vertices.vertices());
     indices.extend(chunk_vertices.indices());

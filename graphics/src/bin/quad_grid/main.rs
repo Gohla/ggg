@@ -123,7 +123,7 @@ impl app::Application for QuadGrid {
         .with_label("Quad grid instance storage buffer")
         .create(&gfx.device);
       {
-        let mut view = buffer.slice(..).get_mapped_range_mut();
+        let mut view = buffer.slice_data(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
         (0..MAX_INSTANCES)
           .map(|_| Instance::from_random_range(&mut rng, texture_1.into_idx() as u32..texture_2.into_idx() as u32))
@@ -207,7 +207,7 @@ impl app::Application for QuadGrid {
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.bind_group, &[]);
     render_pass.set_bind_group(1, &self.array_texture_def.bind_group, &[]);
-    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
+    render_pass.set_index_buffer(self.index_buffer.slice_data(..), IndexFormat::Uint32);
     render_pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())

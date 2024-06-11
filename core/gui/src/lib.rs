@@ -396,7 +396,7 @@ impl Gui {
       clip_rect: Rect,
       texture_id: TextureId,
       indices: Range<u32>,
-      base_vertex: u64,
+      base_vertex: usize,
     }
     let mut draws = Vec::with_capacity(clipped_primitives.len());
     for ClippedPrimitive { clip_rect, primitive } in clipped_primitives {
@@ -406,7 +406,7 @@ impl Gui {
         draws.push(Draw { clip_rect, texture_id, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
         index_offset += indices.len() as u32;
         index_buffer_offset += indices.len();
-        vertex_offset += vertices.len() as u64;
+        vertex_offset += vertices.len();
         vertex_buffer_offset += vertices.len();
       }
     }
@@ -465,7 +465,7 @@ impl Gui {
           render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
         }
         // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
-        render_pass.set_vertex_buffer(0, vertex_buffer.slice_to_end::<Vertex>(base_vertex));
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(base_vertex..));
         render_pass.draw_indexed(indices, 0, 0..1);
       }
       render_pass.pop_debug_group();

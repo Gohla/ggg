@@ -1,5 +1,5 @@
 use std::mem::size_of;
-use std::ops::Deref;
+use std::ops::{Deref, RangeBounds};
 
 use bytemuck::Pod;
 use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSlice, BufferUsages, Device, Queue, ShaderStages};
@@ -109,7 +109,7 @@ impl<'a> BufferBuilder<'a> {
       .create_with_bytes(device, contents)
   }
 
-  /// Create the buffer on `device`, with `content`.. Overrides the previously set [`size`](Self::with_size), and
+  /// Create the buffer on `device`, with `content`. Overrides the previously set [`size`](Self::with_size), and
   /// [`mapped_at_creation`](Self::with_mapped_at_creation) values.
   #[inline]
   pub fn create_with_bytes(self, device: &Device, contents: &[u8]) -> GfxBuffer {
@@ -128,7 +128,7 @@ impl<'a> BufferBuilder<'a> {
 // Buffer writing
 
 impl GfxBuffer {
-  /// Enqueue writing `bytes` into this buffer, starting at byte `offset` in this buffer. The write occurs at the next
+  /// Enqueue writing `bytes` into this buffer, starting at *byte* `offset` in this buffer. The write occurs at the next
   /// `queue` [submit](Queue::submit) call.
   ///
   /// This method fails if `bytes` overruns the size of this buffer starting at `offset`.
@@ -145,7 +145,7 @@ impl GfxBuffer {
     self.enqueue_write_bytes(queue, bytes, 0);
   }
 
-  /// Enqueue writing `data` into this buffer, starting at slice `offset` in this buffer. The write occurs at the next
+  /// Enqueue writing `data` into this buffer, starting at *slice* `offset` in this buffer. The write occurs at the next
   /// `queue` [submit](Queue::submit) call.
   ///
   /// This method fails if `bytes` overruns the size of this buffer starting at `offset`.
@@ -202,9 +202,11 @@ impl<'a> GfxBuffer {
 // Slicing
 
 impl GfxBuffer {
-  pub fn slice_to_end<T: Sized>(&self, offset: BufferAddress) -> BufferSlice {
-    let offset = offset * std::mem::size_of::<T>() as u64;
-    self.buffer.slice(offset..)
+  /// Create a slice for this buffer between `bounds`. The offset in `bounds` is in terms of `&[T]`.
+  pub fn slice_data<T: Sized>(&self, bounds: impl RangeBounds<usize>) -> BufferSlice {
+    let start = bounds.start_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
+    let end = bounds.end_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);
+    self.buffer.slice((start, end))
   }
 }
 
@@ -212,7 +214,6 @@ impl GfxBuffer {
 
 impl Deref for GfxBuffer {
   type Target = Buffer;
-
   #[inline]
   fn deref(&self) -> &Self::Target { &self.buffer }
 }

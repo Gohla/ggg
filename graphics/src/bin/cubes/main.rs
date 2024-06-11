@@ -114,7 +114,7 @@ impl app::Application for Cubes {
         .with_label("Cubes instance storage buffer")
         .create(&gfx.device);
       {
-        let mut view = buffer.slice(..).get_mapped_range_mut();
+        let mut view = buffer.slice_data(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
         (0..num_cubes_to_generate)
           .map(|_| Instance::from_random_range(&mut rng, -cube_position_range..cube_position_range))
@@ -226,7 +226,7 @@ impl app::Application for Cubes {
     render_pass.push_debug_group("Draw cubes");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);
-    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
+    render_pass.set_index_buffer(self.index_buffer.slice_data(..), IndexFormat::Uint32);
     let num_indices = self.num_cubes * NUM_CUBE_INDICES as u32;
     render_pass.draw_indexed(0..num_indices, 0, 0..1);
     render_pass.pop_debug_group();
