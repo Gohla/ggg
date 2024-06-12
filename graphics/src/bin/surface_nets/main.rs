@@ -51,7 +51,7 @@ impl app::Application for SurfaceNetsDemo {
   fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
     config.update_default_camera_settings();
 
-    let staging_belt = StagingBelt::new(4096);
+    let staging_belt = StagingBelt::new(1024); // Small staging belt: small buffers in this demo.
 
     let camera = Camera::new(screen_size.physical, &mut config.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);

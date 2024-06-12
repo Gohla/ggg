@@ -2,8 +2,78 @@ use std::mem::size_of;
 use std::ops::{Deref, RangeBounds};
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Queue, ShaderStages};
-use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Label, Queue, ShaderStages};
+use wgpu::util::StagingBelt;
+
+pub struct GfxBuffer {
+  buffer: Buffer,
+}
+
+impl GfxBuffer {
+  /// Returns the backing [wgpu `Buffer`](Buffer).
+  #[inline]
+  pub fn as_wgpu_buffer(&self) -> &Buffer { &self.buffer }
+}
+
+impl Deref for GfxBuffer {
+  type Target = Buffer;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.buffer }
+}
+
+
+// Simple buffer creation
+
+impl GfxBuffer {
+  /// Create a buffer on `device` with `bytes` as content, with `usage`, a `min_size`, and optional debugging `label`.
+  ///
+  /// The size of the buffer is `bytes.len().max(min_size)`. If that size is not a multiple of [COPY_BUFFER_ALIGNMENT],
+  /// it is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
+  #[inline]
+  pub fn from_bytes_min_size<'a>(device: &Device, bytes: &[u8], usage: BufferUsages, min_size: BufferAddress, label: Label<'a>) -> Self {
+    let unpadded_size = (bytes.len() as BufferAddress).max(min_size);
+    let buffer = if unpadded_size == 0 {
+      device.create_buffer(&BufferDescriptor { label, size: 0, usage, mapped_at_creation: false })
+    } else {
+      let size = wgpu::util::align_to(unpadded_size, COPY_BUFFER_ALIGNMENT);
+      let buffer = device.create_buffer(&BufferDescriptor { label, size, usage, mapped_at_creation: true });
+      buffer.slice(..).get_mapped_range_mut()[..unpadded_size as usize].copy_from_slice(bytes);
+      buffer.unmap();
+      buffer
+    };
+    Self { buffer }
+  }
+
+  /// Create a buffer on `device` with `bytes` as content, with `usage` and optional debugging `label`.
+  ///
+  /// If the size of `bytes` is not a multiple of [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of it. If
+  /// the size is `0`, an empty buffer is created.
+  #[inline]
+  pub fn from_bytes<'a>(device: &Device, bytes: &[u8], usage: BufferUsages, label: Label<'a>) -> Self {
+    Self::from_bytes_min_size(device, bytes, usage, 0, label)
+  }
+
+  /// Create a buffer on `device` with `data` as content, with `usage`, a `min_size` in bytes, and optional
+  /// debugging `label`.
+  ///
+  /// The size of the buffer is `(size_of_val(data)).max(min_size)`. If that size is not a multiple of
+  /// [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
+  #[inline]
+  pub fn from_data_min_size<'a, T: Pod>(device: &Device, data: &[T], usage: BufferUsages, min_size: BufferAddress, label: Label<'a>) -> Self {
+    let bytes = bytemuck::cast_slice(data);
+    Self::from_bytes_min_size(device, bytes, usage, min_size, label)
+  }
+
+  /// Create a buffer on `device` with `data` as content, with `usage` and optional debugging `label`.
+  ///
+  /// If the size in bytes of `data` is not a multiple of [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of
+  /// it. If the size is `0`, an empty buffer is created.
+  #[inline]
+  pub fn from_data<'a, T: Pod>(device: &Device, data: &[T], usage: BufferUsages, label: Label<'a>) -> Self {
+    Self::from_data_min_size(device, data, usage, 0, label)
+  }
+}
+
 
 // Buffer builder
 
@@ -65,31 +135,12 @@ impl<'a> BufferBuilder<'a> {
   /// Sets whether the buffer will be mapped immediately after creation. The buffer does not require
   /// [`BufferUsages::MAP_READ`] nor [`BufferUsages::MAP_WRITE`] use, all buffers are allowed to be mapped at creation.
   ///
-  /// If set to `true`, [`size`](Self::with_size) must be a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// If set to `true`, [`size`](Self::with_size) must be a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn with_mapped_at_creation(mut self, mapped_at_creation: bool) -> Self {
     self.descriptor.mapped_at_creation = mapped_at_creation;
     self
   }
-}
-
-
-// Buffer
-
-pub struct GfxBuffer {
-  buffer: Buffer,
-}
-
-impl GfxBuffer {
-  /// Returns the backing [wgpu `Buffer`](Buffer).
-  #[inline]
-  pub fn as_wgpu_buffer(&self) -> &Buffer { &self.buffer }
-}
-
-impl Deref for GfxBuffer {
-  type Target = Buffer;
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.buffer }
 }
 
 
@@ -103,36 +154,27 @@ impl<'a> BufferBuilder<'a> {
     GfxBuffer { buffer }
   }
 
-  /// Create the buffer on `device` with `bytes` as content. Overrides the previously set [`size`](Self::with_size),
-  /// and [`mapped_at_creation`](Self::with_mapped_at_creation) values.
+  /// Create the buffer on `device` with `bytes` as content.
+  ///
+  /// The size of the buffer is `bytes.len().max(size)`. If that size is not a multiple of [COPY_BUFFER_ALIGNMENT], it
+  /// is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
+  ///
+  /// Ignores the previously set [`mapped_at_creation`](Self::with_mapped_at_creation) value.
   #[inline]
   pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
-    let buffer = GfxBuffer::from_bytes(device, bytes, self.descriptor.label, self.descriptor.usage);
+    let buffer = GfxBuffer::from_bytes_min_size(device, bytes, self.descriptor.usage, self.descriptor.size, self.descriptor.label);
     buffer
   }
 
-  /// Create the buffer on `device` with `data` as content. Overrides the previously set [`size`](Self::with_size),
-  /// and [`mapped_at_creation`](Self::with_mapped_at_creation) values.
+  /// Create the buffer on `device` with `data` as content.
+  ///
+  /// The size of the buffer is `(data.len() * size_of::<T>()).max(size)`. If that size is not a multiple of
+  /// [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
+  ///
+  /// Ignores the previously set [`mapped_at_creation`](Self::with_mapped_at_creation) value.
   #[inline]
   pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
-    GfxBuffer::from_data(device, data, self.descriptor.label, self.descriptor.usage)
-  }
-}
-
-impl GfxBuffer {
-  /// Create a buffer on `device` with `bytes` as content, with `label`, `usage`.
-  #[inline]
-  pub fn from_bytes<'a>(device: &Device, bytes: &[u8], label: wgpu::Label<'a>, usage: BufferUsages) -> Self {
-    let buffer = device.create_buffer_init(&BufferInitDescriptor { label, contents: bytes, usage });
-    Self { buffer }
-  }
-
-  /// Create a buffer on `device` with `data` as content, with `label` and `usage`.
-  #[inline]
-  pub fn from_data<'a, T: Pod>(device: &Device, data: &[T], label: wgpu::Label<'a>, usage: BufferUsages) -> Self {
-    let contents = bytemuck::cast_slice(data);
-    let buffer = device.create_buffer_init(&BufferInitDescriptor { label, contents, usage });
-    Self { buffer }
+    GfxBuffer::from_data_min_size(device, data, self.descriptor.usage, self.descriptor.size, self.descriptor.label)
   }
 }
 
@@ -147,8 +189,8 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - `bytes` overruns the end of this buffer starting at `offset`.
-  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
-  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
+  /// - The size of `bytes` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn enqueue_write_bytes(&self, queue: &Queue, bytes: &[u8], offset: BufferAddress) {
     queue.write_buffer(&self.buffer, offset, bytes);
@@ -159,7 +201,7 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - The size of `bytes` is larger than the size of this buffer.
-  /// - The size of `bytes` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - The size of `bytes` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn enqueue_write_all_bytes(&self, queue: &Queue, bytes: &[u8]) {
     self.enqueue_write_bytes(queue, bytes, 0);
@@ -183,7 +225,7 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - `bytes` overruns the end of this buffer starting at `offset`.
-  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   pub fn enqueue_write_bytes_via_staging_belt(
     &self,
     device: &Device,
@@ -208,8 +250,8 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - `data` overruns the end of this buffer starting at `offset`.
-  /// - `offset` converted to a byte offset is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
-  /// - The size of `data` in bytes is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - `offset` converted to a byte offset is not a multiple of [COPY_BUFFER_ALIGNMENT].
+  /// - The size of `data` in bytes is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn enqueue_write_data<T: Pod>(&self, queue: &Queue, data: &[T], offset: usize) {
     let bytes = bytemuck::cast_slice(data);
@@ -222,7 +264,7 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - The size of `data` is larger than the size of this buffer.
-  /// - The size of `data` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - The size of `data` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn enqueue_write_all_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
     self.enqueue_write_data::<T>(queue, data, 0);
@@ -246,7 +288,7 @@ impl GfxBuffer {
   /// This method fails (and may cause panics) if:
   ///
   /// - `data` overruns the end of this buffer starting at `offset`.
-  /// - `offset` is not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+  /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
   pub fn enqueue_write_data_via_staging_belt<T: Pod>(
     &self,
@@ -266,8 +308,9 @@ impl GfxBuffer {
 // Slicing
 
 impl GfxBuffer {
-  /// Slices this buffer between `bounds`. Offsets in `bounds` are in terms of `&[T]`. Use [slice](Buffer::slice) for
-  /// byte offsets and unbounded ranges.
+  /// Slices this buffer between `bounds`. Offsets in `bounds` are interpreted in terms of `&[T]`.
+  ///
+  /// Use [slice](Buffer::slice) for byte offsets and unbounded ranges.
   #[inline]
   pub fn slice_data<T: Sized>(&self, bounds: impl RangeBounds<usize>) -> BufferSlice {
     let start = bounds.start_bound().map(|o| (*o * size_of::<T>()) as BufferAddress);

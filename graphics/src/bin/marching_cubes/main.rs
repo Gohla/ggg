@@ -53,7 +53,7 @@ impl app::Application for MarchingCubesDemo {
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
     let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
-    let staging_belt = StagingBelt::new(4096);
+    let staging_belt = StagingBelt::new(256); // Tiny staging belt: tiny buffers in this demo.
     let camera_uniform = CameraUniform::from_camera(&camera);
     let mut light_settings = LightSettings::default();
     light_settings.uniform.ambient = 0.2;
