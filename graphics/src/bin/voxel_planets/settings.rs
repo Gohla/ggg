@@ -1,3 +1,5 @@
+use std::mem::size_of_val;
+
 use egui::{Align2, ComboBox, Ui};
 use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
@@ -369,16 +371,16 @@ impl Settings {
   ) {
     ui.collapsing_with_grid("LOD render data", "Grid", |ui| {
       ui.label("# vertices");
-      ui.monospace(format!("{}", lod_render_data.vertex_count));
+      ui.monospace(format!("{}", lod_render_data.vertices.len()));
       ui.end_row();
       ui.label("Vertex buffer size");
-      ui.monospace(format!("{}", lod_render_data.vertex_buffer.size()));
+      ui.monospace(format!("{}", size_of_val(&lod_render_data.vertices)));
       ui.end_row();
       ui.label("# indices");
-      ui.monospace(format!("{}", lod_render_data.index_count));
+      ui.monospace(format!("{}", lod_render_data.indices.len()));
       ui.end_row();
       ui.label("Index buffer size");
-      ui.monospace(format!("{}", lod_render_data.index_buffer.size()));
+      ui.monospace(format!("{}", size_of_val(&lod_render_data.indices)));
       ui.end_row();
       ui.label("# draw commands");
       ui.monospace(format!("{}", lod_render_data.draws.len()));

@@ -1,6 +1,7 @@
 use egui::{Align2, Ui};
 use ultraviolet::{Isometry3, Rotor3, Vec3};
 use wgpu::CommandBuffer;
+use wgpu::util::StagingBelt;
 
 use app::{AppRunner, GuiFrame};
 use common::input::RawInput;
@@ -63,10 +64,10 @@ impl app::Application for VoxelPlanets {
       config.light.uniform,
       ModelUniform::identity(),
       None,
+      StagingBelt::new(4096 * 1024) // 4 MiB staging belt
     );
 
-    let mut lod_render_data_manager = config.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
-    let lod_render_data = lod_render_data_manager.update(selected_camera.get_position(), &config.lod_render_data_settings, &gfx.device);
+    let lod_render_data_manager = config.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
 
     Self {
       settings: config,
@@ -79,7 +80,7 @@ impl app::Application for VoxelPlanets {
 
       lod_octmap_transform,
       lod_render_data_manager,
-      lod_render_data,
+      lod_render_data: LodRenderData::default(),
     }
   }
 
@@ -140,7 +141,7 @@ impl app::Application for VoxelPlanets {
       self.lod_render_data_manager = self.settings.create_lod_render_data_manager(gfx, self.lod_octmap_transform, self.cameras[0].get_view_projection_matrix());
     }
     if update_lod_render_data {
-      self.lod_render_data = self.lod_render_data_manager.update(self.cameras[0].get_position(), &self.settings.lod_render_data_settings, &gfx.device);
+      self.lod_render_data_manager.update(self.cameras[0].get_position(), &self.settings.lod_render_data_settings, &mut self.lod_render_data);
     }
 
     // Render stars

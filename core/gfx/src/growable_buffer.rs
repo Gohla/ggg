@@ -181,7 +181,7 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
         // Do nothing, buffer is large enough.
       }
       _ => {
-        self.recreate_with_size(device, min_size);
+        self.replace_with_size(device, min_size);
       }
     }
     self.buffer.as_ref().unwrap()
@@ -210,9 +210,9 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
 
   /// Replace the backing buffer with a new buffer on `device` with a `size`. Returns a reference to the backing buffer.
   #[inline]
-  pub fn recreate_with_size(&mut self, device: &Device, size: BufferAddress) -> &GfxBuffer {
-    let size = self.grow_size(size).unwrap_or(size);
-    tracing::debug!(label = %self.builder.display_label(), size,"Recreating buffer");
+  pub fn replace_with_size(&mut self, device: &Device, desired_size: BufferAddress) -> &GfxBuffer {
+    let size = self.grow_size(desired_size).unwrap_or(desired_size);
+    tracing::debug!(label = %self.builder.display_label(), desired_size, size, "Recreating buffer");
     let buffer = self.builder.buffer_from_size(device, size);
     self.buffer.insert(buffer)
   }

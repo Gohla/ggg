@@ -18,6 +18,7 @@ pub struct VoxelRenderer {
   model_uniform_buffer: GfxBuffer,
   uniform_bind_group: BindGroup,
   render_pipeline: RenderPipeline,
+  staging_belt: StagingBelt,
   vertex_buffer: GrowableBuffer,
   index_buffer: GrowableBuffer,
 }
@@ -29,6 +30,7 @@ impl VoxelRenderer {
     light_uniform: LightUniform,
     model_uniform: ModelUniform,
     cull_mode: Option<Face>,
+    staging_belt: StagingBelt,
   ) -> Self {
     let camera_uniform_buffer = BufferBuilder::new()
       .with_uniform_usage()
@@ -88,6 +90,7 @@ impl VoxelRenderer {
       model_uniform_buffer,
       uniform_bind_group,
       render_pipeline,
+      staging_belt,
       vertex_buffer,
       index_buffer,
     }
@@ -107,22 +110,26 @@ impl VoxelRenderer {
 
   #[profiling::function]
   pub fn render_lod_mesh(
-    &self,
+    &mut self,
     gfx: &Gfx,
     frame: &mut Frame,
     clear: bool,
     lod_mesh: &LodRenderData,
   ) {
+    self.staging_belt.recall();
+    let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.vertices);
+    let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.indices);
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render LOD mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-    render_pass.set_index_buffer(lod_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+    render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     for draw in &lod_mesh.draws {
-      render_pass.set_vertex_buffer(0, lod_mesh.vertex_buffer.slice_data::<Vertex>(draw.base_vertex..));
+      render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(draw.base_vertex..));
       render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
     }
     render_pass.pop_debug_group();
+    self.staging_belt.finish();
   }
 
   #[profiling::function]
@@ -130,12 +137,12 @@ impl VoxelRenderer {
     &mut self,
     gfx: &Gfx,
     frame: &mut Frame,
-    staging_belt: &mut StagingBelt,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
-    let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.vertices());
-    let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.indices());
+    self.staging_belt.recall();
+    let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.vertices());
+    let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.indices());
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
@@ -144,6 +151,7 @@ impl VoxelRenderer {
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
     render_pass.draw_indexed(0..chunk_vertices.indices().len() as u32, 0, 0..1);
     render_pass.pop_debug_group();
+    self.staging_belt.finish();
   }
 
   #[profiling::function]

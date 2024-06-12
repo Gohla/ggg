@@ -1,10 +1,8 @@
 use std::ops::Range;
 
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::Device;
 
 use gfx::{Frame, Gfx};
-use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::debug_renderer::DebugRenderer;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
@@ -19,8 +17,8 @@ pub trait LodRenderDataManager<C: ChunkSize> {
     &mut self,
     position: Vec3,
     settings: &LodRenderDataSettings,
-    device: &Device,
-  ) -> LodRenderData;
+    data: &mut LodRenderData,
+  );
 
   fn debug_render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, view_projection_matrix: Mat4, data: &LodRenderData);
 
@@ -61,13 +59,20 @@ impl Default for LodRenderDataSettings {
   }
 }
 
+#[derive(Default, Clone)]
 pub struct LodRenderData {
-  pub vertex_count: u32,
-  pub vertex_buffer: GfxBuffer,
-  pub index_count: u32,
-  pub index_buffer: GfxBuffer,
+  pub vertices: Vec<Vertex>,
+  pub indices: Vec<u16>,
   pub draws: Vec<LodDraw>,
   pub model: Mat4,
+}
+impl LodRenderData {
+  #[inline]
+  pub fn clear(&mut self) {
+    self.vertices.clear();
+    self.indices.clear();
+    self.draws.clear();
+  }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -81,18 +86,12 @@ pub struct LodDraw {
 pub struct SimpleLodRenderDataManager<MM> {
   chunk_mesh_manager: MM,
   debug_renderer: DebugRenderer,
-  vertices: Vec<Vertex>,
-  indices: Vec<u16>,
-  draws: Vec<LodDraw>,
 }
 
 impl<MM> SimpleLodRenderDataManager<MM> {
   pub fn new(gfx: &Gfx, chunk_mesh_manager: MM, view_projection_matrix: Mat4) -> Self {
     let debug_renderer = DebugRenderer::new(gfx, view_projection_matrix);
-    let vertices = Vec::new();
-    let indices = Vec::new();
-    let draws = Vec::new();
-    Self { chunk_mesh_manager, debug_renderer, vertices, indices, draws }
+    Self { chunk_mesh_manager, debug_renderer }
   }
 }
 
@@ -104,15 +103,14 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     &mut self,
     position: Vec3,
     settings: &LodRenderDataSettings,
-    device: &Device,
-  ) -> LodRenderData {
+    data: &mut LodRenderData,
+  ) {
     self.debug_renderer.clear();
-    self.vertices.clear();
-    self.indices.clear();
-    self.draws.clear();
+    data.clear();
 
     let extractor = self.chunk_mesh_manager.get_extractor().clone();
     let (root_half_size, transform, lod_chunk_meshes) = self.chunk_mesh_manager.update(position);
+    data.model = transform.into_homogeneous_matrix();
 
     // Transform the position into one local to AABBs, used when `debug_render_octree_aabb_closest_points` is true.
     let transform_inverse = transform.inversed();
@@ -121,7 +119,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     for (aabb, lod_chunk_mesh) in lod_chunk_meshes {
       let is_empty = lod_chunk_mesh.is_empty();
       if !is_empty {
-        extractor.update_render_data(&lod_chunk_mesh, &mut self.vertices, &mut self.indices, &mut self.draws);
+        extractor.update_render_data(&lod_chunk_mesh, &mut data.vertices, &mut data.indices, &mut data.draws);
       }
       if settings.debug_render_octree_nodes {
         let min = aabb.minimum_point(root_half_size).into();
@@ -144,33 +142,17 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     }
 
     if settings.debug_render_vertices {
-      self.debug_renderer.draw_points(self.vertices.iter().map(|v| v.position), settings.debug_render_vertex_color, settings.debug_render_vertex_point_size)
+      self.debug_renderer.draw_points(data.vertices.iter().map(|v| v.position), settings.debug_render_vertex_color, settings.debug_render_vertex_point_size)
     }
     if settings.debug_render_edges {
-      for draw in &self.draws {
+      for draw in &data.draws {
         self.debug_renderer.draw_triangles_wireframe_indexed(
-          self.vertices.iter().map(|v| v.position),
-          self.indices[draw.indices.start as usize..draw.indices.end as usize].iter().map(|i| draw.base_vertex as u32 + *i as u32),
+          data.vertices.iter().map(|v| v.position),
+          data.indices[draw.indices.start as usize..draw.indices.end as usize].iter().map(|i| draw.base_vertex as u32 + *i as u32),
           settings.debug_render_edge_color,
         );
       }
     }
-
-    // OPTO: don't create new buffers each time, reuse them instead!
-    let vertex_count = self.vertices.len() as u32;
-    let vertex_buffer = BufferBuilder::new()
-      .with_vertex_usage()
-      .with_label("Voxel meshing vertex buffer")
-      .create_with_data(device, &self.vertices);
-    let index_count = self.indices.len() as u32;
-    let index_buffer = BufferBuilder::new()
-      .with_index_usage()
-      .with_label("Voxel meshing index buffer")
-      .create_with_data(device, &self.indices);
-    let draws = std::mem::take(&mut self.draws);
-    let model = transform.into_homogeneous_matrix();
-
-    LodRenderData { vertex_count, vertex_buffer, index_count, index_buffer, draws, model }
   }
 
   #[inline]

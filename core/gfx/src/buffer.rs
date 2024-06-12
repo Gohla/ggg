@@ -5,6 +5,7 @@ use bytemuck::Pod;
 use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Label, Queue, ShaderStages};
 use wgpu::util::StagingBelt;
 
+#[derive(Debug)]
 pub struct GfxBuffer {
   buffer: Buffer,
 }
