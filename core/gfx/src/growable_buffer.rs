@@ -4,6 +4,8 @@
 //! that data fits in the backing buffer, it is written to the backing buffer. If not, the backing buffer is replaced
 //! with a new buffer that fits the data, and the data is written into that new buffer.
 //!
+//! Backing buffers are always created with [BufferUsages::COPY_DST], for writing into backing buffers.
+//!
 //! A growable buffer always creates buffers that fit at least your data, but buffers can be larger:
 //!
 //! - If a [with_grow_multiplier](GrowableBufferBuilder::with_grow_multiplier) is set, the minimum size of a new backing
@@ -46,8 +48,7 @@ impl<L> GrowableBufferBuilder<L> {
     }
   }
 
-  /// Sets the `usage` for backing buffers, specifying how buffers may be used. Must include [`BufferUsages::COPY_DST`]
-  /// for writing into backing buffers.
+  /// Sets the `usage` for backing buffers, specifying how buffers may be used.
   ///
   /// If a backing buffer is used in any way that is not specified here, the operation will panic.
   #[inline]
@@ -64,8 +65,7 @@ impl<L> GrowableBufferBuilder<L> {
   #[inline]
   pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
 
-  /// Sets the `grow_multiplier`, which multiplies the original size when the backing buffer needs to be grown, capped
-  /// by the desired size.
+  /// Sets the `grow_multiplier`, which multiplies the minimum size of the buffer when it needs to grow.
   #[inline]
   pub fn with_grow_multiplier(mut self, grow_multiplier: f64) -> Self {
     self.grow_multiplier = Some(grow_multiplier);
@@ -82,20 +82,23 @@ pub struct GrowableBuffer<L = &'static str> {
 impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   /// Create a growable buffer without creating a backing buffer. The backing buffer will be created on the next write.
   #[inline]
-  pub fn create(self) -> GrowableBuffer<L> {
+  pub fn create(mut self) -> GrowableBuffer<L> {
+    self.ensure_copy_dst_usage();
     GrowableBuffer { builder: self, buffer: None }
   }
 
   /// Create a growable buffer with a backing buffer created on `device` with `bytes` as content.
   #[inline]
-  pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GrowableBuffer<L> {
+  pub fn create_with_bytes(mut self, device: &Device, bytes: &[u8]) -> GrowableBuffer<L> {
+    self.ensure_copy_dst_usage();
     let buffer = self.buffer_from_bytes_min_size(device, bytes, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
   }
 
   /// Create a growable buffer with a backing buffer created on `device` with `data` as content.
   #[inline]
-  pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GrowableBuffer<L> {
+  pub fn create_with_data<T: Pod>(mut self, device: &Device, data: &[T]) -> GrowableBuffer<L> {
+    self.ensure_copy_dst_usage();
     let buffer = self.buffer_from_data_min_size(device, data, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
   }
@@ -234,6 +237,12 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     }
   }
 }
+impl<L> GrowableBufferBuilder<L> {
+  #[inline]
+  fn ensure_copy_dst_usage(&mut self) {
+    self.usage |= BufferUsages::COPY_DST;
+  }
+}
 impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   #[inline]
   fn buffer_from_bytes_min_size(&self, device: &Device, bytes: &[u8], minimum_size: BufferAddress) -> GfxBuffer {
@@ -247,6 +256,7 @@ impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   fn buffer_from_size(&self, device: &Device, size: BufferAddress) -> GfxBuffer {
     GfxBuffer::from_size(device, self.usage, size, false, self.buffer_label())
   }
+
   #[inline]
   fn buffer_label(&self) -> wgpu::Label {
     self.label.as_ref().map(|l| l.as_ref())
