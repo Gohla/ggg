@@ -1,5 +1,15 @@
-// Buffer builder
-
+//! Growable buffer: a buffer that grows when needed.
+//!
+//! A [growable buffer](GrowableBuffer) is backed by a [buffer](GfxBuffer). When writing data into a growable buffer, if
+//! that data fits in the backing buffer, it is written to the backing buffer. If not, the backing buffer is replaced
+//! with a new buffer that fits the data, and the data is written into that new buffer.
+//!
+//! A growable buffer always creates buffers that fit at least your data, but buffers can be larger:
+//!
+//! - If a [with_grow_multiplier](GrowableBufferBuilder::with_grow_multiplier) is set, the minimum size of a new backing
+//!   buffer is multiplied by that number. The multiplier is only applied when the buffer needs to grow.
+//! - If the size of a backing buffer would not a multiple of [wgpu::COPY_BUFFER_ALIGNMENT], it is increased to be a
+//!   multiple of it.
 use std::mem::size_of_val;
 
 use bytemuck::Pod;
@@ -79,20 +89,20 @@ impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   /// Create a growable buffer with a backing buffer created on `device` with `bytes` as content.
   #[inline]
   pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GrowableBuffer<L> {
-    let buffer = self.create_buffer_with_bytes(device, bytes, 0);
+    let buffer = self.buffer_from_bytes_min_size(device, bytes, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
   }
 
   /// Create a growable buffer with a backing buffer created on `device` with `data` as content.
   #[inline]
   pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GrowableBuffer<L> {
-    let buffer = self.create_buffer_with_data(device, data, 0);
+    let buffer = self.buffer_from_data_min_size(device, data, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
   }
 }
 
 impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
-  /// Write `bytes` into the backing buffer if it is large enough, or recreate the backing buffer if not. Returns a
+  /// Write `bytes` into the backing buffer if it is large enough, or grow the backing buffer if not. Returns a
   /// reference to the backing buffer.
   ///
   /// # Write to backing buffer
@@ -105,9 +115,9 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
   /// It is up to the caller of this method to correctly [finish](StagingBelt::finish) and
   /// [recall](StagingBelt::recall) the `staging_belt`.
   ///
-  /// # (Re)create backing buffer
+  /// # Grow backing buffer
   ///
-  /// Otherwise, create a new backing buffer on `device` with `bytes` as content.
+  /// Otherwise, grow the backing buffer by create a new buffer on `device` with `bytes` as content.
   pub fn write_bytes(
     &mut self,
     device: &Device,
@@ -116,17 +126,17 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     bytes: &[u8],
   ) -> &GfxBuffer {
     match self.buffer.as_mut() {
-      Some(buffer) if (bytes.len() as BufferAddress) <= buffer.size() => {
+      Some(buffer) if buffer.size() >= (bytes.len() as BufferAddress) => {
         buffer.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, 0);
       }
       _ => {
-        self.recreate_with_bytes(device, bytes);
+        self.replace_with_bytes(device, bytes);
       }
     }
     self.buffer.as_ref().unwrap()
   }
 
-  /// Write `data` into the backing buffer if it is large enough, or recreate the backing buffer if not. Returns a
+  /// Write `data` into the backing buffer if it is large enough, or grow the backing buffer if not. Returns a
   /// reference to the backing buffer.
   ///
   /// # Write to backing buffer
@@ -139,9 +149,9 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
   /// It is up to the caller of this method to correctly [finish](StagingBelt::finish) and
   /// [recall](StagingBelt::recall) the `staging_belt`.
   ///
-  /// # (Re)create backing buffer
+  /// # Grow backing buffer
   ///
-  /// Otherwise, create a new backing buffer on `device` with `data` as content.
+  /// Otherwise, grow the backing buffer by create a new buffer on `device` with `data` as content.
   pub fn write_data<T: Pod>(
     &mut self,
     device: &Device,
@@ -150,70 +160,92 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
     data: &[T],
   ) -> &GfxBuffer {
     match self.buffer.as_mut() {
-      Some(buffer) if (size_of_val(data) as BufferAddress) <= buffer.size() => {
+      Some(buffer) if buffer.size() >= (size_of_val(data) as BufferAddress) => {
         buffer.enqueue_write_data_via_staging_belt(device, encoder, staging_belt, data, 0);
       }
       _ => {
-        self.recreate_with_data(device, data);
+        self.replace_with_data(device, data);
       }
     }
     self.buffer.as_ref().unwrap()
   }
 
 
-  /// Create a new backing buffer on `device` with `data` as content. Returns a reference to the backing buffer.
-  ///
-  /// If a `grow_multiplier` was set, a backing buffer was created previously, and `bytes` is larger than that previous
-  /// buffer, the minimum size of the new backing buffer is: the size of the previous backing buffer multiplied by
-  /// `grow_multiplier`.
+  /// Grow the backing buffer if it is smaller than `min_size`. Returns a reference to the backing buffer.
+  pub fn ensure_minimum_size(&mut self, device: &Device, min_size: BufferAddress) -> &GfxBuffer {
+    match self.buffer.as_mut() {
+      Some(buffer) if buffer.size() >= min_size => {
+        // Do nothing, buffer is large enough.
+      }
+      _ => {
+        self.recreate_with_size(device, min_size);
+      }
+    }
+    self.buffer.as_ref().unwrap()
+  }
+
+
+  /// Replace the backing buffer with a new buffer on `device` with `data` as content. Returns a reference to the
+  /// backing buffer.
   #[inline]
-  pub fn recreate_with_bytes(&mut self, device: &Device, bytes: &[u8]) -> &GfxBuffer {
-    let minimum_size = if let (Some(grow_multiplier), Some(buffer)) = (self.builder.grow_multiplier, &self.buffer) {
-      let multiplied_size = (buffer.size() as f64 * grow_multiplier).round() as BufferAddress;
-      multiplied_size.max(bytes.len() as BufferAddress)
-    } else {
-      0
-    };
+  pub fn replace_with_bytes(&mut self, device: &Device, bytes: &[u8]) -> &GfxBuffer {
+    let minimum_size = self.grow_size(bytes.len() as BufferAddress).unwrap_or_default();
     tracing::debug!(label = %self.builder.display_label(), size = bytes.len(), minimum_size, "Recreating buffer");
-    let buffer = self.builder.create_buffer_with_bytes(device, bytes, minimum_size);
+    let buffer = self.builder.buffer_from_bytes_min_size(device, bytes, minimum_size);
     self.buffer.insert(buffer)
   }
 
-  /// Create a new backing buffer on `device` with `data` as content. Returns a reference to the backing buffer.
-  ///
-  /// If a `grow_multiplier` was set, a backing buffer was created previously, and `data` is larger than that previous
-  /// buffer, the minimum size of the new backing buffer is: the size of the previous backing buffer multiplied by
-  /// `grow_multiplier`.
+  /// Replace the backing buffer with a new buffer on `device` with `data` as content. Returns a reference to the
+  /// backing buffer.
   #[inline]
-  pub fn recreate_with_data<T: Pod>(&mut self, device: &Device, data: &[T]) -> &GfxBuffer {
-    let minimum_size = if let (Some(grow_multiplier), Some(buffer)) = (self.builder.grow_multiplier, &self.buffer) {
-      let multiplied_size = (buffer.size() as f64 * grow_multiplier).round() as BufferAddress;
-      multiplied_size.max(size_of_val(data) as BufferAddress)
-    } else {
-      0
-    };
+  pub fn replace_with_data<T: Pod>(&mut self, device: &Device, data: &[T]) -> &GfxBuffer {
+    let minimum_size = self.grow_size(size_of_val(data) as BufferAddress).unwrap_or_default();
     tracing::debug!(label = %self.builder.display_label(), size = size_of_val(data), minimum_size, "Recreating buffer");
-    let buffer = self.builder.create_buffer_with_data(device, data, minimum_size);
+    let buffer = self.builder.buffer_from_data_min_size(device, data, minimum_size);
+    self.buffer.insert(buffer)
+  }
+
+  /// Replace the backing buffer with a new buffer on `device` with a `size`. Returns a reference to the backing buffer.
+  #[inline]
+  pub fn recreate_with_size(&mut self, device: &Device, size: BufferAddress) -> &GfxBuffer {
+    let size = self.grow_size(size).unwrap_or(size);
+    tracing::debug!(label = %self.builder.display_label(), size,"Recreating buffer");
+    let buffer = self.builder.buffer_from_size(device, size);
     self.buffer.insert(buffer)
   }
 
 
-  /// Returns `Some(backing_buffer)` if a backing buffer was created, otherwise returns `None`.
+  /// Returns `Some(buffer)` if this growable buffer has a backing buffer, otherwise returns `None`.
   #[inline]
   pub fn backing_buffer(&self) -> Option<&GfxBuffer> { self.buffer.as_ref() }
 }
 
 
-// Internals: create buffers
+// Internals
 
+impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
+  #[inline]
+  fn grow_size(&self, minimum_size: BufferAddress) -> Option<BufferAddress> {
+    if let (Some(grow_multiplier), Some(buffer)) = (self.builder.grow_multiplier, &self.buffer) {
+      let multiplied_size = (buffer.size() as f64 * grow_multiplier).round() as BufferAddress;
+      Some(multiplied_size.max(minimum_size))
+    } else {
+      None
+    }
+  }
+}
 impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   #[inline]
-  fn create_buffer_with_bytes(&self, device: &Device, bytes: &[u8], minimum_size: BufferAddress) -> GfxBuffer {
+  fn buffer_from_bytes_min_size(&self, device: &Device, bytes: &[u8], minimum_size: BufferAddress) -> GfxBuffer {
     GfxBuffer::from_bytes_min_size(device, bytes, self.usage, minimum_size, self.buffer_label())
   }
   #[inline]
-  fn create_buffer_with_data<T: Pod>(&self, device: &Device, data: &[T], minimum_size: BufferAddress) -> GfxBuffer {
+  fn buffer_from_data_min_size<T: Pod>(&self, device: &Device, data: &[T], minimum_size: BufferAddress) -> GfxBuffer {
     GfxBuffer::from_data_min_size(device, data, self.usage, minimum_size, self.buffer_label())
+  }
+  #[inline]
+  fn buffer_from_size(&self, device: &Device, size: BufferAddress) -> GfxBuffer {
+    GfxBuffer::from_size(device, self.usage, size, false, self.buffer_label())
   }
   #[inline]
   fn buffer_label(&self) -> wgpu::Label {

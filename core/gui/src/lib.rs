@@ -13,6 +13,7 @@ use common::input::{Key, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
+use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -31,8 +32,8 @@ pub struct Gui {
   cursor_icon: Option<CursorIcon>,
   cursor_in_window: bool,
 
-  index_buffer: Option<GfxBuffer>,
-  vertex_buffer: Option<GfxBuffer>,
+  index_buffer: GrowableBuffer,
+  vertex_buffer: GrowableBuffer,
   uniform_buffer: GfxBuffer,
   _static_bind_group_layout: BindGroupLayout,
   static_bind_group: BindGroup,
@@ -57,6 +58,17 @@ impl Gui {
 
     let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
     let fragment_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
+
+    let index_buffer = GrowableBufferBuilder::default()
+      .with_label("GUI index buffer")
+      .with_index_usage()
+      .with_grow_multiplier(1.5)
+      .create();
+    let vertex_buffer = GrowableBufferBuilder::default()
+      .with_label("GUI vertex buffer")
+      .with_vertex_usage()
+      .with_grow_multiplier(1.5)
+      .create();
 
     // Bind group that does not change while rendering (static), containing the uniform buffer and texture sampler.
     let uniform_buffer = BufferBuilder::new()
@@ -126,8 +138,8 @@ impl Gui {
       cursor_icon: None,
       cursor_in_window: false,
 
-      index_buffer: None,
-      vertex_buffer: None,
+      index_buffer,
+      vertex_buffer,
       uniform_buffer,
       _static_bind_group_layout: static_bind_group_layout,
       static_bind_group,
@@ -357,33 +369,15 @@ impl Gui {
     // Get primitives to render.
     let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
-    // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
-    let index_buffer = { // TODO: replace with growable buffer?
-      let count: usize = clipped_primitives.iter()
-        .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
-        .sum();
-      let size = (count * size_of::<u32>()) as BufferAddress;
-      let mut buffer = self.index_buffer.take().unwrap_or_else(|| create_index_buffer(size, device));
-      if buffer.size() < size {
-        buffer.destroy();
-        // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
-        buffer = create_index_buffer(buffer.size().saturating_mul(2).max(size), device);
-      }
-      buffer
-    };
-    let vertex_buffer = { // TODO: replace with growable buffer?
-      let count: usize = clipped_primitives.iter()
-        .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
-        .sum();
-      let size = (count * size_of::<Vertex>()) as BufferAddress;
-      let mut buffer = self.vertex_buffer.take().unwrap_or_else(|| create_vertex_buffer(size, device));
-      if buffer.size() < size {
-        buffer.destroy();
-        // Double size to prevent rapid buffer recreation. // TODO: will never shrink, is that ok?
-        buffer = create_vertex_buffer(buffer.size().saturating_mul(2).max(size), device);
-      }
-      buffer
-    };
+    // Ensure index and vertex buffers are big enough.
+    let index_count: usize = clipped_primitives.iter()
+      .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
+      .sum();
+    let index_buffer = self.index_buffer.ensure_minimum_size(device, (index_count * size_of::<u32>()) as BufferAddress);
+    let vertex_count: usize = clipped_primitives.iter()
+      .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
+      .sum();
+    let vertex_buffer = self.vertex_buffer.ensure_minimum_size(device, (vertex_count * size_of::<Vertex>()) as BufferAddress);
 
     // Write to buffers and create draw list.
     self.uniform_buffer.enqueue_write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
@@ -413,14 +407,13 @@ impl Gui {
 
     // Render
     {
+      let mut bound_texture_id = None;
       let mut render_pass = RenderPassBuilder::new()
         .with_label("GUI render pass")
         .begin_render_pass_for_swap_chain_with_load(encoder, surface_texture_view);
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group, &[]);
-      let mut bound_texture_id = TextureId::default();
-      render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
       let scale_factor: f64 = screen_size.scale.into();
       let scale_factor = scale_factor as f32;
@@ -460,20 +453,26 @@ impl Gui {
         }
 
         render_pass.set_scissor_rect(x, y, width, height);
-        if texture_id != bound_texture_id {
-          bound_texture_id = texture_id;
-          render_pass.set_bind_group(1, self.get_texture_bind_group(bound_texture_id), &[]);
+
+        match bound_texture_id {
+          Some(bound_id) if texture_id == bound_id => {
+            // Do nothing, already bound correct group.
+          }
+          ref mut b => {
+            let bind_group = &self.textures
+              .get(&texture_id)
+              .unwrap_or_else(|| panic!("Cannot get bind group for {:?}; texture with that ID does not exist", texture_id)).1;
+            render_pass.set_bind_group(1, bind_group, &[]);
+            *b = Some(texture_id);
+          }
         }
+
         // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
         render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(base_vertex..));
         render_pass.draw_indexed(indices, 0, 0..1);
       }
       render_pass.pop_debug_group();
     }
-
-    // Store index and vertex buffers (outside of render pass because it held a reference to these buffers).
-    self.index_buffer = Some(index_buffer);
-    self.vertex_buffer = Some(vertex_buffer);
 
     // Free unused textures.
     self.free_textures(&full_output.textures_delta);
@@ -548,12 +547,6 @@ impl Gui {
     }
   }
 
-  fn get_texture_bind_group(&self, texture_id: TextureId) -> &BindGroup {
-    &self.textures
-      .get(&texture_id)
-      .unwrap_or_else(|| panic!("Cannot get bind group for {:?}; texture with that ID does not exist", texture_id)).1
-  }
-
   fn free_textures(&mut self, textures_delta: &TexturesDelta) {
     for texture_id in textures_delta.free.iter() {
       let (texture, _bind_group) = self.textures.
@@ -565,24 +558,6 @@ impl Gui {
 }
 
 // Utilities
-
-#[inline]
-fn create_index_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
-  BufferBuilder::new()
-    .with_index_usage()
-    .with_size(size)
-    .with_label("GUI index buffer")
-    .create(device)
-}
-
-#[inline]
-fn create_vertex_buffer(size: BufferAddress, device: &Device) -> GfxBuffer {
-  BufferBuilder::new()
-    .with_vertex_usage()
-    .with_size(size)
-    .with_label("GUI vertex buffer")
-    .create(device)
-}
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]

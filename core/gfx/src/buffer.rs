@@ -25,6 +25,18 @@ impl Deref for GfxBuffer {
 // Simple buffer creation
 
 impl GfxBuffer {
+  /// Create a buffer on `device` with `usage`, a `size`, whether it should be `mapped_at_creation`, and an optional
+  /// debugging `label`.
+  ///
+  /// If `size` is not a multiple of [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of it. If that size is
+  /// `0`, an empty buffer is created.
+  #[inline]
+  pub fn from_size(device: &Device, usage: BufferUsages, size: BufferAddress, mapped_at_creation: bool, label: Label) -> Self {
+    let size = wgpu::util::align_to(size, COPY_BUFFER_ALIGNMENT);
+    let buffer = device.create_buffer(&BufferDescriptor { label, size, usage, mapped_at_creation });
+    Self { buffer }
+  }
+
   /// Create a buffer on `device` with `bytes` as content, with `usage`, a `min_size`, and optional debugging `label`.
   ///
   /// The size of the buffer is `bytes.len().max(min_size)`. If that size is not a multiple of [COPY_BUFFER_ALIGNMENT],
