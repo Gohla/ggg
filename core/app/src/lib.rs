@@ -18,25 +18,35 @@ mod run;
 mod debug_gui;
 mod config;
 
-#[derive(Debug)]
-pub struct Tick {
-  pub time_target: Offset,
-  pub count: u64,
+/// Cycle information.
+#[derive(Copy, Clone, Debug)]
+pub struct Cycle {
+  /// Cycle #
+  pub cycle: u64,
+  /// Duration of the previous frame. That is, the duration from the previous cycle start to the current cycle start.
+  pub duration: Offset,
 }
 
+/// Simulation step information.
+#[derive(Copy, Clone, Debug)]
+pub struct Step {
+  /// Step #
+  pub step: u64,
+  /// How much time a step should simulate. This is a fixed amount of time for determinism of update steps.
+  pub target_duration: Offset,
+}
+
+/// Context for creating GUI elements in a single frame.
 pub struct GuiFrame {
   pub context: egui::Context,
 }
-
 impl std::ops::Deref for GuiFrame {
   type Target = egui::Context;
   #[inline]
   fn deref(&self) -> &Self::Target { &self.context }
 }
 
-
-// Application trait
-
+/// Application trait
 #[allow(unused_variables)]
 pub trait Application: Sized {
   /// Type of configuration that is deserialized and passed into `new`, and gotten from `get_config` to be serialized.
@@ -64,16 +74,14 @@ pub trait Application: Sized {
   /// Allow the application to add elements to the menu bar via `ui`.
   fn add_to_menu(&mut self, ui: &mut Ui) {}
 
-  /// Simulates a single `tick` of the application.
-  fn simulate(&mut self, tick: Tick, input: &Self::Input) {}
+  /// Simulates a single update `step` of the application.
+  fn simulate(&mut self, step: Step, input: &Self::Input) {}
 
   /// Renders a single `frame` of the application. May return additional command buffers to be submitted.
-  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>>;
+  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, elapsed: Offset, cycle: Cycle, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
-
-// Options
-
+/// Application options
 pub struct Options {
   pub graphics_backends: Backends,
   pub graphics_adapter_power_preference: PowerPreference,
@@ -111,9 +119,7 @@ impl Default for Options {
   }
 }
 
-
-// Application runner
-
+/// Application runner
 #[derive(Default)]
 pub struct AppRunner {
   os_options: os::Options,

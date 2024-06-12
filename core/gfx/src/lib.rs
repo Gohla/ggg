@@ -1,7 +1,6 @@
 use wgpu::{Adapter, CommandEncoder, Device, Instance, Queue, TextureFormat, TextureView};
 
 use common::screen::ScreenSize;
-use common::timing::FrameTime;
 
 use crate::surface::GfxSurface;
 use crate::texture::{GfxTexture, TextureBuilder};
@@ -24,6 +23,7 @@ pub mod display_math;
 pub mod debug_renderer;
 pub mod full_screen_triangle;
 
+/// Facade for graphics handles and information.
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
@@ -51,16 +51,22 @@ impl Gfx {
     }
   }
 
-  pub fn depth_stencil_format(&self) -> Option<TextureFormat> { self.depth_stencil_texture.as_ref().map(|t| t.format) }
+  pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
+    self.depth_stencil_texture.as_ref().map(|t| t.format)
+  }
 }
 
+/// Data for rendering a single frame.
 #[derive(Debug)]
 pub struct Frame<'a> {
+  /// Size of the screen/window/viewport.
   pub screen_size: ScreenSize,
+  /// Swapchain texture to output pixels to.
   pub output_texture: &'a TextureView,
+  /// Primary command encoder for recording GPU operations.
   pub encoder: &'a mut CommandEncoder,
+  /// Amount of extrapolation required to make rendering representation sync up with simulated representation.
   pub extrapolation: f64,
-  pub time: FrameTime,
 }
 
 #[macro_export]

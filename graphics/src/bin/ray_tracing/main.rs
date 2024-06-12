@@ -4,9 +4,10 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, RenderPipeline, ShaderStages};
 
-use app::{AppRunner, GuiFrame};
+use app::{AppRunner, Cycle, GuiFrame};
 use common::input::{KeyboardKey, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
+use common::timing::Offset;
 use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -128,17 +129,17 @@ impl app::Application for RayTracing {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    let delta = frame.time.delta.as_s() as f32;
-    if input.forward { self.camera_origin.z -= 1.0 * delta; }
-    if input.backward { self.camera_origin.z += 1.0 * delta; }
-    if input.left { self.camera_origin.x += 1.0 * delta; }
-    if input.right { self.camera_origin.x -= 1.0 * delta; }
-    if input.up { self.camera_origin.y += 1.0 * delta; }
-    if input.down { self.camera_origin.y -= 1.0 * delta; }
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    let duration = cycle.duration.as_s() as f32;
+    if input.forward { self.camera_origin.z -= 1.0 * duration; }
+    if input.backward { self.camera_origin.z += 1.0 * duration; }
+    if input.left { self.camera_origin.x += 1.0 * duration; }
+    if input.right { self.camera_origin.x -= 1.0 * duration; }
+    if input.up { self.camera_origin.y += 1.0 * duration; }
+    if input.down { self.camera_origin.y -= 1.0 * duration; }
     self.v_fov += input.v_fov_delta;
     self.camera_aperture += input.aperture_delta;
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::new(frame.screen_size, frame.time.elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::new(frame.screen_size, elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Ray tracing render pass")

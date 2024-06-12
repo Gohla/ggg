@@ -6,9 +6,10 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::Vec3;
 use wgpu::{BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{AppRunner, GuiFrame};
+use app::{AppRunner, Cycle, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use common::timing::Offset;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
@@ -72,7 +73,7 @@ impl app::Application for Triangle {
   fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, _cycle: Cycle, mut frame: Frame<'a>, _gui_frame: &GuiFrame, _input: &()) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Triangle render pass")
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);

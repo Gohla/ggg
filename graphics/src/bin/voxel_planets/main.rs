@@ -3,9 +3,10 @@ use ultraviolet::{Isometry3, Rotor3, Vec3};
 use wgpu::CommandBuffer;
 use wgpu::util::StagingBelt;
 
-use app::{AppRunner, GuiFrame};
+use app::{AppRunner, Cycle, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use common::timing::Offset;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
@@ -110,10 +111,10 @@ impl app::Application for VoxelPlanets {
 
 
   #[profiling::function]
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.settings.camera_debugging.show_debugging_gui_window_multiple_cameras(&gui_frame, &self.cameras, &mut self.settings.camera_settings);
     let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
-    camera.update(camera_settings, &input.camera, frame.time.delta);
+    camera.update(camera_settings, &input.camera, cycle.duration);
     self.camera_uniform.update_from_camera(camera);
     let camera_view_projection = camera.get_view_projection_matrix();
     let camera_direction_inverse = camera.get_direction_inverse();

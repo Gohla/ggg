@@ -87,26 +87,14 @@ impl EventSampler {
   }
 
 
-  pub fn add(&mut self, instant: Instant) {
+  pub fn add_now(&mut self) {
     let now = Instant::now();
-    // Remove oldest samples that are outside of the sampling window.
-    loop {
-      let oldest: Instant = {
-        let oldest = self.samples.front();
-        if oldest.is_none() { break; }
-        *oldest.unwrap()
-      };
-      let age = oldest.to(now);
-      if age > self.sample_window {
-        self.samples.pop_front();
-      } else {
-        break;
-      }
-    }
-    // Remove oldest samples down to max_samples - 1, to make space for new sample.
-    while self.samples.len() > self.max_samples {
-      self.samples.pop_front();
-    }
+    self.compact(now);
+    self.add(now)
+  }
+
+  pub fn add(&mut self, instant: Instant) {
+    self.compact(Instant::now());
     self.samples.push_back(instant);
   }
 
@@ -126,7 +114,29 @@ impl EventSampler {
     Some(duration)
   }
 
+  #[inline]
   pub fn num_samples(&self) -> usize { self.samples.len() }
+
+  fn compact(&mut self, now: Instant) {
+    // Remove the oldest samples that are outside the sampling window.
+    loop {
+      let oldest: Instant = {
+        let oldest = self.samples.front();
+        if oldest.is_none() { break; }
+        *oldest.unwrap()
+      };
+      let age = oldest.to(now);
+      if age > self.sample_window {
+        self.samples.pop_front();
+      } else {
+        break;
+      }
+    }
+    // Remove the oldest samples down to `max_samples - 1`, to make space for new sample.
+    while self.samples.len() > self.max_samples {
+      self.samples.pop_front();
+    }
+  }
 }
 
 impl Default for EventSampler {

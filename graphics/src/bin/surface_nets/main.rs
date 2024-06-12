@@ -3,9 +3,10 @@ use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::CommandBuffer;
 use wgpu::util::StagingBelt;
 
-use app::{AppRunner, GuiFrame};
+use app::{AppRunner, Cycle, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use common::timing::Offset;
 use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
@@ -101,10 +102,10 @@ impl app::Application for SurfaceNetsDemo {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
     self.config.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.config.camera_settings);
-    self.camera.update(&mut self.config.camera_settings, &input.camera, frame.time.delta);
+    self.camera.update(&mut self.config.camera_settings, &input.camera, cycle.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI

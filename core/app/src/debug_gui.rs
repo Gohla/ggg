@@ -2,8 +2,66 @@ use egui::{CollapsingHeader, Context, Grid, menu, Ui, Window};
 use serde::{Deserialize, Serialize};
 
 use common::input::RawInput;
-use common::timing::TimingStats;
+use common::sampler::{EventSampler, ValueSampler};
+use common::timing::{Instant, Offset};
 use gui_widget::UiWidgetsExt;
+
+use crate::Cycle;
+use crate::run::StepEnd;
+
+// Timing statistics
+
+#[derive(Default)]
+pub struct TimingStats {
+  /// Elapsed time since application start
+  pub elapsed: Offset,
+
+  /// Cycle #
+  pub cycle: u64,
+  /// Cycle duration sampler
+  pub cycle_duration: ValueSampler<Offset>,
+
+  /// Step target duration
+  pub step_target_duration: Offset,
+  /// Step #
+  pub step: u64,
+  /// Step duration sampler
+  pub step_duration: ValueSampler<Offset>,
+  /// Step rate sampler
+  pub step_rate: EventSampler,
+
+  /// Accumulated lag
+  pub accumulated_lag: Offset,
+  /// Render extrapolation
+  pub render_extrapolation: f64,
+}
+
+impl TimingStats {
+  pub fn new() -> TimingStats { TimingStats::default() }
+
+  pub fn elapsed(&mut self, elapsed: Offset) {
+    self.elapsed = elapsed;
+  }
+
+  pub fn cycle(&mut self, cycle: Cycle) {
+    self.cycle = cycle.cycle;
+    self.cycle_duration.add(cycle.duration);
+  }
+
+  pub fn step(&mut self, step_end: StepEnd) {
+    self.step_target_duration = step_end.target_duration;
+    self.step = step_end.step;
+    self.step_duration.add(step_end.duration);
+    self.step_rate.add(Instant::now())
+  }
+
+  pub fn step_lag(&mut self, accumulated_lag: Offset, gfx_extrapolation: f64) {
+    self.accumulated_lag = accumulated_lag;
+    self.render_extrapolation = gfx_extrapolation;
+  }
+}
+
+// Debug GUI
 
 #[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
 pub struct DebugGui {
@@ -51,64 +109,64 @@ impl DebugGui {
             .spacing([10.0, 4.0])
             .show(ui, |ui| {
               ui.label("Elapsed");
-              ui.label(format!("{:7.3}s", timing_stats.elapsed_time.as_s()));
+              ui.label(format!("{:7.3}s", timing_stats.elapsed.as_s()));
               ui.end_row();
             });
         });
 
-        CollapsingHeader::new("Frame").default_open(true).show(ui, |ui| {
+        CollapsingHeader::new("Cycle").default_open(true).show(ui, |ui| {
           Grid::new("Grid")
             .striped(true)
             .spacing([10.0, 4.0])
             .show(ui, |ui| {
-              ui.label("Frame #");
-              ui.label(format!("{}", timing_stats.frame_count));
+              ui.label("Cycle #");
+              ui.label(format!("{}", timing_stats.cycle));
               ui.end_row();
-              ui.label("Frame time");
-              ui.label(format!("{:7.3}ms", timing_stats.frame_time.avg().as_ms()));
+              ui.label("Cycle duration");
+              ui.label(format!("{:7.3}ms", timing_stats.cycle_duration.avg().as_ms()));
               ui.end_row();
-              ui.label("FPS");
-              ui.label(format!("{:7.3}", 1.0 / timing_stats.frame_time.avg().as_s()));
+              ui.label("CPS");
+              ui.label(format!("{:7.3}", 1.0 / timing_stats.cycle_duration.avg().as_s()));
               ui.end_row();
             });
         });
 
-        CollapsingHeader::new("Tick").default_open(true).show(ui, |ui| {
+        CollapsingHeader::new("Simulation update step").default_open(true).show(ui, |ui| {
           Grid::new("Grid")
             .striped(true)
             .spacing([10.0, 4.0])
             .show(ui, |ui| {
-              ui.label("Tick #");
-              ui.label(format!("{}", timing_stats.tick_count));
+              ui.label("Step target duration");
+              ui.label(format!("{:7.3}ms", timing_stats.step_target_duration.as_ms()));
               ui.end_row();
-              ui.label("Tick time target");
-              ui.label(format!("{:7.3}ms", timing_stats.tick_time_target.as_ms()));
+              let sps_target = 1.0 / timing_stats.step_target_duration.as_s();
+              ui.label("SPS target");
+              ui.label(format!("{:7.3}", sps_target));
               ui.end_row();
-              let tps_target = 1.0 / timing_stats.tick_time_target.as_s();
-              ui.label("TPS target");
-              ui.label(format!("{:7.3}", tps_target));
+              ui.label("Step #");
+              ui.label(format!("{}", timing_stats.step));
               ui.end_row();
-              ui.label("Tick time");
-              ui.label(format!("{:7.3}ms", timing_stats.tick_time.avg().as_ms()));
+              ui.label("Step duration");
+              ui.label(format!("{:7.3}ms", timing_stats.step_duration.avg().as_ms()));
               ui.end_row();
-              let (tps, tps_rate) = {
-                let duration = timing_stats.tick_rate.duration();
+              let (sps, sps_rate) = {
+                let duration = timing_stats.step_rate.duration();
                 let tps = if let Some(duration) = duration {
-                  let ticks = timing_stats.tick_rate.num_samples();
+                  let ticks = timing_stats.step_rate.num_samples();
                   ticks as f64 / duration.as_s()
                 } else {
                   0.0
                 };
-                let tps_rate = tps / tps_target;
+                let tps_rate = tps / sps_target;
                 (tps, tps_rate)
               };
-              ui.label("TPS");
-              ui.label(format!("{:7.3}", tps));
+              ui.label("SPS");
+              ui.label(format!("{:7.3}", sps));
               ui.end_row();
-              ui.label("TPS rate");
-              ui.label(format!("{:5.1}%", tps_rate * 100.0));
+              ui.label("SPS target rate");
+              ui.label(format!("{:5.1}%", sps_rate * 100.0));
               ui.end_row();
-              ui.label("Accumulated tick lag");
+              ui.label("Accumulated step lag");
               ui.label(format!("{:7.3}ms", timing_stats.accumulated_lag.as_ms()));
               ui.end_row();
               ui.label("Render extrapolation");

@@ -4,11 +4,11 @@ use egui::TopBottomPanel;
 use pollster::FutureExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::info;
+use tracing::{info, trace_span};
 use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, Surface, SurfaceError};
 
 use common::screen::ScreenSize;
-use common::timing::{FrameTimer, Offset, TickTimer, TimingStats};
+use common::timing::{Offset, Timer};
 use gfx::{Frame, Gfx};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
@@ -18,7 +18,8 @@ use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
 use os::OsCreateError;
 use os::window::Window;
 
-use crate::{Application, config, DebugGui, GuiFrame, Options, Os, Tick};
+use crate::{Application, config, Cycle, DebugGui, GuiFrame, Options, Os, Step};
+use crate::debug_gui::TimingStats;
 
 /// Run application error.
 #[derive(Error, Debug)]
@@ -112,8 +113,9 @@ struct Runner<A> {
 
   app: A,
   debug_gui: DebugGui,
-  frame_timer: FrameTimer,
-  tick_timer: TickTimer,
+  timer: Timer,
+  cycles: Cycles,
+  stepper: Stepper,
   timing_stats: TimingStats,
 
   screen_size: ScreenSize,
@@ -209,8 +211,9 @@ impl<A: Application> Runner<A> {
 
       app,
       debug_gui: config.debug_gui,
-      frame_timer: FrameTimer::new(),
-      tick_timer: TickTimer::new(Offset::from_ns(16_666_667)),
+      timer: Timer::default(),
+      cycles: Cycles::default(),
+      stepper: Stepper::new(Offset::from_ns(16_666_667)),
       timing_stats: TimingStats::new(),
 
       screen_size,
@@ -228,7 +231,7 @@ impl<A: Application> Runner<A> {
   #[tracing::instrument(name = "loop", skip_all)]
   fn run(mut self) {
     loop {
-      let stop = self.frame();
+      let stop = self.cycle();
       profiling::finish_frame!();
       if stop { break; }
     }
@@ -240,12 +243,16 @@ impl<A: Application> Runner<A> {
   }
 
   #[profiling::function]
-  #[tracing::instrument(name = "frame", skip_all)]
-  fn frame(&mut self) -> bool {
-    // Timing
-    let frame_time = self.frame_timer.frame();
-    self.timing_stats.frame(frame_time);
-    self.tick_timer.update_lag(frame_time.delta);
+  fn cycle(&mut self) -> bool {
+    // Elapsed time
+    let elapsed = self.timer.time();
+    self.timing_stats.elapsed(elapsed);
+
+    // Cycle
+    let cycle = self.cycles.start();
+    self.timing_stats.cycle(cycle);
+    self.stepper.update_lag(cycle.duration); // TODO: should we instead update this lag after a cycle completes?
+    let _cycle_span = trace_span!("cycle", cycle = cycle.cycle).entered();
 
     // Process OS events
     for event in self.os.event_rx.try_iter() {
@@ -296,7 +303,7 @@ impl<A: Application> Runner<A> {
 
     // Create GUI frame
     let gui_frame = if !self.minimized {
-      let gui_context = self.gui.begin_frame(self.screen_size, frame_time.elapsed.as_s(), frame_time.delta.as_s());
+      let gui_context = self.gui.begin_frame(self.screen_size, elapsed.as_s(), cycle.duration.as_s() as f32);
       TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
         self.app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
@@ -316,18 +323,16 @@ impl<A: Application> Runner<A> {
     // Let the application process input.
     let input = self.app.process_input(raw_input);
 
-    // Simulate tick
-    if self.tick_timer.should_tick() {
-      while self.tick_timer.should_tick() { // Run simulation.
-        let count = self.tick_timer.tick_start();
-        let tick = Tick { count, time_target: self.tick_timer.time_target() };
-        self.app.simulate(tick, &input);
-        let tick_time = self.tick_timer.tick_end();
-        self.timing_stats.tick(tick_time);
-      }
+    // Simulate
+    while self.stepper.should_step() { // Run simulation steps.
+      let step = self.stepper.start();
+      let _step_span = trace_span!("step", step = step.step).entered();
+      self.app.simulate(step, &input);
+      let step_end = self.stepper.end();
+      self.timing_stats.step(step_end);
     }
-    let extrapolation = self.tick_timer.extrapolation();
-    self.timing_stats.tick_lag(self.tick_timer.accumulated_lag(), extrapolation);
+    let extrapolation = self.stepper.extrapolation();
+    self.timing_stats.step_lag(self.stepper.accumulated_lag(), extrapolation);
 
     // Skip rendering if minimized.
     if self.minimized { return false; }
@@ -364,18 +369,107 @@ impl<A: Application> Runner<A> {
       output_texture: &output_texture,
       encoder: &mut encoder,
       extrapolation,
-      time: frame_time,
     };
-    let additional_command_buffers = self.app.render(&self.os, &self.gfx, frame, gui_frame.as_ref().unwrap(), &input);
+    let additional_command_buffers = self.app.render(&self.os, &self.gfx, elapsed, cycle, frame, gui_frame.as_ref().unwrap(), &input);
     self.gui.render(&self.window, self.screen_size, &self.gfx.device, &self.gfx.queue, &mut encoder, &output_texture);
 
     // Submit command buffers
     let command_buffer = encoder.finish();
-    self.gfx.queue.submit(std::iter::once(command_buffer).chain(additional_command_buffers));
+    let command_buffers = std::iter::once(command_buffer).chain(additional_command_buffers);
+    self.gfx.queue.submit(command_buffers);
 
     // Present
     surface_texture.present();
 
     return false; // Keep looping.
+  }
+}
+
+// Cycles
+
+#[derive(Default)]
+struct Cycles {
+  timer: Timer,
+  cycle: u64,
+}
+
+impl Cycles {
+  fn start(&mut self) -> Cycle {
+    let duration = self.timer.time_then_reset();
+    let cycle = Cycle { cycle: self.cycle, duration };
+    self.cycle += 1;
+    cycle
+  }
+}
+
+// Simulation update stepper
+
+pub struct Stepper {
+  timer: Timer,
+  target_duration: Offset,
+  accumulated_lag: Offset,
+  step: u64,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct StepEnd {
+  /// How much time a step should simulate. This is a fixed amount of time for determinism of update steps.
+  pub target_duration: Offset,
+  /// Step #
+  pub step: u64,
+  /// Duration of the ended step. That is, the duration from the step start to the step end.
+  pub duration: Offset,
+}
+
+impl Stepper {
+  fn new(target_duration: Offset) -> Stepper {
+    Stepper {
+      timer: Timer::default(),
+      target_duration,
+      step: 0,
+      accumulated_lag: Offset::default(),
+    }
+  }
+
+
+  pub fn update_lag(&mut self, cycle_duration: Offset) -> Offset {
+    self.accumulated_lag += cycle_duration;
+    self.accumulated_lag
+  }
+
+  pub fn _num_upcoming_steps(&self) -> u64 {
+    (self.accumulated_lag / self.target_duration).floor() as u64
+  }
+
+  pub fn should_step(&self) -> bool {
+    self.accumulated_lag >= self.target_duration
+  }
+
+
+  pub fn start(&mut self) -> Step {
+    self.timer.reset();
+    Step { step: self.step, target_duration: self.target_duration }
+  }
+
+  pub fn end(&mut self) -> StepEnd {
+    self.accumulated_lag -= self.target_duration;
+    let tick_time = StepEnd {
+      target_duration: self.target_duration,
+      step: self.step,
+      duration: self.timer.time(),
+    };
+    self.step += 1;
+    tick_time
+  }
+
+
+  pub fn accumulated_lag(&self) -> Offset {
+    self.accumulated_lag
+  }
+
+  pub fn extrapolation(&self) -> f64 {
+    let lag_ns = self.accumulated_lag.as_ns();
+    let target_ns = self.target_duration.as_ns();
+    lag_ns as f64 / target_ns as f64
   }
 }

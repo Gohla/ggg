@@ -1,10 +1,8 @@
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
-use crate::sampler::{EventSampler, ValueSampler};
-
 // Instant
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Default, Hash, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct Instant(u64);
 
 impl Instant {
@@ -103,168 +101,35 @@ impl Div<isize> for Offset {
 
 // Timer
 
+#[derive(Debug)]
 pub struct Timer {
-  start: Instant,
-  last: Instant,
+  instant: Instant,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Time {
-  pub elapsed: Offset,
-  pub delta: Offset,
+impl Default for Timer {
+  #[inline]
+  fn default() -> Self {
+    Self { instant: Instant::now() }
+  }
+}
+impl Timer {
+  #[inline]
+  pub fn new() -> Self { Self::default() }
 }
 
 impl Timer {
-  pub fn new() -> Timer {
+  pub fn time(&self) -> Offset {
     let now = Instant::now();
-    return Timer { start: now, last: now };
+    self.instant.to(now)
   }
-
-  pub fn update(&mut self) -> Time {
+  pub fn reset(&mut self) {
     let now = Instant::now();
-    let elapsed = self.start.to(now);
-    let delta = self.last.to(now);
-    self.last = now;
-    Time { elapsed, delta }
+    self.instant = now;
   }
-}
-
-// Frame timer
-
-pub struct FrameTimer {
-  timer: Timer,
-  count: u64,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct FrameTime {
-  pub elapsed: Offset,
-  pub delta: Offset,
-  pub count: u64,
-}
-
-impl FrameTimer {
-  pub fn new() -> FrameTimer { FrameTimer { timer: Timer::new(), count: 0 } }
-
-  pub fn frame(&mut self) -> FrameTime {
-    let Time { elapsed, delta: frame_time } = self.timer.update();
-    let frame_time = FrameTime { elapsed, delta: frame_time, count: self.count };
-    self.count += 1;
-    frame_time
-  }
-}
-
-// Tick timer
-
-pub struct TickTimer {
-  start: Instant,
-  time_target: Offset,
-  accumulated_lag: Offset,
-  count: u64,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct TickTime {
-  pub time_target: Offset,
-  pub accumulated_lag: Offset,
-  pub delta: Offset,
-  pub count: u64,
-}
-
-impl TickTimer {
-  pub fn new(tick_time_target: Offset) -> TickTimer {
-    TickTimer {
-      count: 0,
-      start: Instant::now(),
-      time_target: tick_time_target,
-      accumulated_lag: Offset::zero(),
-    }
-  }
-
-
-  pub fn update_lag(&mut self, frame_time: Offset) -> Offset {
-    self.accumulated_lag += frame_time;
-    self.accumulated_lag
-  }
-
-  pub fn num_upcoming_ticks(&self) -> u64 {
-    (self.accumulated_lag / self.time_target).floor() as u64
-  }
-
-  pub fn should_tick(&self) -> bool {
-    self.accumulated_lag >= self.time_target
-  }
-
-  pub fn tick_start(&mut self) -> u64 {
-    self.start = Instant::now();
-    self.count
-  }
-
-  pub fn tick_end(&mut self) -> TickTime {
-    self.accumulated_lag -= self.time_target;
-    let tick_time = TickTime {
-      time_target: self.time_target,
-      accumulated_lag: self.accumulated_lag,
-      delta: self.start.to(Instant::now()),
-      count: self.count,
-    };
-    self.count += 1;
-    tick_time
-  }
-
-
-  pub fn time_target(&self) -> Offset {
-    self.time_target
-  }
-
-  pub fn accumulated_lag(&self) -> Offset {
-    self.accumulated_lag
-  }
-
-  pub fn extrapolation(&self) -> f64 {
-    let lag_ns = self.accumulated_lag.as_ns();
-    let target_ns = self.time_target.as_ns();
-    lag_ns as f64 / target_ns as f64
-  }
-}
-
-// Timing statistic
-
-#[derive(Default)]
-pub struct TimingStats {
-  // Time
-  pub elapsed_time: Offset,
-  // Frame
-  pub frame_count: u64,
-  pub frame_time: ValueSampler<Offset>,
-  // Tick
-  pub tick_count: u64,
-  pub tick_time_target: Offset,
-  pub tick_time: ValueSampler<Offset>,
-  pub tick_rate: EventSampler,
-  pub accumulated_lag: Offset,
-  // Render
-  pub render_extrapolation: f64,
-}
-
-impl TimingStats {
-  pub fn new() -> TimingStats { TimingStats::default() }
-
-  pub fn frame(&mut self, frame_time: FrameTime) {
-    self.elapsed_time = frame_time.elapsed;
-    self.frame_count = frame_time.count;
-    self.frame_time.add(frame_time.delta);
-  }
-
-  pub fn tick(&mut self, tick_time: TickTime) {
-    self.tick_count = tick_time.count;
-    self.tick_time_target = tick_time.time_target;
-    self.tick_time.add(tick_time.delta);
-    self.tick_rate.add(Instant::now())
-  }
-
-  pub fn tick_lag(&mut self, accumulated_lag: Offset, gfx_extrapolation: f64) {
-    self.accumulated_lag = accumulated_lag;
-    self.render_extrapolation = gfx_extrapolation;
+  pub fn time_then_reset(&mut self) -> Offset {
+    let now = Instant::now();
+    let time = self.instant.to(now);
+    self.instant = now;
+    time
   }
 }

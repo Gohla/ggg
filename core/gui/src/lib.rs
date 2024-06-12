@@ -325,8 +325,8 @@ impl Gui {
   pub fn begin_frame(
     &mut self,
     screen_size: ScreenSize,
-    elapsed_seconds: f64,
-    delta_seconds: f64,
+    elapsed_time_in_seconds: f64,
+    predicted_duration_in_seconds: f32,
   ) -> Context {
     let screen_rect = Rect::from_min_size(Pos2::ZERO, screen_size.physical.into());
     self.input.screen_rect = Some(screen_rect);
@@ -336,8 +336,8 @@ impl Gui {
       viewport.native_pixels_per_point = Some(native_pixels_per_point as f32);
     }
 
-    self.input.time = Some(elapsed_seconds);
-    self.input.predicted_dt = delta_seconds as f32;
+    self.input.time = Some(elapsed_time_in_seconds);
+    self.input.predicted_dt = predicted_duration_in_seconds;
 
     let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);

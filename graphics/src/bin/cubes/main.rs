@@ -10,9 +10,10 @@ use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
-use app::{AppRunner, GuiFrame};
+use app::{AppRunner, Cycle, GuiFrame};
 use common::input::RawInput;
 use common::screen::ScreenSize;
+use common::timing::Offset;
 use gfx::{Frame, Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
@@ -196,9 +197,9 @@ impl app::Application for Cubes {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
-    self.camera.update(&mut self.camera_settings, &input.camera, frame.time.delta);
+    self.camera.update(&mut self.camera_settings, &input.camera, cycle.duration);
     self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Cubes").show(&gui_frame, |ui| {
