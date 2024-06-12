@@ -95,12 +95,6 @@ impl Default for Options {
       Limits::default()
     };
 
-    let graphics_swap_chain_present_mode = if cfg!(target_os = "macos") {
-      PresentMode::Mailbox
-    } else {
-      PresentMode::Immediate
-    };
-
     Self {
       graphics_backends: Backends::all(),
       graphics_adapter_power_preference: PowerPreference::None,
@@ -109,7 +103,7 @@ impl Default for Options {
       request_graphics_device_features: Features::empty(),
       graphics_device_limits,
 
-      graphics_swap_chain_present_mode,
+      graphics_swap_chain_present_mode: PresentMode::AutoNoVsync,
 
       depth_stencil_texture_format: Some(TextureFormat::Depth32Float),
       sample_count: 1,

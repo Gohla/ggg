@@ -374,13 +374,13 @@ impl Settings {
       ui.monospace(format!("{}", lod_render_data.vertices.len()));
       ui.end_row();
       ui.label("Vertex buffer size");
-      ui.monospace(format!("{}", size_of_val(&lod_render_data.vertices)));
+      ui.monospace(format!("{}", size_of_val(lod_render_data.vertices.as_slice())));
       ui.end_row();
       ui.label("# indices");
       ui.monospace(format!("{}", lod_render_data.indices.len()));
       ui.end_row();
       ui.label("Index buffer size");
-      ui.monospace(format!("{}", size_of_val(&lod_render_data.indices)));
+      ui.monospace(format!("{}", size_of_val(lod_render_data.indices.as_slice())));
       ui.end_row();
       ui.label("# draw commands");
       ui.monospace(format!("{}", lod_render_data.draws.len()));
