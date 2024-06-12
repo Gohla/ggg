@@ -237,24 +237,16 @@ impl DebugRenderer {
 
   pub fn clear(&mut self) {
     if let Some(pipeline) = &mut self.point_list_render_pipeline {
-      pipeline.vertices.clear();
-      pipeline.indices.clear();
-      pipeline.upload_buffers = true;
+      pipeline.clear();
     }
     if let Some(pipeline) = &mut self.line_list_render_pipeline {
-      pipeline.vertices.clear();
-      pipeline.indices.clear();
-      pipeline.upload_buffers = true;
+      pipeline.clear();
     }
     if let Some(pipeline) = &mut self.line_strip_render_pipeline {
-      pipeline.vertices.clear();
-      pipeline.indices.clear();
-      pipeline.upload_buffers = true;
+      pipeline.clear();
     }
     if let Some(pipeline) = &mut self.line_triangle_list_render_pipeline {
-      pipeline.vertices.clear();
-      pipeline.indices.clear();
-      pipeline.upload_buffers = true;
+      pipeline.clear();
     }
   }
 
@@ -352,6 +344,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     }
   }
 
+
   #[inline]
   fn push_vertex_without_index(&mut self, vertex: V) {
     self.vertices.push(vertex);
@@ -389,7 +382,7 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     self.indices.extend(indices.into_iter().map(|idx| base + idx));
   }
 
-  #[inline]
+
   fn upload_buffers_if_needed(&mut self, gfx: &Gfx) {
     if self.upload_buffers {
       self.vertex_buffer = BufferBuilder::new()
@@ -404,18 +397,24 @@ impl<V: Vertex + Pod> DebugRendererPipeline<V> {
     self.upload_buffers = false;
   }
 
-  #[inline]
   fn draw<'a, 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
     render_pass.push_debug_group(&format!("Debug draw {}", self.label));
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     if !self.indices.is_empty() {
       render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-      render_pass.draw_indexed(0..self.index_buffer.count() as u32, 0, 0..1);
+      render_pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
     } else {
-      render_pass.draw(0..self.vertex_buffer.count() as u32, 0..1);
+      render_pass.draw(0..self.vertices.len() as u32, 0..1);
     }
     render_pass.pop_debug_group();
+  }
+
+
+  fn clear(&mut self) {
+    self.vertices.clear();
+    self.indices.clear();
+    self.upload_buffers = true;
   }
 }
 

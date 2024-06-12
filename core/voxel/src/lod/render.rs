@@ -62,7 +62,9 @@ impl Default for LodRenderDataSettings {
 }
 
 pub struct LodRenderData {
+  pub vertex_count: u32,
   pub vertex_buffer: GfxBuffer,
+  pub index_count: u32,
   pub index_buffer: GfxBuffer,
   pub draws: Vec<LodDraw>,
   pub model: Mat4,
@@ -155,10 +157,12 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     }
 
     // OPTO: don't create new buffers each time, reuse them instead!
+    let vertex_count = self.vertices.len() as u32;
     let vertex_buffer = BufferBuilder::new()
       .with_vertex_usage()
       .with_label("Voxel meshing vertex buffer")
       .create_with_data(device, &self.vertices);
+    let index_count = self.indices.len() as u32;
     let index_buffer = BufferBuilder::new()
       .with_index_usage()
       .with_label("Voxel meshing index buffer")
@@ -166,7 +170,7 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
     let draws = std::mem::take(&mut self.draws);
     let model = transform.into_homogeneous_matrix();
 
-    LodRenderData { vertex_buffer, index_buffer, draws, model }
+    LodRenderData { vertex_count, vertex_buffer, index_count, index_buffer, draws, model }
   }
 
   #[inline]

@@ -134,15 +134,15 @@ impl VoxelRenderer {
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
-    let vertex_buffer = self.vertex_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.vertices());
-    let index_buffer = self.index_buffer.write_all_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.indices());
+    let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.vertices());
+    let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, staging_belt, &chunk_vertices.indices());
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..index_buffer.count() as u32, 0, 0..1);
+    render_pass.draw_indexed(0..chunk_vertices.indices().len() as u32, 0, 0..1);
     render_pass.pop_debug_group();
   }
 

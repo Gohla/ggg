@@ -358,7 +358,7 @@ impl Gui {
     let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
     // (Re-)Create index and vertex buffers if they do not exist yet or are not large enough.
-    let mut index_buffer = { // TODO: replace with growable buffer?
+    let index_buffer = { // TODO: replace with growable buffer?
       let count: usize = clipped_primitives.iter()
         .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
         .sum();
@@ -371,7 +371,7 @@ impl Gui {
       }
       buffer
     };
-    let mut vertex_buffer = { // TODO: replace with growable buffer?
+    let vertex_buffer = { // TODO: replace with growable buffer?
       let count: usize = clipped_primitives.iter()
         .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
         .sum();

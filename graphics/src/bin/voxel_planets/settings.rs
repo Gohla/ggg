@@ -369,13 +369,13 @@ impl Settings {
   ) {
     ui.collapsing_with_grid("LOD render data", "Grid", |ui| {
       ui.label("# vertices");
-      ui.monospace(format!("{}", lod_render_data.vertex_buffer.count()));
+      ui.monospace(format!("{}", lod_render_data.vertex_count));
       ui.end_row();
       ui.label("Vertex buffer size");
       ui.monospace(format!("{}", lod_render_data.vertex_buffer.size()));
       ui.end_row();
       ui.label("# indices");
-      ui.monospace(format!("{}", lod_render_data.index_buffer.count()));
+      ui.monospace(format!("{}", lod_render_data.index_count));
       ui.end_row();
       ui.label("Index buffer size");
       ui.monospace(format!("{}", lod_render_data.index_buffer.size()));
