@@ -1,12 +1,11 @@
 use egui::{Align2, ComboBox, Ui};
 use ultraviolet::{UVec3, Vec4};
 
-use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, MaybeCompressedChunkSampleArray, ChunkSamplesMut};
+use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSampleArray};
 use voxel::chunk::size::ChunkSize;
 use voxel::marching_cubes;
 use voxel::marching_cubes::{MarchingCubes, RegularCell};
@@ -26,10 +25,10 @@ pub struct MarchingCubesDebugging {
 }
 
 impl MarchingCubesDebugging {
-  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame) {
+  pub fn show_gui_window(&mut self, gui: &egui::Context) {
     egui::Window::new("Marching Cubes")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
-      .show(&gui_frame, |ui| {
+      .show(&gui, |ui| {
         self.draw_window_contents(ui);
       });
   }

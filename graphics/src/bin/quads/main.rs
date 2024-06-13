@@ -7,11 +7,10 @@ use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
-use app::{AppRunner, Cycle, GuiFrame};
+use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Offset;
-use gfx::{Frame, Gfx, include_shader_for_bin};
+use gfx::{Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
@@ -218,12 +217,12 @@ impl app::Application for Quads {
     self.camera_debugging.add_to_menu(ui);
   }
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, cycle.duration);
     self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    egui::Window::new("Quads").show(&gui_frame, |ui| {
+    egui::Window::new("Quads").show(gui, |ui| {
       ui.label("Hello, world!");
     });
 

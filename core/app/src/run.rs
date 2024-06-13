@@ -18,7 +18,7 @@ use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
 use os::OsCreateError;
 use os::window::Window;
 
-use crate::{Application, config, Cycle, DebugGui, GuiFrame, Options, Os, Step};
+use crate::{Application, config, Cycle, DebugGui, Options, Os, RenderInput, Step};
 use crate::debug_gui::TimingStats;
 
 /// Run application error.
@@ -302,7 +302,7 @@ impl<A: Application> Runner<A> {
     }
 
     // Create GUI frame
-    let gui_frame = if !self.minimized {
+    let gui_context = if !self.minimized {
       let gui_context = self.gui.begin_frame(self.screen_size, elapsed.as_s(), cycle.duration.as_s() as f32);
       TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
         self.app.add_to_menu(ui);
@@ -310,13 +310,13 @@ impl<A: Application> Runner<A> {
           self.debug_gui.add_debug_menu(ui, |ui| self.app.add_to_debug_menu(ui));
         })
       });
-      Some(GuiFrame { context: gui_context })
+      Some(gui_context)
     } else {
       None
     };
 
     // Show input debugging GUI if enabled.
-    if let Some(ref gui_frame) = gui_frame {
+    if let Some(ref gui_frame) = gui_context {
       self.debug_gui.show_input(&gui_frame, &raw_input);
     }
 
@@ -338,7 +338,7 @@ impl<A: Application> Runner<A> {
     if self.minimized { return false; }
 
     // Show timing debugging GUI if enabled.
-    self.debug_gui.show_timing(gui_frame.as_ref().unwrap(), &self.timing_stats);
+    self.debug_gui.show_timing(gui_context.as_ref().unwrap(), &self.timing_stats);
 
     // Get swapchain texture to draw into and present.
     let surface_texture = match self.gfx.surface.get_current_texture() {
@@ -370,7 +370,16 @@ impl<A: Application> Runner<A> {
       encoder: &mut encoder,
       extrapolation,
     };
-    let additional_command_buffers = self.app.render(&self.os, &self.gfx, elapsed, cycle, frame, gui_frame.as_ref().unwrap(), &input);
+    let render_input = RenderInput {
+      os: &self.os,
+      gfx: &self.gfx,
+      elapsed,
+      cycle,
+      frame,
+      gui: gui_context.as_ref().unwrap(),
+      input: &input,
+    };
+    let additional_command_buffers = self.app.render(render_input);
     self.gui.render(&self.window, self.screen_size, &self.gfx.device, &self.gfx.queue, &mut encoder, &output_texture);
 
     // Submit command buffers

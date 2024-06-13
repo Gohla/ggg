@@ -10,11 +10,10 @@ use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
-use app::{AppRunner, Cycle, GuiFrame};
+use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Offset;
-use gfx::{Frame, Gfx, include_shader_for_bin};
+use gfx::{Gfx, include_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
@@ -197,12 +196,12 @@ impl app::Application for Cubes {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, cycle.duration);
     self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    egui::Window::new("Cubes").show(&gui_frame, |ui| {
+    egui::Window::new("Cubes").show(gui, |ui| {
       ui.grid("Grid", |ui| {
         ui.label("Cube instances");
         ui.add(DragValue::new(&mut self.num_cubes_to_generate).prefix("# ").speed(1000).clamp_range(0..=MAX_INSTANCES));

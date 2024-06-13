@@ -4,7 +4,6 @@ use egui::{Align2, ComboBox, Ui};
 use serde::{Deserialize, Serialize};
 use ultraviolet::{UVec3, Vec4};
 
-use app::GuiFrame;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::{UVec3DisplayExt, Vec3DisplayExt};
 use gui_widget::UiWidgetsExt;
@@ -44,10 +43,10 @@ struct Chunk {
 }
 
 impl SurfaceNetsDebugging {
-  pub fn show_gui_window(&mut self, gui_frame: &GuiFrame) {
+  pub fn show_gui_window(&mut self, gui: &egui::Context) {
     egui::Window::new("Surface Nets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
-      .show(&gui_frame, |ui| {
+      .show(&gui, |ui| {
         ComboBox::from_id_source("Selected Chunk")
           .selected_text(format!("{}", self.selected_chunk))
           .show_ui(ui, |ui| {
@@ -90,7 +89,7 @@ impl SurfaceNetsDebugging {
       &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_y_min, 1)),
       x_positive_min,
       &MaybeCompressedChunkSamples::Mixed(self.chunk_sample_array.offset(x_positive_min, 1)),
-      chunk_vertices
+      chunk_vertices,
     );
 
     // Debug draw voxels
@@ -247,7 +246,7 @@ impl Chunk {
     surface_nets: SurfaceNets<C2>,
     chunk_sample_array: &ChunkSampleArray<C6>,
     chunk_mesh: &mut ChunkMesh,
-    debug_renderer: &mut DebugRenderer
+    debug_renderer: &mut DebugRenderer,
   ) {
     surface_nets.extract_chunk_from_samples(minimum_point, step, &chunk_sample_array.offset(minimum_point, step), chunk_mesh);
     self.debug_draw(step, minimum_point, debug_renderer);

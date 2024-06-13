@@ -3,13 +3,12 @@ use ultraviolet::{Isometry3, Rotor3, Vec3};
 use wgpu::CommandBuffer;
 use wgpu::util::StagingBelt;
 
-use app::{AppRunner, Cycle, GuiFrame};
+use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Offset;
-use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraInput};
 use gfx::debug_renderer::DebugRenderer;
+use gfx::Gfx;
 use os::Os;
 use voxel::chunk::size::ChunkSize16;
 use voxel::lod::render::{LodRenderData, LodRenderDataManager};
@@ -65,7 +64,7 @@ impl app::Application for VoxelPlanets {
       config.light.uniform,
       ModelUniform::identity(),
       None,
-      StagingBelt::new(4096 * 1024) // 4 MiB staging belt
+      StagingBelt::new(4096 * 1024), // 4 MiB staging belt
     );
 
     let lod_render_data_manager = config.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
@@ -111,8 +110,8 @@ impl app::Application for VoxelPlanets {
 
 
   #[profiling::function]
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.settings.camera_debugging.show_debugging_gui_window_multiple_cameras(&gui_frame, &self.cameras, &mut self.settings.camera_settings);
+  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    self.settings.camera_debugging.show_debugging_gui_window_multiple_cameras(gui, &self.cameras, &mut self.settings.camera_settings);
     let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
     camera.update(camera_settings, &input.camera, cycle.duration);
     self.camera_uniform.update_from_camera(camera);
@@ -123,7 +122,7 @@ impl app::Application for VoxelPlanets {
     let (recreate_lod_render_data_manager, update_lod_render_data) = egui::Window::new("Voxel Planets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
       .auto_sized()
-      .show(&gui_frame, |ui| {
+      .show(gui, |ui| {
         let mut recreate = false;
         recreate |= self.settings.draw_reset_to_defaults_button(ui);
         self.settings.draw_light_gui(ui, camera_direction_inverse);

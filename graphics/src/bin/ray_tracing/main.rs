@@ -4,11 +4,10 @@ use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
 use wgpu::{BindGroup, CommandBuffer, Features, RenderPipeline, ShaderStages};
 
-use app::{AppRunner, Cycle, GuiFrame};
+use app::{AppRunner, RenderInput};
 use common::input::{KeyboardKey, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
-use common::timing::Offset;
-use gfx::{Frame, Gfx, include_shader_without_validation_for_bin};
+use gfx::{Gfx, include_shader_without_validation_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
@@ -129,7 +128,7 @@ impl app::Application for RayTracing {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, _gui_frame: &GuiFrame, input: &Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, cycle, elapsed, mut frame, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let duration = cycle.duration.as_s() as f32;
     if input.forward { self.camera_origin.z -= 1.0 * duration; }
     if input.backward { self.camera_origin.z += 1.0 * duration; }

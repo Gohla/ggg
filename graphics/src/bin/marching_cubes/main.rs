@@ -3,13 +3,12 @@ use ultraviolet::{Isometry3, Rotor3, Vec3, Vec4};
 use wgpu::CommandBuffer;
 use wgpu::util::StagingBelt;
 
-use app::{AppRunner, Cycle, GuiFrame};
+use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Offset;
-use gfx::{Frame, Gfx};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
+use gfx::Gfx;
 use os::Os;
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::size::ChunkSize1;
@@ -107,17 +106,17 @@ impl app::Application for MarchingCubesDemo {
   }
 
 
-  fn render<'a>(&mut self, _os: &Os, gfx: &Gfx, _elapsed: Offset, cycle: Cycle, mut frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera_debugging.show_debugging_gui_window(&gui_frame, &self.camera, &mut self.camera_settings);
+    self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, cycle.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI
-    self.marching_cubes_debugging.show_gui_window(gui_frame);
+    self.marching_cubes_debugging.show_gui_window(gui);
     egui::Window::new("Demo")
       .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
-      .show(&gui_frame, |ui| {
+      .show(gui, |ui| {
         self.light_settings.render_gui(ui, self.camera.get_direction_inverse());
       });
 

@@ -23,7 +23,7 @@ mod config;
 pub struct Cycle {
   /// Cycle #
   pub cycle: u64,
-  /// Duration of the previous frame. That is, the duration from the previous cycle start to the current cycle start.
+  /// Duration of the previous frame. That is, the duration from the previous frame start to the current frame start.
   pub duration: Offset,
 }
 
@@ -36,14 +36,14 @@ pub struct Step {
   pub target_duration: Offset,
 }
 
-/// Context for creating GUI elements in a single frame.
-pub struct GuiFrame {
-  pub context: egui::Context,
-}
-impl std::ops::Deref for GuiFrame {
-  type Target = egui::Context;
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.context }
+pub struct RenderInput<'a, A: Application> {
+  pub os: &'a Os,
+  pub gfx: &'a Gfx,
+  pub elapsed: Offset,
+  pub cycle: Cycle,
+  pub frame: Frame<'a>,
+  pub gui: &'a egui::Context,
+  pub input: &'a A::Input,
 }
 
 /// Application trait
@@ -78,7 +78,7 @@ pub trait Application: Sized {
   fn simulate(&mut self, step: Step, input: &Self::Input) {}
 
   /// Renders a single `frame` of the application. May return additional command buffers to be submitted.
-  fn render<'a>(&mut self, os: &Os, gfx: &Gfx, elapsed: Offset, cycle: Cycle, frame: Frame<'a>, gui_frame: &GuiFrame, input: &Self::Input) -> Box<dyn Iterator<Item=CommandBuffer>>;
+  fn render<'a>(&mut self, render_input: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
 /// Application options
