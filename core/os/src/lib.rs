@@ -49,8 +49,7 @@ pub fn init_tracing() -> Tracing {
 }
 
 
-// Operating system (OS) interface
-
+/// Operating system (OS) facade: handles for interacting with the OS environment.
 pub struct Os {
   pub directories: Directories,
   pub tracing: Tracing,

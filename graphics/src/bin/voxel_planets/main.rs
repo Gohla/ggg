@@ -110,10 +110,10 @@ impl app::Application for VoxelPlanets {
 
 
   #[profiling::function]
-  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, frame, mut render, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.settings.camera_debugging.show_debugging_gui_window_multiple_cameras(gui, &self.cameras, &mut self.settings.camera_settings);
     let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
-    camera.update(camera_settings, &input.camera, cycle.duration);
+    camera.update(camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(camera);
     let camera_view_projection = camera.get_view_projection_matrix();
     let camera_direction_inverse = camera.get_direction_inverse();
@@ -145,7 +145,7 @@ impl app::Application for VoxelPlanets {
     }
 
     // Render stars
-    self.stars_renderer.render(gfx, &mut frame, camera_view_inverse_matrix, &self.settings.stars_renderer_settings);
+    self.stars_renderer.render(gfx, &mut render, camera_view_inverse_matrix, &self.settings.stars_renderer_settings);
 
     // Render voxels
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
@@ -154,13 +154,13 @@ impl app::Application for VoxelPlanets {
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
     self.voxel_renderer.render_lod_mesh(
       gfx,
-      &mut frame,
+      &mut render,
       false,
       &self.lod_render_data,
     );
 
     // LOD render data debug draw (last so it draws over everything)
-    self.lod_render_data_manager.debug_render(gfx, &mut frame, camera_view_projection, &self.lod_render_data);
+    self.lod_render_data_manager.debug_render(gfx, &mut render, camera_view_projection, &self.lod_render_data);
 
     Box::new(std::iter::empty())
   }

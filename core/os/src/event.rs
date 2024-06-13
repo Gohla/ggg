@@ -173,6 +173,7 @@ impl EventLoop {
     Ok(())
   }
 
+  // TODO: WASM code is out of date with rest of the code.
   #[cfg(target_arch = "wasm32")]
   pub fn run(mut self, os_context: Context, mut cycle: impl FnMut() -> bool + 'static) {
     os_context.event_loop.run(move |event, _, control_flow| {

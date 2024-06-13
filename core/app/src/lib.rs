@@ -8,7 +8,7 @@ use wgpu::{Backends, CommandBuffer, Features, Limits, PowerPreference, PresentMo
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use common::timing::Offset;
-use gfx::{Frame, Gfx};
+use gfx::{Gfx, Render};
 use os::{ApplicationOptions, Os};
 pub use run::RunError;
 
@@ -18,30 +18,38 @@ mod run;
 mod debug_gui;
 mod config;
 
-/// Cycle information.
+/// Frame information.
 #[derive(Copy, Clone, Debug)]
-pub struct Cycle {
-  /// Cycle #
-  pub cycle: u64,
-  /// Duration of the previous frame. That is, the duration from the previous frame start to the current frame start.
+pub struct Frame {
+  /// Frame #
+  pub frame: u64,
+  /// Duration of the previous frame. That is, the duration from the previous frame start to the current frame start. Is
+  /// set to `Offset::zero()` for the first frame.
+  ///
+  /// This can be used as an approximation for the duration of this frame.
   pub duration: Offset,
 }
 
-/// Simulation step information.
+/// Simulation update step information.
 #[derive(Copy, Clone, Debug)]
 pub struct Step {
-  /// Step #
-  pub step: u64,
-  /// How much time a step should simulate. This is a fixed amount of time for determinism of update steps.
+  /// Update #
+  pub update: u64,
+  /// How much time an update step should simulate. This is a fixed amount of time for determinism of update steps.
   pub target_duration: Offset,
 }
 
+/// Input for [Application::render].
 pub struct RenderInput<'a, A: Application> {
   pub os: &'a Os,
   pub gfx: &'a Gfx,
   pub elapsed: Offset,
-  pub cycle: Cycle,
-  pub frame: Frame<'a>,
+  pub frame: Frame,
+  pub render: Render<'a>,
+  /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required
+  /// to make the rendered representation sync up with the simulated representation. Thus, the renderer should
+  /// extrapolate this much time into the future.
+  pub extrapolate: Offset,
   pub gui: &'a egui::Context,
   pub input: &'a A::Input,
 }
@@ -49,36 +57,37 @@ pub struct RenderInput<'a, A: Application> {
 /// Application trait
 #[allow(unused_variables)]
 pub trait Application: Sized {
-  /// Type of configuration that is deserialized and passed into `new`, and gotten from `get_config` to be serialized.
+  /// Type of configuration this application expects, passed into [new](Self::new) and retrieved with
+  /// [into_config](Self::into_config).
   type Config: Default + Serialize + DeserializeOwned + Send + 'static;
-  /// Creates an instance of the application.
+  /// Create a new instance of the application.
   fn new(os: &Os, gfx: &Gfx, screen_size: ScreenSize, config: Self::Config) -> Self;
-  /// Takes the configuration of the application, so that the framework can serialize it.
+  /// Converts this application into its configuration.
   fn into_config(self) -> Self::Config { Self::Config::default() }
 
-  /// Notifies the application about a screen resize or rescale event.
+  /// Update this application with a new `screen_size`, possibly updating internal structures to reflect the new size.
   fn screen_resize(&mut self, os: &Os, gfx: &Gfx, screen_size: ScreenSize) {}
 
-  /// Return true to prevent the GUI from receiving keyboard events.
+  /// Returns `true` when this application wants to capture keyboard events, `false` otherwise.
   fn is_capturing_keyboard(&self) -> bool { return false; }
-  /// Return true to prevent the GUI from receiving mouse events.
+  /// Returns `true` when this application wants to capture mouse events, `false` otherwise.
   fn is_capturing_mouse(&self) -> bool { return false; }
 
-  /// The type of input that this application creates, to be passed into `simulate` and `render`.
+  /// Type of input this application creates, passed into `simulate` and `render`.
   type Input;
-  /// Processes raw `input` into `Self::Input`.
+  /// Process raw `input` into [`Self::Input`].
   fn process_input(&mut self, input: RawInput) -> Self::Input;
 
-  /// Allow the application to add elements to the debug menu via `ui`.
+  /// Add elements to the debug menu via `ui`.
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {}
-  /// Allow the application to add elements to the menu bar via `ui`.
+  /// Add elements to the menu bar via `ui`.
   fn add_to_menu(&mut self, ui: &mut Ui) {}
 
-  /// Simulates a single update `step` of the application.
+  /// Simulate a single update `step` with `input`.
   fn simulate(&mut self, step: Step, input: &Self::Input) {}
 
-  /// Renders a single `frame` of the application. May return additional command buffers to be submitted.
-  fn render<'a>(&mut self, render_input: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>>;
+  /// Render a single frame from render `input`. May return additional command buffers to be submitted.
+  fn render<'a>(&mut self, input: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
 /// Application options

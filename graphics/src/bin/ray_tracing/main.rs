@@ -128,8 +128,8 @@ impl app::Application for RayTracing {
   }
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, cycle, elapsed, mut frame, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    let duration = cycle.duration.as_s() as f32;
+  fn render<'a>(&mut self, RenderInput { gfx, frame, elapsed, mut render, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    let duration = frame.duration.as_s() as f32;
     if input.forward { self.camera_origin.z -= 1.0 * duration; }
     if input.backward { self.camera_origin.z += 1.0 * duration; }
     if input.left { self.camera_origin.x += 1.0 * duration; }
@@ -138,11 +138,11 @@ impl app::Application for RayTracing {
     if input.down { self.camera_origin.y -= 1.0 * duration; }
     self.v_fov += input.v_fov_delta;
     self.camera_aperture += input.aperture_delta;
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::new(frame.screen_size, elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
+    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::new(render.screen_size, elapsed.as_s() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Ray tracing render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
     render_pass.push_debug_group("Trace rays");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);

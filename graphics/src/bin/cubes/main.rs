@@ -196,9 +196,9 @@ impl app::Application for Cubes {
   }
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, frame, mut render, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
-    self.camera.update(&mut self.camera_settings, &input.camera, cycle.duration);
+    self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Cubes").show(gui, |ui| {
@@ -222,7 +222,7 @@ impl app::Application for Cubes {
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Cubes render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, true);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
     render_pass.push_debug_group("Draw cubes");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.static_bind_group, &[]);

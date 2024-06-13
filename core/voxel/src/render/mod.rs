@@ -1,7 +1,7 @@
 use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
 use wgpu::util::StagingBelt;
 
-use gfx::{Frame, Gfx};
+use gfx::{Render, Gfx};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -112,7 +112,7 @@ impl VoxelRenderer {
   pub fn render_lod_mesh(
     &mut self,
     gfx: &Gfx,
-    frame: &mut Frame,
+    frame: &mut Render,
     clear: bool,
     lod_mesh: &LodRenderData,
   ) {
@@ -136,7 +136,7 @@ impl VoxelRenderer {
   pub fn render_chunk_vertices(
     &mut self,
     gfx: &Gfx,
-    frame: &mut Frame,
+    frame: &mut Render,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
@@ -157,7 +157,7 @@ impl VoxelRenderer {
   #[profiling::function]
   fn create_render_pass<'a>(
     gfx: &'a Gfx,
-    frame: &'a mut Frame,
+    frame: &'a mut Render,
     clear: bool,
   ) -> RenderPass<'a> {
     RenderPassBuilder::new()

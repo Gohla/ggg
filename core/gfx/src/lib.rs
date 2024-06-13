@@ -23,7 +23,7 @@ pub mod display_math;
 pub mod debug_renderer;
 pub mod full_screen_triangle;
 
-/// Facade for graphics handles and information.
+/// Graphics facade: graphics handles and information.
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
@@ -56,17 +56,15 @@ impl Gfx {
   }
 }
 
-/// Data for rendering a single frame.
+/// Data for rendering a frame.
 #[derive(Debug)]
-pub struct Frame<'a> {
-  /// Size of the screen/window/viewport.
+pub struct Render<'a> {
+  /// Current size of the screen/window/viewport.
   pub screen_size: ScreenSize,
   /// Swapchain texture to output pixels to.
   pub output_texture: &'a TextureView,
   /// Primary command encoder for recording GPU operations.
   pub encoder: &'a mut CommandEncoder,
-  /// Amount of extrapolation required to make rendering representation sync up with simulated representation.
-  pub extrapolation: f64,
 }
 
 #[macro_export]

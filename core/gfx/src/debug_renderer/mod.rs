@@ -5,7 +5,7 @@ use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BindGroup, BufferAddress, Features, PolygonMode, PrimitiveTopology, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 use wgpu::util::StagingBelt;
 
-use crate::{Frame, Gfx, include_shader};
+use crate::{Render, Gfx, include_shader};
 use crate::bind_group::CombinedBindGroupLayoutBuilder;
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::debug_renderer::pipeline::{Pipeline, Vertex};
@@ -245,7 +245,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Frame<'a>, model_view_projection: Mat4) {
+  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Render<'a>, model_view_projection: Mat4) {
     if self.point_list_pipeline.is_some() && self.line_list_pipeline.is_none() &&
       self.line_strip_pipeline.is_none() && self.line_triangle_list_pipeline.is_none() {
       return; // Nothing to do

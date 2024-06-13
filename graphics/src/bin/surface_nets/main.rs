@@ -101,10 +101,10 @@ impl app::Application for SurfaceNetsDemo {
   }
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, cycle, mut frame, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, frame, mut render, gui, input, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
     self.config.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.config.camera_settings);
-    self.camera.update(&mut self.config.camera_settings, &input.camera, cycle.duration);
+    self.camera.update(&mut self.config.camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI
@@ -125,7 +125,7 @@ impl app::Application for SurfaceNetsDemo {
     self.config.surface_nets_debugging.extract_chunk_and_debug_draw(&mut chunk_vertices, &mut self.debug_renderer);
     self.voxel_renderer.render_chunk_vertices(
       gfx,
-      &mut frame,
+      &mut render,
       true,
       &chunk_vertices,
     );
@@ -137,7 +137,7 @@ impl app::Application for SurfaceNetsDemo {
       chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    self.debug_renderer.render(gfx, &mut frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut render, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }
