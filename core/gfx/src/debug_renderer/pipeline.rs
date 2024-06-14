@@ -30,17 +30,17 @@ impl<V: Vertex + Pod> Pipeline<V> {
     label: &'static str,
   ) -> Self {
     let (_, render_pipeline) = gfx.render_pipeline_builder_without_depth_stencil()
-      .with_layout_label(&format!("Debug {} pipeline layout", label))
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_label(&format!("Debug {} render pipeline", label))
-      .with_vertex_module(&vertex_shader_module)
-      .with_vertex_buffer_layouts(&[V::buffer_layout()])
-      .with_primitive_topology(primitive_topology)
-      .with_cull_mode(None)
-      .with_polygon_mode(polygon_mode)
-      .with_fragment_module(&fragment_shader_module)
+      .layout_label(&format!("Debug {} pipeline layout", label))
+      .bind_group_layouts(&[&uniform_bind_group_layout])
+      .label(&format!("Debug {} render pipeline", label))
+      .vertex_module(&vertex_shader_module)
+      .vertex_buffer_layouts(&[V::buffer_layout()])
+      .primitive_topology(primitive_topology)
+      .without_cull_mode()
+      .polygon_mode(polygon_mode)
+      .fragment_module(&fragment_shader_module)
       // Opt in to premultiplied alpha blending
-      .with_surface_premultiplied_alpha_blend_fragment_target(&gfx.surface)
+      .surface_premultiplied_alpha_blend_fragment_target(&gfx.surface)
       .build(&gfx.device);
     let vertex_buffer = GrowableBufferBuilder::new()
       .with_vertex_usage()

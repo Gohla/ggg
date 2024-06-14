@@ -51,13 +51,13 @@ impl Gfx {
   #[inline]
   pub fn render_pipeline_builder(&self) -> RenderPipelineBuilder {
     self.render_pipeline_builder_without_depth_stencil()
-      .with_depth_from_format(self.depth_stencil_format())
+      .depth_texture(self.depth_stencil_format())
   }
   #[inline]
   pub fn render_pipeline_builder_without_depth_stencil(&self) -> RenderPipelineBuilder {
     RenderPipelineBuilder::default()
-      .with_surface_fragment_target(&self.surface)
-      .with_multisample_count(self.sample_count)
+      .surface_fragment_target(&self.surface)
+      .multisample_count(self.sample_count)
   }
 
 

@@ -104,15 +104,17 @@ impl Gui {
       .build(device);
 
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::default()
-      .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
-      .with_vertex_module(&vertex_shader_module)
-      .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
+      .layout_label("GUI pipeline layout")
+      .bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
+      .label("GUI render pipeline")
+      .vertex_module(&vertex_shader_module)
+      .vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
         array_stride: 5 * 4,
         step_mode: VertexStepMode::Vertex,
         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
       }])
-      .with_fragment_module(&fragment_shader_module)
-      .with_fragment_targets(&[Some(ColorTargetState {
+      .fragment_module(&fragment_shader_module)
+      .fragment_targets(&[Some(ColorTargetState {
         blend: Some(BlendState {
           color: BlendComponent {
             src_factor: BlendFactor::One,
@@ -127,8 +129,6 @@ impl Gui {
         }),
         ..swap_chain_texture_format.into()
       })])
-      .with_layout_label("GUI pipeline layout")
-      .with_label("GUI render pipeline")
       .build(device);
 
     Self {

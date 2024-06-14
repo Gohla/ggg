@@ -21,43 +21,27 @@ impl<'a> Default for FragmentStateBuilder<'a> {
 
 impl<'a> FragmentStateBuilder<'a> {
   #[inline]
-  pub fn with_module(mut self, module: &'a ShaderModule) -> Self {
+  pub fn module(mut self, module: &'a ShaderModule) -> Self {
     self.module = Some(module);
     self
   }
-  #[inline]
-  pub fn set_module(&mut self, module: &'a ShaderModule) {
-    self.module = Some(module);
-  }
 
   #[inline]
-  pub fn with_entry_point(mut self, entry_point: &'a str) -> Self {
+  pub fn entry_point(mut self, entry_point: &'a str) -> Self {
     self.entry_point = entry_point;
     self
   }
-  #[inline]
-  pub fn set_entry_point(&mut self, entry_point: &'a str) {
-    self.entry_point = entry_point;
-  }
 
   #[inline]
-  pub fn with_compilation_options(mut self, compilation_options: PipelineCompilationOptions<'a>) -> Self {
+  pub fn compilation_options(mut self, compilation_options: PipelineCompilationOptions<'a>) -> Self {
     self.compilation_options = compilation_options;
     self
   }
-  #[inline]
-  pub fn set_compilation_options(&mut self, compilation_options: PipelineCompilationOptions<'a>) {
-    self.compilation_options = compilation_options;
-  }
 
   #[inline]
-  pub fn with_targets(mut self, targets: &'a [Option<ColorTargetState>]) -> Self {
+  pub fn targets(mut self, targets: &'a [Option<ColorTargetState>]) -> Self {
     self.targets = targets;
     self
-  }
-  #[inline]
-  pub fn set_targets(&mut self, targets: &'a [Option<ColorTargetState>]) {
-    self.targets = targets;
   }
 }
 

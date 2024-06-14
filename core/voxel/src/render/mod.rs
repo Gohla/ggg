@@ -57,15 +57,14 @@ impl VoxelRenderer {
       .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
       .build(&gfx.device);
 
-    let render_pipeline_builder = gfx.render_pipeline_builder()
-      .with_layout_label("Voxel renderer pipeline layout")
-      .with_label("Voxel renderer render pipeline")
-      .with_vertex_module(&vertex_shader_module)
-      .with_cull_mode(cull_mode)
-      .with_fragment_module(&fragment_shader_module);
-    let (_, render_pipeline) = render_pipeline_builder
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
+    let (_, render_pipeline) = gfx.render_pipeline_builder()
+      .layout_label("Voxel renderer pipeline layout")
+      .bind_group_layouts(&[&uniform_bind_group_layout])
+      .label("Voxel renderer render pipeline")
+      .vertex_module(&vertex_shader_module)
+      .vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .cull_mode(cull_mode)
+      .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
 
     let vertex_buffer = GrowableBufferBuilder::default()

@@ -16,7 +16,7 @@ impl FullScreenTriangle {
 
   #[inline]
   pub fn configure_render_pipeline_builder<'a>(&'a self, builder: RenderPipelineBuilder<'a>) -> RenderPipelineBuilder<'a> {
-    builder.with_vertex_module(&self.vertex_shader)
+    builder.vertex_module(&self.vertex_shader)
   }
   #[inline]
   pub fn create_render_pipeline_builder<'a>(&'a self, gfx: &'a Gfx) -> RenderPipelineBuilder<'a> {

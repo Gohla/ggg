@@ -50,11 +50,11 @@ impl app::Application for Triangle {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = gfx.render_pipeline_builder()
-      .with_layout_label("Triangle pipeline layout")
-      .with_label("Triangle render pipeline")
-      .with_vertex_module(&vertex_shader_module)
-      .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
-      .with_fragment_module(&fragment_shader_module)
+      .layout_label("Triangle pipeline layout")
+      .label("Triangle render pipeline")
+      .vertex_module(&vertex_shader_module)
+      .vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::default()
       .with_label("Triangle static vertex buffer")
