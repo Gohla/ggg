@@ -114,6 +114,11 @@ pub struct Options {
 }
 impl Default for Options {
   fn default() -> Self {
+    let graphics_backends = if cfg!(target_os = "windows") {
+      Backends::DX12
+    } else {
+      Backends::default()
+    };
     let graphics_device_limits = if cfg!(target_arch = "wasm32") {
       Limits::downlevel_webgl2_defaults()
     } else {
@@ -121,7 +126,7 @@ impl Default for Options {
     };
 
     Self {
-      graphics_backends: Backends::all(),
+      graphics_backends,
       graphics_adapter_power_preference: PowerPreference::None,
 
       require_graphics_device_features: Features::empty(),
