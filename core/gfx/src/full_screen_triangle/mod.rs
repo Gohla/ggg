@@ -1,6 +1,6 @@
 use wgpu::{Device, RenderPass, ShaderModule};
 
-use crate::include_shader;
+use crate::include_spirv_shader;
 use crate::render_pipeline::RenderPipelineBuilder;
 
 pub struct FullScreenTriangle {
@@ -9,7 +9,7 @@ pub struct FullScreenTriangle {
 
 impl<'a> FullScreenTriangle {
   pub fn new(device: &Device) -> Self {
-    let vertex_shader = device.create_shader_module(include_shader!("full_screen_triangle/vert"));
+    let vertex_shader = device.create_shader_module(include_spirv_shader!("full_screen_triangle/vert"));
     Self { vertex_shader }
   }
 

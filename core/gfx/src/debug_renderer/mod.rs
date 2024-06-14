@@ -5,7 +5,7 @@ use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BindGroup, BufferAddress, Features, PolygonMode, PrimitiveTopology, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 use wgpu::util::StagingBelt;
 
-use crate::{Render, Gfx, include_shader};
+use crate::{Render, Gfx, include_spirv_shader};
 use crate::bind_group::CombinedBindGroupLayoutBuilder;
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::debug_renderer::pipeline::{Pipeline, Vertex};
@@ -44,9 +44,9 @@ impl DebugRenderer {
       .with_label("Debug uniform bind group")
       .build(&gfx.device);
 
-    let point_vertex_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/point_vert"));
-    let vertex_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(include_shader!("debug_renderer/frag"));
+    let point_vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("debug_renderer/point_vert"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("debug_renderer/vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader!("debug_renderer/frag"));
 
     let has_polygon_mode_point_feature = gfx.adapter.features().contains(Features::POLYGON_MODE_POINT);
     let point_list_pipeline = has_polygon_mode_point_feature.then(|| Pipeline::new(

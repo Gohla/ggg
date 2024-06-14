@@ -11,6 +11,7 @@ use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperati
 
 use common::input::{Key, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
+use gfx::{include_spirv_shader};
 use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -56,8 +57,8 @@ impl Gui {
       context.memory_mut(|m| *m = memory);
     }
 
-    let vertex_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.vert.spv")));
-    let fragment_shader_module = device.create_shader_module(wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/shader/gui.frag.spv")));
+    let vertex_shader_module = device.create_shader_module(include_spirv_shader!("gui.vert"));
+    let fragment_shader_module = device.create_shader_module(include_spirv_shader!("gui.frag"));
 
     let index_buffer = GrowableBufferBuilder::default()
       .with_label("GUI index buffer")

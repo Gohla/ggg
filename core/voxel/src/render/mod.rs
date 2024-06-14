@@ -48,8 +48,8 @@ impl VoxelRenderer {
       .create_with_data(&gfx.device, &[model_uniform]);
     let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
 
-    let vertex_shader_module = gfx.device.create_shader_module(gfx::include_shader!("render/vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(gfx::include_shader!("render/frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/frag"));
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])

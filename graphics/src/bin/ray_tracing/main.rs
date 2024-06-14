@@ -2,12 +2,12 @@
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, Features, RenderPipeline, ShaderStages};
+use wgpu::{BindGroup, CommandBuffer, RenderPipeline, ShaderStages};
 
 use app::{AppRunner, RenderInput};
 use common::input::{KeyboardKey, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
-use gfx::{Gfx, include_shader_without_validation_for_bin};
+use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
@@ -75,7 +75,7 @@ impl app::Application for RayTracing {
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
-    let fragment_shader_module = unsafe { gfx.device.create_shader_module_spirv(&include_shader_without_validation_for_bin!("frag")) };
+    let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder()
       .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
@@ -155,7 +155,6 @@ impl app::Application for RayTracing {
 fn main() {
   AppRunner::from_name("Ray tracing")
     .with_high_power_graphics_adapter()
-    .require_graphics_device_features(Features::SPIRV_SHADER_PASSTHROUGH)
     .without_depth_stencil_texture()
     .run::<RayTracing>()
     .unwrap();

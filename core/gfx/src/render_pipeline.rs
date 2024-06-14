@@ -5,11 +5,11 @@ use crate::surface::GfxSurface;
 pub struct RenderPipelineBuilder<'a> {
   layout: PipelineLayoutDescriptor<'a>,
   label: Option<&'a str>,
-  vertex: VertexState<'a>,
+  vertex_state: VertexState<'a>,
   primitive: PrimitiveState,
-  depth_stencil: Option<DepthStencilState>,
-  multisample: MultisampleState,
-  fragment: Option<FragmentState<'a>>,
+  depth_stencil_state: Option<DepthStencilState>,
+  multisample_state: MultisampleState,
+  fragment_state: Option<FragmentState<'a>>,
   default_fragment_targets: [Option<ColorTargetState>; 1],
   use_default_fragment_targets: bool,
 }
@@ -25,7 +25,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         push_constant_ranges: &[],
       },
       label: None,
-      vertex: VertexState {
+      vertex_state: VertexState {
         module: vertex_shader_module,
         entry_point: "main",
         compilation_options: Default::default(),
@@ -35,9 +35,9 @@ impl<'a> RenderPipelineBuilder<'a> {
         front_face: FrontFace::Cw, // TODO: the default is counter clockwise!?
         ..PrimitiveState::default()
       },
-      depth_stencil: None,
-      multisample: MultisampleState::default(),
-      fragment: None,
+      depth_stencil_state: None,
+      multisample_state: MultisampleState::default(),
+      fragment_state: None,
       default_fragment_targets: [Some(ColorTargetState {
         format: TextureFormat::R8Unorm,
         blend: Default::default(),
@@ -76,19 +76,17 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_vertex_state(mut self, vertex: VertexState<'a>) -> Self {
-    self.vertex = vertex;
+    self.vertex_state = vertex;
     self
   }
-
   #[inline]
   pub fn with_vertex_entry_point(mut self, entry_point: &'a str) -> Self {
-    self.vertex.entry_point = entry_point;
+    self.vertex_state.entry_point = entry_point;
     self
   }
-
   #[inline]
   pub fn with_vertex_buffer_layouts(mut self, buffer_layouts: &'a [VertexBufferLayout<'a>]) -> Self {
-    self.vertex.buffers = buffer_layouts;
+    self.vertex_state.buffers = buffer_layouts;
     self
   }
 
@@ -98,25 +96,21 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.primitive = primitive;
     self
   }
-
   #[inline]
   pub fn with_primitive_topology(mut self, primitive_topology: PrimitiveTopology) -> Self {
     self.primitive.topology = primitive_topology;
     self
   }
-
   #[inline]
   pub fn with_front_face(mut self, front_face: FrontFace) -> Self {
     self.primitive.front_face = front_face;
     self
   }
-
   #[inline]
   pub fn with_cull_mode(mut self, cull_mode: Option<Face>) -> Self {
     self.primitive.cull_mode = cull_mode;
     self
   }
-
   #[inline]
   pub fn with_polygon_mode(mut self, polygon_mode: PolygonMode) -> Self {
     self.primitive.polygon_mode = polygon_mode;
@@ -125,14 +119,13 @@ impl<'a> RenderPipelineBuilder<'a> {
 
 
   #[inline]
-  pub fn with_depth_stencil(mut self, depth_stencil: DepthStencilState) -> Self {
-    self.depth_stencil = Some(depth_stencil);
+  pub fn with_depth_stencil_state(mut self, depth_stencil_state: DepthStencilState) -> Self {
+    self.depth_stencil_state = Some(depth_stencil_state);
     self
   }
-
   #[inline]
   pub fn with_depth_texture(self, format: TextureFormat) -> Self {
-    self.with_depth_stencil(DepthStencilState {
+    self.with_depth_stencil_state(DepthStencilState {
       format,
       depth_write_enabled: true,
       depth_compare: CompareFunction::Greater, // Using "reversed Z", so depth compare using greater instead of less.
@@ -144,7 +137,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_fragment_state(mut self, module: &'a ShaderModule, entry_point: &'a str, targets: &'a [Option<ColorTargetState>]) -> Self {
-    self.fragment = Some(FragmentState {
+    self.fragment_state = Some(FragmentState {
       module,
       entry_point,
       compilation_options: Default::default(),
@@ -156,7 +149,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_default_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
-    self.fragment = Some(FragmentState {
+    self.fragment_state = Some(FragmentState {
       module,
       entry_point: "main",
       compilation_options: Default::default(),
@@ -171,7 +164,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_default_alpha_blending_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
-    self.fragment = Some(FragmentState {
+    self.fragment_state = Some(FragmentState {
       module,
       entry_point: "main",
       compilation_options: Default::default(),
@@ -187,7 +180,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_default_premultiplied_alpha_blending_fragment_state(mut self, module: &'a ShaderModule, surface: &GfxSurface) -> Self {
-    self.fragment = Some(FragmentState {
+    self.fragment_state = Some(FragmentState {
       module,
       entry_point: "main",
       compilation_options: Default::default(),
@@ -203,20 +196,20 @@ impl<'a> RenderPipelineBuilder<'a> {
 
   #[inline]
   pub fn with_multisample(mut self, multisample: MultisampleState) -> Self {
-    self.multisample = multisample;
+    self.multisample_state = multisample;
     self
   }
 
   #[inline]
   pub fn with_multisample_count(mut self, count: u32) -> Self {
-    self.multisample.count = count;
+    self.multisample_state.count = count;
     self
   }
 
 
   pub fn build(self, device: &Device) -> (PipelineLayout, RenderPipeline) {
     let layout = device.create_pipeline_layout(&self.layout);
-    let mut fragment = self.fragment;
+    let mut fragment = self.fragment_state;
     if self.use_default_fragment_targets {
       if let Some(ref mut fragment) = fragment {
         fragment.targets = &self.default_fragment_targets;
@@ -225,10 +218,10 @@ impl<'a> RenderPipelineBuilder<'a> {
     let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
       label: self.label,
       layout: Some(&layout),
-      vertex: self.vertex,
+      vertex: self.vertex_state,
       primitive: self.primitive,
-      depth_stencil: self.depth_stencil,
-      multisample: self.multisample,
+      depth_stencil: self.depth_stencil_state,
+      multisample: self.multisample_state,
       fragment,
       multiview: None,
     });

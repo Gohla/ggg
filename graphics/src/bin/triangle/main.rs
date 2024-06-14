@@ -9,7 +9,7 @@ use wgpu::{BufferAddress, CommandBuffer, RenderPipeline, VertexAttribute, Vertex
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::{Gfx, include_shader_for_bin};
+use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
@@ -48,8 +48,8 @@ impl app::Application for Triangle {
   type Config = ();
 
   fn new(_os: &Os, gfx: &Gfx, _screen_size: ScreenSize, _config: Self::Config) -> Self {
-    let vertex_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])

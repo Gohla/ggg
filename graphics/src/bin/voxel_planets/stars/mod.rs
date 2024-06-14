@@ -4,7 +4,7 @@ use ultraviolet::{Mat4, Vec4};
 use wgpu::{BindGroup, RenderPipeline, ShaderStages};
 
 use common::screen::ScreenSize;
-use gfx::{Render, Gfx, include_shader_for_bin};
+use gfx::{Render, Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
@@ -62,7 +62,7 @@ impl StarsRenderer {
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
-    let fragment_shader_module = gfx.device.create_shader_module(include_shader_for_bin!("stars/frag"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("stars/frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder()
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
