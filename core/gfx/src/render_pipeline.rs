@@ -2,9 +2,9 @@ use std::num::NonZeroU32;
 
 use wgpu::{
   BindGroupLayout, ColorTargetState, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState,
-  FrontFace, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode,
-  PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule,
-  StencilState, TextureFormat, VertexBufferLayout, VertexState,
+  FrontFace, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode, PrimitiveState,
+  PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StencilState,
+  TextureFormat, VertexBufferLayout, VertexState,
 };
 
 use crate::fragment_state::FragmentStateBuilder;
