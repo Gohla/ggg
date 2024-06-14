@@ -144,11 +144,13 @@ impl app::Application for QuadGrid {
 
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&bind_group_layout, &array_texture_def.bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
+    let (_, render_pipeline) = RenderPipelineBuilder::default()
       .with_layout_label("Quad grid pipeline layout")
+      .with_bind_group_layouts(&[&bind_group_layout, &array_texture_def.bind_group_layout])
       .with_label("Quad grid render pipeline")
+      .with_vertex_module(&vertex_shader_module)
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
 
     let index_buffer = {

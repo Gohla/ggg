@@ -31,16 +31,18 @@ impl<V: Vertex + Pod> Pipeline<V> {
     polygon_mode: PolygonMode,
     label: &'static str,
   ) -> Self {
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_premultiplied_alpha_blending_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_vertex_buffer_layouts(&[V::buffer_layout()])
-      .with_multisample_count(multisample_sample_count)
-      .with_primitive_topology(primitive_topology)
-      .with_polygon_mode(polygon_mode)
-      .with_cull_mode(None)
+    let (_, render_pipeline) = RenderPipelineBuilder::default()
       .with_layout_label(&format!("Debug {} pipeline layout", label))
+      .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_label(&format!("Debug {} render pipeline", label))
+      .with_vertex_module(&vertex_shader_module)
+      .with_vertex_buffer_layouts(&[V::buffer_layout()])
+      .with_primitive_topology(primitive_topology)
+      .with_cull_mode(None)
+      .with_polygon_mode(polygon_mode)
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_premultiplied_alpha_blend_fragment_target(&gfx.surface)
+      .with_multisample_count(multisample_sample_count)
       .build(&gfx.device);
     let vertex_buffer = GrowableBufferBuilder::new()
       .with_vertex_usage()

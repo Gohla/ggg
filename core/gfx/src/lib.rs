@@ -7,6 +7,8 @@ use crate::texture::{GfxTexture, TextureBuilder};
 
 pub mod prelude;
 pub mod surface;
+pub mod vertex_state;
+pub mod fragment_state;
 pub mod render_pipeline;
 pub mod buffer;
 pub mod growable_buffer;

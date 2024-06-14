@@ -4,7 +4,7 @@ use ultraviolet::{Mat4, Vec4};
 use wgpu::{BindGroup, RenderPipeline, ShaderStages};
 
 use common::screen::ScreenSize;
-use gfx::{Render, Gfx, include_spirv_shader_for_bin};
+use gfx::{Gfx, include_spirv_shader_for_bin, Render};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
@@ -48,26 +48,27 @@ impl StarsRenderer {
     let mut uniform = Uniform::default();
     uniform.update_screen_size(gfx.surface.get_size());
     uniform.view_inverse_matrix = view_inverse_matrix;
-    let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
+    let uniform_buffer = BufferBuilder::default()
       .with_label("Stars uniform buffer")
+      .with_uniform_usage()
       .create_with_data(&gfx.device, &[uniform]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry])
       .with_layout_label("Stars uniform bind group layout")
+      .with_layout_entries(&[uniform_bind_group_layout_entry])
       .with_label("Stars uniform bind group")
+      .with_entries(&[uniform_bind_group_entry])
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("stars/frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder()
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_layout_label("Stars pipeline layout")
+      .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_label("Stars render pipeline")
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
 
     Self {
@@ -84,11 +85,11 @@ impl StarsRenderer {
   }
 
   pub fn render(
-      &mut self,
-      gfx: &Gfx,
-      frame: &mut Render,
-      view_inverse_matrix: Mat4,
-      settings: &StarsRendererSettings,
+    &mut self,
+    gfx: &Gfx,
+    frame: &mut Render,
+    view_inverse_matrix: Mat4,
+    settings: &StarsRendererSettings,
   ) {
     self.uniform.view_inverse_matrix = view_inverse_matrix;
     self.uniform.update_settings(settings);

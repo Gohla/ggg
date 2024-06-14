@@ -1,4 +1,4 @@
-use wgpu::{Adapter, CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat};
+use wgpu::{Adapter, BlendState, ColorTargetState, CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat};
 
 use common::screen::ScreenSize;
 
@@ -7,13 +7,33 @@ pub struct GfxSurface {
   inner: Surface<'static>,
   configuration: SurfaceConfiguration,
   size: ScreenSize,
+
+  pub non_blend_target: [Option<ColorTargetState>; 1],
+  pub replace_blend_target: [Option<ColorTargetState>; 1],
+  pub alpha_blend_target: [Option<ColorTargetState>; 1],
+  pub premultiplied_alpha_blend_target: [Option<ColorTargetState>; 1],
 }
 
 impl GfxSurface {
   pub fn new(surface: Surface<'static>, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> Self {
     let configuration = Self::create_configuration(&surface, adapter, present_mode, size);
     surface.configure(device, &configuration);
-    Self { inner: surface, configuration, size }
+
+    let non_blend_target = [Some(configuration.format.into())];
+    let replace_blend_target = [Some(ColorTargetState {
+      blend: Some(BlendState::REPLACE),
+      ..configuration.format.into()
+    })];
+    let alpha_blend_target = [Some(ColorTargetState {
+      blend: Some(BlendState::ALPHA_BLENDING),
+      ..configuration.format.into()
+    })];
+    let premultiplied_alpha_blend_target = [Some(ColorTargetState {
+      blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+      ..configuration.format.into()
+    })];
+
+    Self { inner: surface, configuration, size, non_blend_target, replace_blend_target, alpha_blend_target, premultiplied_alpha_blend_target }
   }
   pub fn new_with_defaults(surface: Surface<'static>, adapter: &Adapter, device: &Device, size: ScreenSize) -> Self {
     Self::new(surface, adapter, device, PresentMode::Mailbox, size)

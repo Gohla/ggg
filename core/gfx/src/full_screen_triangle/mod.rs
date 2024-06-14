@@ -14,7 +14,7 @@ impl<'a> FullScreenTriangle {
   }
 
   pub fn create_render_pipeline_builder(&'a self) -> RenderPipelineBuilder {
-    RenderPipelineBuilder::new(&self.vertex_shader)
+    RenderPipelineBuilder::new().with_vertex_module(&self.vertex_shader)
   }
 
   pub fn draw(&self, render_pass: &mut RenderPass) {

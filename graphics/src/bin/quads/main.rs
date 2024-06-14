@@ -151,13 +151,15 @@ impl app::Application for Quads {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
 
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
+    let (_, render_pipeline) = RenderPipelineBuilder::new()
+      .with_layout_label("Quads pipeline layout")
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
+      .with_label("Quads render pipeline")
+      .with_vertex_module(&vertex_shader_module)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
       .with_depth_texture(gfx.depth_stencil_format().unwrap())
-      .with_layout_label("Quads pipeline layout")
-      .with_label("Quads render pipeline")
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()

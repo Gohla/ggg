@@ -94,9 +94,9 @@ pub struct BufferBuilder<'a> {
   descriptor: BufferDescriptor<'a>,
 }
 
-impl<'a> BufferBuilder<'a> {
+impl<'a> Default for BufferBuilder<'a> {
   #[inline]
-  pub fn new() -> Self {
+  fn default() -> Self {
     Self {
       descriptor: BufferDescriptor {
         label: None,
@@ -106,6 +106,11 @@ impl<'a> BufferBuilder<'a> {
       },
     }
   }
+}
+
+impl<'a> BufferBuilder<'a> {
+  #[inline]
+  pub fn new() -> Self { Self::default() }
 
   /// Set the debug label of the buffer, used by graphics debuggers for identification.
   #[inline]

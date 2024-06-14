@@ -136,12 +136,14 @@ impl app::Application for Cubes {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
 
-    let (_, render_pipeline) = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_bind_group_layouts(&[&static_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
-      .with_depth_texture(gfx.depth_stencil_format().unwrap())
+    let (_, render_pipeline) = RenderPipelineBuilder::default()
       .with_layout_label("Cubes pipeline layout")
+      .with_bind_group_layouts(&[&static_bind_group_layout])
       .with_label("Cubes render pipeline")
+      .with_vertex_module(&vertex_shader_module)
+      .with_depth_texture(gfx.depth_stencil_format().unwrap())
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
 
     let index_buffer = {

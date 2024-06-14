@@ -1,7 +1,7 @@
 use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
 use wgpu::util::StagingBelt;
 
-use gfx::{Render, Gfx};
+use gfx::{Gfx, Render};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -32,17 +32,17 @@ impl VoxelRenderer {
     cull_mode: Option<Face>,
     staging_belt: StagingBelt,
   ) -> Self {
-    let camera_uniform_buffer = BufferBuilder::new()
+    let camera_uniform_buffer = BufferBuilder::default()
       .with_uniform_usage()
       .with_label("Camera uniform buffer")
       .create_with_data(&gfx.device, &[camera_uniform]);
     let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
-    let light_uniform_buffer = BufferBuilder::new()
+    let light_uniform_buffer = BufferBuilder::default()
       .with_uniform_usage()
       .with_label("Light uniform buffer")
       .create_with_data(&gfx.device, &[light_uniform]);
     let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
-    let model_uniform_buffer = BufferBuilder::new()
+    let model_uniform_buffer = BufferBuilder::default()
       .with_uniform_usage()
       .with_label("Model uniform buffer")
       .create_with_data(&gfx.device, &[model_uniform]);
@@ -52,34 +52,35 @@ impl VoxelRenderer {
     let fragment_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/frag"));
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
-      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
       .with_layout_label("Voxel renderer uniform bind group layout")
       .with_label("Voxel renderer uniform bind group")
+      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
+      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
       .build(&gfx.device);
 
-    let mut render_pipeline_builder = RenderPipelineBuilder::new(&vertex_shader_module)
-      .with_cull_mode(cull_mode)
+    let mut render_pipeline_builder = RenderPipelineBuilder::default()
       .with_layout_label("Voxel renderer pipeline layout")
-      .with_label("Voxel renderer render pipeline");
+      .with_label("Voxel renderer render pipeline")
+      .with_vertex_module(&vertex_shader_module)
+      .with_cull_mode(cull_mode)
+      .with_fragment_module(&fragment_shader_module)
+      .with_surface_fragment_target(&gfx.surface);
     if let Some(depth_texture) = &gfx.depth_stencil_texture {
       render_pipeline_builder = render_pipeline_builder.with_depth_texture(depth_texture.format);
     }
     if gfx.sample_count > 1 {
       render_pipeline_builder = render_pipeline_builder.with_multisample_count(gfx.sample_count)
     }
-
     let (_, render_pipeline) = render_pipeline_builder
-      .with_bind_group_layouts(&[&uniform_bind_group_layout])
-      .with_default_fragment_state(&fragment_shader_module, &gfx.surface)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
+      .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .build(&gfx.device);
 
-    let vertex_buffer = GrowableBufferBuilder::new()
+    let vertex_buffer = GrowableBufferBuilder::default()
       .with_vertex_usage()
       .with_label("Voxel renderer vertex buffer")
       .create();
-    let index_buffer = GrowableBufferBuilder::new()
+    let index_buffer = GrowableBufferBuilder::default()
       .with_index_usage()
       .with_label("Voxel renderer index buffer")
       .create();
