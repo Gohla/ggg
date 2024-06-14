@@ -1,4 +1,11 @@
-use wgpu::{BindGroupLayout, ColorTargetState, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineCompilationOptions, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StencilState, TextureFormat, VertexBufferLayout, VertexState};
+use std::num::NonZeroU32;
+
+use wgpu::{
+  BindGroupLayout, ColorTargetState, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState,
+  FrontFace, MultisampleState, PipelineCompilationOptions, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
+  PrimitiveState, PrimitiveTopology, PushConstantRange, RenderPipeline, RenderPipelineDescriptor, ShaderModule,
+  StencilState, TextureFormat, VertexBufferLayout, VertexState,
+};
 
 use crate::fragment_state::FragmentStateBuilder;
 use crate::surface::GfxSurface;
@@ -13,6 +20,7 @@ pub struct RenderPipelineBuilder<'a> {
   depth_stencil: Option<DepthStencilState>,
   multisample: MultisampleState,
   fragment: FragmentStateBuilder<'a>,
+  multiview: Option<NonZeroU32>,
 }
 impl<'a> Default for RenderPipelineBuilder<'a> {
   #[inline]
@@ -28,6 +36,7 @@ impl<'a> Default for RenderPipelineBuilder<'a> {
       depth_stencil: None,
       multisample: MultisampleState::default(),
       fragment: FragmentStateBuilder::default(),
+      multiview: None,
     }
   }
 }
@@ -122,7 +131,6 @@ impl<'a> RenderPipelineBuilder<'a> {
     self
   }
 
-
   #[inline]
   pub fn with_depth_stencil(mut self, depth_stencil: DepthStencilState) -> Self {
     self.depth_stencil = Some(depth_stencil);
@@ -139,7 +147,6 @@ impl<'a> RenderPipelineBuilder<'a> {
     })
   }
 
-
   #[inline]
   pub fn with_multisample(mut self, multisample: MultisampleState) -> Self {
     self.multisample = multisample;
@@ -150,7 +157,6 @@ impl<'a> RenderPipelineBuilder<'a> {
     self.multisample.count = count;
     self
   }
-
 
   #[inline]
   pub fn with_fragment(mut self, fragment: FragmentState<'a>) -> Self {
@@ -203,6 +209,11 @@ impl<'a> RenderPipelineBuilder<'a> {
     self
   }
 
+  #[inline]
+  pub fn with_multiview(mut self, multiview: Option<NonZeroU32>) -> Self {
+    self.multiview = multiview;
+    self
+  }
 
   #[inline]
   pub fn build(self, device: &Device) -> (PipelineLayout, RenderPipeline) {
@@ -216,7 +227,7 @@ impl<'a> RenderPipelineBuilder<'a> {
       depth_stencil: self.depth_stencil,
       multisample: self.multisample,
       fragment: self.fragment.into(),
-      multiview: None,
+      multiview: self.multiview,
     });
     (layout, pipeline)
   }
