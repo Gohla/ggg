@@ -103,7 +103,7 @@ impl Gui {
       .with_label("GUI texture bind group layout")
       .build(device);
 
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::new()
+    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::default()
       .with_bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
       .with_vertex_module(&vertex_shader_module)
       .with_vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180

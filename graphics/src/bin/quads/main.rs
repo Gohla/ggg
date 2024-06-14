@@ -16,7 +16,6 @@ use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
 use os::Os;
@@ -151,15 +150,13 @@ impl app::Application for Quads {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
 
-    let (_, render_pipeline) = RenderPipelineBuilder::new()
+    let (_, render_pipeline) = gfx.render_pipeline_builder()
       .with_layout_label("Quads pipeline layout")
       .with_bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
       .with_label("Quads render pipeline")
       .with_vertex_module(&vertex_shader_module)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
-      .with_depth_texture(gfx.depth_stencil_format().unwrap())
       .with_fragment_module(&fragment_shader_module)
-      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::new()
       .with_static_vertex_usage()

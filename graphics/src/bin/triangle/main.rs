@@ -12,7 +12,6 @@ use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 use os::Os;
 
 #[repr(C)]
@@ -50,13 +49,12 @@ impl app::Application for Triangle {
   fn new(_os: &Os, gfx: &Gfx, _screen_size: ScreenSize, _config: Self::Config) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
-    let (_, render_pipeline) = RenderPipelineBuilder::default()
+    let (_, render_pipeline) = gfx.render_pipeline_builder()
       .with_layout_label("Triangle pipeline layout")
       .with_label("Triangle render pipeline")
       .with_vertex_module(&vertex_shader_module)
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_fragment_module(&fragment_shader_module)
-      .with_surface_fragment_target(&gfx.surface)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::default()
       .with_label("Triangle static vertex buffer")

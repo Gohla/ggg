@@ -2,11 +2,13 @@ use wgpu::{Adapter, CommandEncoder, Device, Instance, Queue, TextureFormat, Text
 
 use common::screen::ScreenSize;
 
+use crate::render_pipeline::RenderPipelineBuilder;
 use crate::surface::GfxSurface;
 use crate::texture::{GfxTexture, TextureBuilder};
 
 pub mod prelude;
 pub mod surface;
+pub mod pipeline_layout;
 pub mod vertex_state;
 pub mod fragment_state;
 pub mod render_pipeline;
@@ -40,6 +42,25 @@ pub struct Gfx {
 }
 
 impl Gfx {
+  #[inline]
+  pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
+    self.depth_stencil_texture.as_ref().map(|t| t.format)
+  }
+
+
+  #[inline]
+  pub fn render_pipeline_builder(&self) -> RenderPipelineBuilder {
+    self.render_pipeline_builder_without_depth_stencil()
+      .with_depth_from_format(self.depth_stencil_format())
+  }
+  #[inline]
+  pub fn render_pipeline_builder_without_depth_stencil(&self) -> RenderPipelineBuilder {
+    RenderPipelineBuilder::default()
+      .with_surface_fragment_target(&self.surface)
+      .with_multisample_count(self.sample_count)
+  }
+
+
   pub fn resize_surface(&mut self, size: ScreenSize) {
     self.surface.resize(&self.adapter, &self.device, size);
     if let Some(depth_texture) = &mut self.depth_stencil_texture {
@@ -51,10 +72,6 @@ impl Gfx {
       *multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&self.surface, self.sample_count)
         .build(&self.device);
     }
-  }
-
-  pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
-    self.depth_stencil_texture.as_ref().map(|t| t.format)
   }
 }
 

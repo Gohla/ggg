@@ -6,7 +6,6 @@ use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::lod::render::LodRenderData;
@@ -58,19 +57,12 @@ impl VoxelRenderer {
       .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
       .build(&gfx.device);
 
-    let mut render_pipeline_builder = RenderPipelineBuilder::default()
+    let render_pipeline_builder = gfx.render_pipeline_builder()
       .with_layout_label("Voxel renderer pipeline layout")
       .with_label("Voxel renderer render pipeline")
       .with_vertex_module(&vertex_shader_module)
       .with_cull_mode(cull_mode)
-      .with_fragment_module(&fragment_shader_module)
-      .with_surface_fragment_target(&gfx.surface);
-    if let Some(depth_texture) = &gfx.depth_stencil_texture {
-      render_pipeline_builder = render_pipeline_builder.with_depth_texture(depth_texture.format);
-    }
-    if gfx.sample_count > 1 {
-      render_pipeline_builder = render_pipeline_builder.with_multisample_count(gfx.sample_count)
-    }
+      .with_fragment_module(&fragment_shader_module);
     let (_, render_pipeline) = render_pipeline_builder
       .with_vertex_buffer_layouts(&[Vertex::buffer_layout()])
       .with_bind_group_layouts(&[&uniform_bind_group_layout])

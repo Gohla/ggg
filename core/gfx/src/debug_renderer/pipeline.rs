@@ -4,7 +4,6 @@ use wgpu::util::StagingBelt;
 
 use crate::Gfx;
 use crate::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
-use crate::render_pipeline::RenderPipelineBuilder;
 
 pub trait Vertex {
   fn buffer_layout() -> VertexBufferLayout<'static>;
@@ -26,12 +25,11 @@ impl<V: Vertex + Pod> Pipeline<V> {
     vertex_shader_module: &ShaderModule,
     fragment_shader_module: &ShaderModule,
     uniform_bind_group_layout: &BindGroupLayout,
-    multisample_sample_count: u32,
     primitive_topology: PrimitiveTopology,
     polygon_mode: PolygonMode,
     label: &'static str,
   ) -> Self {
-    let (_, render_pipeline) = RenderPipelineBuilder::default()
+    let (_, render_pipeline) = gfx.render_pipeline_builder_without_depth_stencil()
       .with_layout_label(&format!("Debug {} pipeline layout", label))
       .with_bind_group_layouts(&[&uniform_bind_group_layout])
       .with_label(&format!("Debug {} render pipeline", label))
@@ -41,8 +39,8 @@ impl<V: Vertex + Pod> Pipeline<V> {
       .with_cull_mode(None)
       .with_polygon_mode(polygon_mode)
       .with_fragment_module(&fragment_shader_module)
+      // Opt in to premultiplied alpha blending
       .with_surface_premultiplied_alpha_blend_fragment_target(&gfx.surface)
-      .with_multisample_count(multisample_sample_count)
       .build(&gfx.device);
     let vertex_buffer = GrowableBufferBuilder::new()
       .with_vertex_usage()
