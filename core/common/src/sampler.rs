@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 use std::ops::Add;
 use std::ops::Div;
 
-use crate::timing::{
-    Offset,
-    Instant,
+use crate::time::{
+  Instant,
+  Offset,
 };
 
 /// Sampler for figuring out the minimum, maximum, and average value.
@@ -14,7 +14,7 @@ pub struct ValueSampler<T> {
   max_samples: usize,
 }
 
-impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default> ValueSampler<T> {
+impl<T> ValueSampler<T> {
   pub fn new(sample_window: Offset, max_samples: usize) -> ValueSampler<T> {
     ValueSampler {
       samples: VecDeque::with_capacity(max_samples),
@@ -22,8 +22,13 @@ impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default>
       max_samples,
     }
   }
+}
+impl<T> Default for ValueSampler<T> {
+  #[inline]
+  fn default() -> Self { ValueSampler::new(Offset::from_seconds(1), 8192) }
+}
 
-
+impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default> ValueSampler<T> {
   pub fn min(&self) -> T {
     self.samples.iter().map(|&(_, s)| s).min().unwrap_or(T::default())
   }
@@ -42,7 +47,7 @@ impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default>
 
   pub fn add(&mut self, sample: T) {
     let now = Instant::now();
-    // Remove oldest samples that are outside of the sampling window.
+    // Remove the oldest samples that are outside the sampling window.
     loop {
       let oldest = {
         let oldest_sample = self.samples.front();
@@ -50,14 +55,14 @@ impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default>
         let &(instant, _) = oldest_sample.unwrap();
         instant
       };
-      let age = oldest.to(now);
+      let age = now - oldest;
       if age > self.sample_window {
         self.samples.pop_front();
       } else {
         break;
       }
     }
-    // Remove oldest samples down to max_samples - 1, to make space for new sample.
+    // Remove the oldest samples down to `max_samples - 1`, making space for the new sample.
     while self.samples.len() > self.max_samples {
       self.samples.pop_front();
     }
@@ -65,9 +70,6 @@ impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default>
   }
 }
 
-impl<A: Default, T: Copy + Ord + Add<Output=T> + Div<usize, Output=A> + Default> Default for ValueSampler<T> {
-  fn default() -> Self { ValueSampler::new(Offset::from_s(1), 8192) }
-}
 
 
 /// Sampler for figuring out how many times an event occurs.
@@ -110,7 +112,7 @@ impl EventSampler {
       if newest.is_none() { return None; };
       *newest.unwrap()
     };
-    let duration = oldest.to(newest);
+    let duration = newest - oldest;
     Some(duration)
   }
 
@@ -125,14 +127,14 @@ impl EventSampler {
         if oldest.is_none() { break; }
         *oldest.unwrap()
       };
-      let age = oldest.to(now);
+      let age = now - oldest;
       if age > self.sample_window {
         self.samples.pop_front();
       } else {
         break;
       }
     }
-    // Remove the oldest samples down to `max_samples - 1`, to make space for new sample.
+    // Remove the oldest samples down to `max_samples - 1`, making space for the new sample.
     while self.samples.len() > self.max_samples {
       self.samples.pop_front();
     }
@@ -140,5 +142,5 @@ impl EventSampler {
 }
 
 impl Default for EventSampler {
-  fn default() -> Self { EventSampler::new(Offset::from_s(1), 8192) }
+  fn default() -> Self { EventSampler::new(Offset::from_seconds(1), 8192) }
 }

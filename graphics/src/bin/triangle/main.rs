@@ -72,10 +72,10 @@ impl app::Application for Triangle {
   fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, render: mut frame, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, mut render, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Triangle render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut frame, false);
+      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
     render_pass.push_debug_group("Draw triangle");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

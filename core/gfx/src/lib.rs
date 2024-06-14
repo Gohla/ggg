@@ -56,7 +56,7 @@ impl Gfx {
   }
 }
 
-/// Data for rendering a frame.
+/// Data and handles for rendering a frame.
 #[derive(Debug)]
 pub struct Render<'a> {
   /// Current size of the screen/window/viewport.

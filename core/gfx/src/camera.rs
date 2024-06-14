@@ -4,7 +4,7 @@ use ultraviolet::{Mat4, Rotor3, Vec3, Vec4};
 
 use common::input::{KeyboardKey, MouseButton, RawInput};
 use common::screen::{PhysicalSize, ScreenDelta};
-use common::timing::Offset;
+use common::time::Offset;
 
 // Camera settings
 
@@ -285,7 +285,7 @@ impl Camera {
           }
         }
         // Panning (keyboard)
-        let frame_delta = frame_delta.as_s() as f32;
+        let frame_delta = frame_delta.into_seconds() as f32;
         let keyboard_panning_speed = settings.arcball.keyboard_panning_speed * frame_delta;
         if input.forward_key_down {
           settings.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed;

@@ -3,7 +3,7 @@ pub mod line;
 #[cfg(feature = "cursor_icon")]
 pub mod cursor;
 pub mod input;
-pub mod timing;
+pub mod time;
 pub mod sampler;
 pub mod idx_assigner;
 pub mod idx_allocator;

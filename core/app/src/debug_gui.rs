@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use common::input::RawInput;
 use common::sampler::{EventSampler, ValueSampler};
-use common::timing::Offset;
+use common::time::Offset;
 use gui_widget::UiWidgetsExt;
 
 use crate::{Frame, Step};
@@ -56,7 +56,7 @@ impl TimingStats {
   }
 
   pub fn update_start(&mut self, updates: &Updates) {
-    self.target_step_duration = updates.target_step_duration();
+    self.target_step_duration = updates.target_duration();
     self.accumulated_lag_before_updates = updates.accumulated_lag();
     self.target_ratio_before_updates = updates.target_ratio();
   }
@@ -121,7 +121,7 @@ impl DebugGui {
             .spacing([10.0, 4.0])
             .show(ui, |ui| {
               ui.label("Elapsed");
-              ui.label(format!("{:7.3}s", timing_stats.elapsed.as_s()));
+              ui.label(format!("{:7.3}s", timing_stats.elapsed.into_seconds()));
               ui.end_row();
             });
         });
@@ -135,10 +135,10 @@ impl DebugGui {
               ui.label(format!("{}", timing_stats.frame));
               ui.end_row();
               ui.label("Frame duration");
-              ui.label(format!("{:7.3}ms", timing_stats.frame_duration.avg().as_ms()));
+              ui.label(format!("{:7.3}ms", timing_stats.frame_duration.avg().into_milliseconds()));
               ui.end_row();
               ui.label("FPS");
-              ui.label(format!("{:7.3}", 1.0 / timing_stats.frame_duration.avg().as_s()));
+              ui.label(format!("{:7.3}", 1.0 / timing_stats.frame_duration.avg().into_seconds()));
               ui.end_row();
             });
         });
@@ -149,14 +149,14 @@ impl DebugGui {
             .spacing([10.0, 4.0])
             .show(ui, |ui| {
               ui.label("Target update step duration");
-              ui.label(format!("{:7.3}ms", timing_stats.target_step_duration.as_ms()));
+              ui.label(format!("{:7.3}ms", timing_stats.target_step_duration.into_milliseconds()));
               ui.end_row();
-              let target_ups = 1.0 / timing_stats.target_step_duration.as_s();
+              let target_ups = 1.0 / timing_stats.target_step_duration.into_seconds();
               ui.label("Target UPS");
               ui.label(format!("{:7.3}", target_ups));
               ui.end_row();
               ui.label("Lag before updates");
-              ui.label(format!("{:7.3}ms", timing_stats.accumulated_lag_before_updates.as_ms()));
+              ui.label(format!("{:7.3}ms", timing_stats.accumulated_lag_before_updates.into_milliseconds()));
               ui.end_row();
               ui.label("Steps needed before updates");
               ui.label(format!("{:7.3}", timing_stats.target_ratio_before_updates));
@@ -166,13 +166,13 @@ impl DebugGui {
               ui.label(format!("{}", timing_stats.step));
               ui.end_row();
               ui.label("Step duration");
-              ui.label(format!("{:7.3}ms", timing_stats.step_duration.avg().as_ms()));
+              ui.label(format!("{:7.3}ms", timing_stats.step_duration.avg().into_milliseconds()));
               ui.end_row();
               let (ups, ups_rate) = {
                 let duration = timing_stats.step_rate.duration();
                 let tps = if let Some(duration) = duration {
                   let ticks = timing_stats.step_rate.num_samples();
-                  ticks as f64 / duration.as_s()
+                  ticks as f64 / duration.into_seconds()
                 } else {
                   0.0
                 };
@@ -187,7 +187,7 @@ impl DebugGui {
               ui.end_row();
 
               ui.label("Lag after updates");
-              ui.label(format!("{:7.3}ms", timing_stats.accumulated_lag_after_updates.as_ms()));
+              ui.label(format!("{:7.3}ms", timing_stats.accumulated_lag_after_updates.into_milliseconds()));
               ui.end_row();
               ui.label("Steps needed after updates");
               ui.label(format!("{:7.3}", timing_stats.target_ratio_after_updates));

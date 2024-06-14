@@ -7,7 +7,7 @@ use wgpu::{Backends, CommandBuffer, Features, Limits, PowerPreference, PresentMo
 
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use common::timing::Offset;
+use common::time::Offset;
 use gfx::{Gfx, Render};
 use os::{ApplicationOptions, Os};
 pub use run::RunError;
@@ -23,8 +23,8 @@ mod config;
 pub struct Frame {
   /// Frame #
   pub frame: u64,
-  /// Duration of the previous frame. That is, the duration from the previous frame start to the current frame start. Is
-  /// set to `Offset::zero()` for the first frame.
+  /// Time elapsed since the previous frame. That is, the time elapsed from the previous frame start to the current
+  /// frame start. Is set to `Offset::zero()` for the first frame.
   ///
   /// This can be used as an approximation for the duration of this frame.
   pub duration: Offset,
@@ -41,17 +41,25 @@ pub struct Step {
 
 /// Input for [Application::render].
 pub struct RenderInput<'a, A: Application> {
+  /// Operating system facade.
   pub os: &'a Os,
+  /// Graphics facade.
   pub gfx: &'a Gfx,
+  /// Time elapsed since the start of the application.
   pub elapsed: Offset,
+
+  /// Information about the current frame.
   pub frame: Frame,
+  /// Application input for the current frame.
+  pub input: &'a A::Input,
+  /// Data and handles for rendering a frame.
   pub render: Render<'a>,
+  /// Handle for creating GUIs this frame.
+  pub gui: &'a egui::Context,
   /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required
   /// to make the rendered representation sync up with the simulated representation. Thus, the renderer should
   /// extrapolate this much time into the future.
   pub extrapolate: Offset,
-  pub gui: &'a egui::Context,
-  pub input: &'a A::Input,
 }
 
 /// Application trait

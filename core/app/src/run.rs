@@ -8,7 +8,7 @@ use tracing::{info, trace_span};
 use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterOptions, RequestDeviceError, Surface, SurfaceError};
 
 use common::screen::ScreenSize;
-use common::timing::{Offset, Timer};
+use common::time::{Offset, Stopwatch};
 use gfx::{Gfx, Render};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
@@ -113,7 +113,7 @@ struct Runner<A> {
 
   app: A,
   debug_gui: DebugGui,
-  timer: Timer,
+  stopwatch: Stopwatch,
   frames: Frames,
   updates: Updates,
   timing_stats: TimingStats,
@@ -211,9 +211,9 @@ impl<A: Application> Runner<A> {
 
       app,
       debug_gui: config.debug_gui,
-      timer: Timer::default(),
+      stopwatch: Stopwatch::default(),
       frames: Frames::default(),
-      updates: Updates::new(Offset::from_ns(16_666_667)),
+      updates: Updates::new(Offset::from_nanoseconds(16_666_667)),
       timing_stats: TimingStats::new(),
 
       screen_size,
@@ -255,7 +255,7 @@ impl<A: Application> Runner<A> {
   #[profiling::function]
   fn frame(&mut self, frame: Frame) -> bool {
     // Elapsed time
-    let elapsed = self.timer.time();
+    let elapsed = self.stopwatch.elapsed();
     self.timing_stats.elapsed(elapsed);
 
     // Process OS events
@@ -307,7 +307,7 @@ impl<A: Application> Runner<A> {
 
     // Create GUI frame
     let gui_context = if !self.minimized {
-      let gui_context = self.gui.begin_frame(self.screen_size, elapsed.as_s(), frame.duration.as_s() as f32);
+      let gui_context = self.gui.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
       TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
         self.app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
@@ -403,7 +403,7 @@ impl<A: Application> Runner<A> {
 
 #[derive(Default)]
 struct Frames {
-  timer: Timer,
+  stopwatch: Stopwatch,
   frame: u64,
 }
 
@@ -416,12 +416,12 @@ pub struct FrameEnd {
 impl Frames {
   fn start(&mut self, previous_frame_end: FrameEnd) -> Frame {
     let duration = previous_frame_end.duration;
-    self.timer.reset();
+    self.stopwatch.reset();
     Frame { frame: self.frame, duration }
   }
 
   fn end(&mut self) -> FrameEnd {
-    let duration = self.timer.time();
+    let duration = self.stopwatch.elapsed();
     self.frame += 1;
     FrameEnd { duration }
   }
@@ -430,10 +430,10 @@ impl Frames {
 // Simulation updates
 
 pub struct Updates {
-  timer: Timer,
-  target_step_duration: Offset,
+  stopwatch: Stopwatch,
+  target_duration: Offset,
   accumulated_lag: Offset,
-  step: u64,
+  update: u64,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -443,29 +443,29 @@ pub struct StepEnd {
 }
 
 impl Updates {
-  fn new(target_step_duration: Offset) -> Self {
+  fn new(target_duration: Offset) -> Self {
     Self {
-      timer: Timer::default(),
-      target_step_duration,
-      step: 0,
+      stopwatch: Stopwatch::default(),
+      target_duration,
+      update: 0,
       accumulated_lag: Offset::default(),
     }
   }
 
-  /// Returns the target step duration: how much time a single update step should simulate. This is a fixed amount of
-  /// time for determinism of update steps.
-  pub fn target_step_duration(&self) -> Offset { self.target_step_duration }
+  /// Returns the target duration: how much time a single update step should simulate. This is a fixed amount of time
+  /// for determinism of update steps.
+  pub fn target_duration(&self) -> Offset { self.target_duration }
   /// Returns the accumulated lag: the amount of time that the simulation lags behind the current frame.
   ///
   /// After performing as many simulation update steps as possible to minimize the accumulated lag, this will always
-  /// return a number less than [target_duration](Self::target_step_duration), because no more steps could be performed.
+  /// return a number less than [target_duration](Self::target_duration), because no more steps could be performed.
   ///
   /// A renderer can render information from the simulation with extrapolation based on this lag.
   pub fn accumulated_lag(&self) -> Offset { self.accumulated_lag }
   /// Returns `true` when a step should be performed, `false` otherwise. A step should be performed when the accumulated
   /// lag equals or exceeds the target duration.
   pub fn should_step(&self) -> bool {
-    self.accumulated_lag >= self.target_step_duration
+    self.accumulated_lag >= self.target_duration
   }
   /// Returns the ratio between accumulated lag and the target step duration. This ratio show how close we are to the
   /// next update step. A ratio of 0.0 means we have not accumulated any lag. A ratio of 1.0 means we have accumulated
@@ -477,9 +477,7 @@ impl Updates {
   ///
   /// A renderer can render information from the simulation with extrapolation based on this ratio.
   pub fn target_ratio(&self) -> f64 {
-    let lag_ns = self.accumulated_lag.as_ns();
-    let target_ns = self.target_step_duration.as_ns();
-    lag_ns as f64 / target_ns as f64
+    self.accumulated_lag / self.target_duration
   }
 
   /// Accumulate a lag of `duration`.
@@ -491,14 +489,14 @@ impl Updates {
 
   /// Starts a step and returns information about the step.
   pub fn start_step(&mut self) -> Step {
-    self.timer.reset();
-    Step { update: self.step, target_duration: self.target_step_duration }
+    self.stopwatch.reset();
+    Step { update: self.update, target_duration: self.target_duration }
   }
   /// Ends the step, catching up on accumulated lag and returning information about the step.
   pub fn end_step(&mut self) -> StepEnd {
-    self.accumulated_lag -= self.target_step_duration;
-    let tick_time = StepEnd { duration: self.timer.time() };
-    self.step += 1;
-    tick_time
+    self.accumulated_lag -= self.target_duration;
+    let step_end = StepEnd { duration: self.stopwatch.elapsed() };
+    self.update += 1;
+    step_end
   }
 }
