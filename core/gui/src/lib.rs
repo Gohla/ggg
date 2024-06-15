@@ -11,7 +11,8 @@ use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperati
 
 use common::input::{Key, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
-use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutEntryBuilder, CombinedBindGroupLayoutBuilder};
+use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, CombinedBindGroupLayoutBuilder};
+use gfx::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::include_spirv_shader;

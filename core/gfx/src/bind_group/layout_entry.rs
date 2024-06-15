@@ -1,8 +1,6 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding, BufferBindingType, BufferSize, Device, Sampler, SamplerBindingType, ShaderStages, TextureSampleType, TextureView, TextureViewDimension};
-
-// Bind group layout entry creation
+use wgpu::{BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension};
 
 #[derive(Copy, Clone, Debug)]
 pub struct BindGroupLayoutEntryBuilder<T = ()> {
@@ -27,6 +25,35 @@ impl Default for BindGroupLayoutEntryBuilder {
 impl BindGroupLayoutEntryBuilder {
   #[inline]
   pub fn new() -> Self { Self::default() }
+}
+
+impl<T> BindGroupLayoutEntryBuilder<T> {
+  #[inline]
+  pub fn binding_index(mut self, binding_index: u32) -> Self {
+    self.binding = binding_index;
+    self
+  }
+
+  #[inline]
+  pub fn shader_visibility(mut self, visibility: ShaderStages) -> Self {
+    self.visibility = visibility;
+    self
+  }
+  /// [ShaderStages::VERTEX]
+  #[inline]
+  pub fn vertex_shader_visibility(self) -> Self {
+    self.shader_visibility(ShaderStages::VERTEX)
+  }
+  /// [ShaderStages::FRAGMENT]
+  #[inline]
+  pub fn fragment_shader_visibility(self) -> Self {
+    self.shader_visibility(ShaderStages::FRAGMENT)
+  }
+  /// [ShaderStages::COMPUTE]
+  #[inline]
+  pub fn compute_shader_visibility(self) -> Self {
+    self.shader_visibility(ShaderStages::COMPUTE)
+  }
 
   /// [BindingType::Buffer]
   #[inline]
@@ -42,6 +69,35 @@ impl BindGroupLayoutEntryBuilder {
   #[inline]
   pub fn texture(self) -> BindGroupLayoutEntryBuilder<TextureBindingBuilder> {
     self.replace_ty(TextureBindingBuilder::default())
+  }
+
+  #[inline]
+  pub fn array_count(mut self, array_count: NonZeroU32) -> Self {
+    self.count = Some(array_count);
+    self
+  }
+
+
+  #[inline]
+  fn replace_ty<TT>(self, ty: TT) -> BindGroupLayoutEntryBuilder<TT> {
+    BindGroupLayoutEntryBuilder {
+      binding: self.binding,
+      visibility: self.visibility,
+      ty,
+      count: self.count,
+    }
+  }
+}
+
+impl<T: Into<BindingType>> BindGroupLayoutEntryBuilder<T> {
+  #[inline]
+  pub fn build(self) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+      binding: self.binding,
+      visibility: self.visibility,
+      ty: self.ty.into(),
+      count: self.count,
+    }
   }
 }
 
@@ -243,244 +299,5 @@ impl BindGroupLayoutEntryBuilder<TextureBindingBuilder> {
   pub fn multisampled(mut self, multisampled: bool) -> Self {
     self.ty.multisampled = multisampled;
     self
-  }
-}
-
-
-impl<T> BindGroupLayoutEntryBuilder<T> {
-  #[inline]
-  pub fn binding_index(mut self, binding_index: u32) -> Self {
-    self.binding = binding_index;
-    self
-  }
-
-  #[inline]
-  pub fn shader_visibility(mut self, visibility: ShaderStages) -> Self {
-    self.visibility = visibility;
-    self
-  }
-  /// [ShaderStages::VERTEX]
-  #[inline]
-  pub fn vertex_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::VERTEX)
-  }
-  /// [ShaderStages::FRAGMENT]
-  #[inline]
-  pub fn fragment_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::FRAGMENT)
-  }
-  /// [ShaderStages::COMPUTE]
-  #[inline]
-  pub fn compute_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::COMPUTE)
-  }
-
-  #[inline]
-  pub fn array_count(mut self, array_count: NonZeroU32) -> Self {
-    self.count = Some(array_count);
-    self
-  }
-
-  #[inline]
-  fn replace_ty<TT>(self, ty: TT) -> BindGroupLayoutEntryBuilder<TT> {
-    BindGroupLayoutEntryBuilder {
-      binding: self.binding,
-      visibility: self.visibility,
-      ty,
-      count: self.count,
-    }
-  }
-}
-
-impl<T: Into<BindingType>> BindGroupLayoutEntryBuilder<T> {
-  #[inline]
-  pub fn build(self) -> BindGroupLayoutEntry {
-    BindGroupLayoutEntry {
-      binding: self.binding,
-      visibility: self.visibility,
-      ty: self.ty.into(),
-      count: self.count,
-    }
-  }
-}
-
-
-
-// Bind group entry creation
-
-pub struct BindGroupEntryBuilder<'a> {
-  entry: BindGroupEntry<'a>,
-}
-
-impl<'a> BindGroupEntryBuilder<'a> {
-  #[inline]
-  pub fn new(resource: BindingResource<'a>) -> Self {
-    Self {
-      entry: BindGroupEntry {
-        binding: 0,
-        resource,
-      }
-    }
-  }
-
-  #[inline]
-  pub fn new_buffer(buffer: &'a Buffer, offset: BufferAddress, size: Option<BufferSize>) -> Self {
-    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset, size }))
-  }
-
-  #[inline]
-  pub fn new_whole_buffer(buffer: &'a Buffer) -> Self {
-    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset: 0, size: None }))
-  }
-
-  #[inline]
-  pub fn new_sampler(sampler: &'a Sampler) -> Self {
-    Self::new(BindingResource::Sampler(sampler))
-  }
-
-  #[inline]
-  pub fn new_texture_view(texture_view: &'a TextureView) -> Self {
-    Self::new(BindingResource::TextureView(texture_view))
-  }
-
-
-  #[inline]
-  pub fn binding_index(mut self, binding_index: u32) -> Self {
-    self.entry.binding = binding_index;
-    self
-  }
-
-
-  #[inline]
-  pub fn build(self) -> BindGroupEntry<'a> { self.entry }
-}
-
-// Bind group layout creation
-
-pub struct BindGroupLayoutBuilder<'a> {
-  descriptor: BindGroupLayoutDescriptor<'a>,
-}
-
-impl<'a> BindGroupLayoutBuilder<'a> {
-  #[inline]
-  pub fn new() -> Self {
-    Self {
-      descriptor: BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[],
-      }
-    }
-  }
-
-  #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
-    self.descriptor.entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.descriptor.label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn build(self, device: &Device) -> BindGroupLayout {
-    device.create_bind_group_layout(&self.descriptor)
-  }
-}
-
-// Bind group creation
-
-pub struct BindGroupBuilder<'a> {
-  descriptor: BindGroupDescriptor<'a>,
-}
-
-impl<'a> BindGroupBuilder<'a> {
-  #[inline]
-  pub fn new(layout: &'a BindGroupLayout) -> Self {
-    Self {
-      descriptor: BindGroupDescriptor {
-        label: None,
-        layout,
-        entries: &[],
-      }
-    }
-  }
-
-  #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
-    self.descriptor.entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.descriptor.label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn build(self, device: &Device) -> BindGroup {
-    device.create_bind_group(&self.descriptor)
-  }
-}
-
-// Combined bind group (layout) creation
-
-pub struct CombinedBindGroupLayoutBuilder<'a> {
-  layout_label: Option<&'a str>,
-  layout_entries: &'a [BindGroupLayoutEntry],
-  label: Option<&'a str>,
-  entries: &'a [BindGroupEntry<'a>],
-}
-
-impl<'a> CombinedBindGroupLayoutBuilder<'a> {
-  #[inline]
-  pub fn new() -> Self {
-    Self {
-      layout_label: None,
-      layout_entries: &[],
-      label: None,
-      entries: &[],
-    }
-  }
-
-  #[inline]
-  pub fn with_layout_entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
-    self.layout_entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_layout_label(mut self, label: &'a str) -> Self {
-    self.layout_label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
-    self.entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn build(self, device: &Device) -> (BindGroupLayout, BindGroup) {
-    let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-      label: self.layout_label,
-      entries: self.layout_entries,
-    });
-    let bind = device.create_bind_group(&BindGroupDescriptor {
-      label: self.label,
-      layout: &layout,
-      entries: self.entries,
-    });
-    (layout, bind)
   }
 }

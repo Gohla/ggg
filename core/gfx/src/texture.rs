@@ -3,7 +3,8 @@ use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BufferAddress, Device, Extent3d
 
 use common::screen::PhysicalSize;
 
-use crate::bind_group::{BindGroupEntryBuilder, BindGroupLayoutEntryBuilder};
+use crate::bind_group::BindGroupEntryBuilder;
+use crate::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use crate::surface::GfxSurface;
 
 // Texture builder creation and modification
