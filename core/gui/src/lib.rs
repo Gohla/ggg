@@ -98,7 +98,7 @@ impl Gui {
     let texture_bind_group_layout = BindGroupLayoutBuilder::new()
       .with_entries(&[BindGroupLayoutEntryBuilder::default()
         .texture()
-        .binding_index(0)
+        .binding(0)
         .fragment_shader_visibility()
         .build()
       ])

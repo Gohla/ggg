@@ -1,55 +1,7 @@
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, Buffer, BufferAddress, BufferBinding, BufferSize, Device, Sampler, TextureView};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Device};
 
 pub mod layout_entry;
-
-// Bind group entry creation
-
-pub struct BindGroupEntryBuilder<'a> {
-  entry: BindGroupEntry<'a>,
-}
-
-impl<'a> BindGroupEntryBuilder<'a> {
-  #[inline]
-  pub fn new(resource: BindingResource<'a>) -> Self {
-    Self {
-      entry: BindGroupEntry {
-        binding: 0,
-        resource,
-      }
-    }
-  }
-
-  #[inline]
-  pub fn new_buffer(buffer: &'a Buffer, offset: BufferAddress, size: Option<BufferSize>) -> Self {
-    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset, size }))
-  }
-
-  #[inline]
-  pub fn new_whole_buffer(buffer: &'a Buffer) -> Self {
-    Self::new(BindingResource::Buffer(BufferBinding { buffer, offset: 0, size: None }))
-  }
-
-  #[inline]
-  pub fn new_sampler(sampler: &'a Sampler) -> Self {
-    Self::new(BindingResource::Sampler(sampler))
-  }
-
-  #[inline]
-  pub fn new_texture_view(texture_view: &'a TextureView) -> Self {
-    Self::new(BindingResource::TextureView(texture_view))
-  }
-
-
-  #[inline]
-  pub fn binding_index(mut self, binding_index: u32) -> Self {
-    self.entry.binding = binding_index;
-    self
-  }
-
-
-  #[inline]
-  pub fn build(self) -> BindGroupEntry<'a> { self.entry }
-}
+pub mod entry;
 
 // Bind group layout creation
 

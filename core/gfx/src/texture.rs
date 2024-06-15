@@ -2,8 +2,8 @@ use image::RgbaImage;
 use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BufferAddress, Device, Extent3d, ImageCopyTexture, ImageDataLayout, Origin3d, Queue, ShaderStages, Texture, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
 
 use common::screen::PhysicalSize;
+use crate::bind_group::entry::BindGroupEntryBuilder;
 
-use crate::bind_group::BindGroupEntryBuilder;
 use crate::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use crate::surface::GfxSurface;
 
@@ -225,28 +225,29 @@ impl<'a> GfxTexture {
 
 impl<'a> GfxTexture {
   #[inline]
-  pub fn create_default_float_2d_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
+  pub fn create_default_float_2d_bind_group_layout_entry(&self, binding: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
     BindGroupLayoutEntryBuilder::default()
-      .texture()
-      .binding_index(binding_index)
+      .binding(binding)
       .shader_visibility(shader_visibility)
+      .texture()
       .build()
   }
 
   #[inline]
-  pub fn create_default_float_2d_array_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
+  pub fn create_default_float_2d_array_bind_group_layout_entry(&self, binding: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
     BindGroupLayoutEntryBuilder::default()
+      .binding(binding)
+      .shader_visibility(shader_visibility)
       .texture()
       .d2_array()
-      .binding_index(binding_index)
-      .shader_visibility(shader_visibility)
       .build()
   }
 
   #[inline]
-  pub fn create_bind_group_entry(&'a self, binding_index: u32) -> BindGroupEntry<'a> {
-    BindGroupEntryBuilder::new_texture_view(&self.view)
-      .binding_index(binding_index)
+  pub fn create_bind_group_entry(&'a self, binding: u32) -> BindGroupEntry<'a> {
+    BindGroupEntryBuilder::default()
+      .binding(binding)
+      .texture_view(&self.view)
       .build()
   }
 

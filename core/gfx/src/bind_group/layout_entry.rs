@@ -21,7 +21,6 @@ impl Default for BindGroupLayoutEntryBuilder {
     }
   }
 }
-
 impl BindGroupLayoutEntryBuilder {
   #[inline]
   pub fn new() -> Self { Self::default() }
@@ -29,8 +28,8 @@ impl BindGroupLayoutEntryBuilder {
 
 impl<T> BindGroupLayoutEntryBuilder<T> {
   #[inline]
-  pub fn binding_index(mut self, binding_index: u32) -> Self {
-    self.binding = binding_index;
+  pub fn binding(mut self, binding: u32) -> Self {
+    self.binding = binding;
     self
   }
 
@@ -57,18 +56,18 @@ impl<T> BindGroupLayoutEntryBuilder<T> {
 
   /// [BindingType::Buffer]
   #[inline]
-  pub fn buffer(self) -> BindGroupLayoutEntryBuilder<BufferBindingBuilder> {
-    self.replace_ty(BufferBindingBuilder::default())
+  pub fn buffer(self) -> BindGroupLayoutEntryBuilder<BufferLayoutBuilder> {
+    self.replace_ty(BufferLayoutBuilder::default())
   }
   /// [BindingType::Sampler]
   #[inline]
-  pub fn sampler(self) -> BindGroupLayoutEntryBuilder<SamplerBindingBuilder> {
-    self.replace_ty(SamplerBindingBuilder::default())
+  pub fn sampler(self) -> BindGroupLayoutEntryBuilder<SamplerLayoutBuilder> {
+    self.replace_ty(SamplerLayoutBuilder::default())
   }
   /// [BindingType::Texture]
   #[inline]
-  pub fn texture(self) -> BindGroupLayoutEntryBuilder<TextureBindingBuilder> {
-    self.replace_ty(TextureBindingBuilder::default())
+  pub fn texture(self) -> BindGroupLayoutEntryBuilder<TextureLayoutBuilder> {
+    self.replace_ty(TextureLayoutBuilder::default())
   }
 
   #[inline]
@@ -104,14 +103,15 @@ impl<T: Into<BindingType>> BindGroupLayoutEntryBuilder<T> {
 
 /// Builder for [BindingType::Buffer].
 #[derive(Default, Copy, Clone, Debug)]
-pub struct BufferBindingBuilder {
+pub struct BufferLayoutBuilder {
   ty: BufferBindingType,
   has_dynamic_offset: bool,
   min_binding_size: Option<BufferSize>,
 }
 
-impl From<BufferBindingBuilder> for BindingType {
-  fn from(builder: BufferBindingBuilder) -> Self {
+impl From<BufferLayoutBuilder> for BindingType {
+  #[inline]
+  fn from(builder: BufferLayoutBuilder) -> Self {
     BindingType::Buffer {
       ty: builder.ty,
       has_dynamic_offset: builder.has_dynamic_offset,
@@ -120,7 +120,7 @@ impl From<BufferBindingBuilder> for BindingType {
   }
 }
 
-impl BindGroupLayoutEntryBuilder<BufferBindingBuilder> {
+impl BindGroupLayoutEntryBuilder<BufferLayoutBuilder> {
   #[inline]
   pub fn ty(mut self, ty: BufferBindingType) -> Self {
     self.ty.ty = ty;
@@ -163,24 +163,21 @@ impl BindGroupLayoutEntryBuilder<BufferBindingBuilder> {
 
 /// Builder for [BindingType::Sampler].
 #[derive(Copy, Clone, Debug)]
-pub struct SamplerBindingBuilder {
+pub struct SamplerLayoutBuilder {
   ty: SamplerBindingType,
 }
 
-impl Default for SamplerBindingBuilder {
+impl Default for SamplerLayoutBuilder {
   #[inline]
-  fn default() -> Self {
-    Self { ty: SamplerBindingType::Filtering }
-  }
+  fn default() -> Self { Self { ty: SamplerBindingType::Filtering } }
 }
 
-impl From<SamplerBindingBuilder> for BindingType {
-  fn from(builder: SamplerBindingBuilder) -> Self {
-    BindingType::Sampler(builder.ty)
-  }
+impl From<SamplerLayoutBuilder> for BindingType {
+  #[inline]
+  fn from(builder: SamplerLayoutBuilder) -> Self { BindingType::Sampler(builder.ty) }
 }
 
-impl BindGroupLayoutEntryBuilder<SamplerBindingBuilder> {
+impl BindGroupLayoutEntryBuilder<SamplerLayoutBuilder> {
   #[inline]
   pub fn ty(mut self, ty: SamplerBindingType) -> Self {
     self.ty.ty = ty;
@@ -206,14 +203,15 @@ impl BindGroupLayoutEntryBuilder<SamplerBindingBuilder> {
 
 /// Builder for [BindingType::Texture].
 #[derive(Default, Copy, Clone, Debug)]
-pub struct TextureBindingBuilder {
+pub struct TextureLayoutBuilder {
   sample_type: TextureSampleType,
   view_dimension: TextureViewDimension,
   multisampled: bool,
 }
 
-impl From<TextureBindingBuilder> for BindingType {
-  fn from(builder: TextureBindingBuilder) -> Self {
+impl From<TextureLayoutBuilder> for BindingType {
+  #[inline]
+  fn from(builder: TextureLayoutBuilder) -> Self {
     BindingType::Texture {
       sample_type: builder.sample_type,
       view_dimension: builder.view_dimension,
@@ -222,7 +220,7 @@ impl From<TextureBindingBuilder> for BindingType {
   }
 }
 
-impl BindGroupLayoutEntryBuilder<TextureBindingBuilder> {
+impl BindGroupLayoutEntryBuilder<TextureLayoutBuilder> {
   #[inline]
   pub fn sample_type(mut self, sample_type: TextureSampleType) -> Self {
     self.ty.sample_type = sample_type;
