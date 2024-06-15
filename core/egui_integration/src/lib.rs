@@ -1,336 +1,66 @@
-use std::borrow::Cow;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::mem::size_of;
-use std::ops::Range;
+use egui::{ClippedPrimitive, Context, epaint, FullOutput, PlatformOutput, Pos2, Rect, TexturesDelta};
+use wgpu::{CommandEncoder, Device, Queue, TextureFormat, TextureView};
 
-use bytemuck::{Pod, Zeroable};
-use egui::{
-  ClippedPrimitive, Context, CursorIcon, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2,
-  RawInput as EguiRawInput, Rect, TextureId, TexturesDelta,
-};
-use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
-use wgpu::{
-  BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState,
-  CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d,
-  PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView,
-  VertexBufferLayout, VertexStepMode,
-};
-
-use common::input::{Key, KeyboardModifier, RawInput};
+use ::os::window::Window;
+use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, CombinedBindGroup, CombinedBindGroupBuilder};
-use gfx::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
-use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
-use gfx::include_spirv_shader;
-use gfx::render_pass::RenderPassBuilder;
-use gfx::render_pipeline::RenderPipelineBuilder;
-use gfx::sampler::SamplerBuilder;
-use gfx::texture::{GfxTexture, TextureBuilder};
-use os::clipboard::{get_clipboard, TextClipboard};
-use os::open_url::open_url;
-use os::window::Window;
+
+use crate::gfx::GuiGfx;
+use crate::os::GuiOs;
+
+mod gfx;
+mod os;
 
 pub struct GuiIntegration {
-  pub context: Context,
-  clipboard: Box<dyn TextClipboard + Send + 'static>,
-
-  input: EguiRawInput,
-
-  cursor_icon: Option<CursorIcon>,
-  cursor_in_window: bool,
-
-  index_buffer: GrowableBuffer,
-  vertex_buffer: GrowableBuffer,
-  uniform_buffer: GfxBuffer,
-  static_bind_group: CombinedBindGroup,
-  texture_bind_group_layout: BindGroupLayout,
-  textures: HashMap<TextureId, (GfxTexture, BindGroup)>,
-  _pipeline_layout: PipelineLayout,
-  render_pipeline: RenderPipeline,
+  context: Context,
+  os: GuiOs,
+  gfx: GuiGfx,
 }
 
 // Creation
 
 impl GuiIntegration {
   pub fn new(
+    memory: Option<egui::Memory>,
     device: &Device,
     swap_chain_texture_format: TextureFormat,
-    memory: Option<egui::Memory>,
   ) -> Self {
     let context = Context::default();
     if let Some(memory) = memory {
       context.memory_mut(|m| *m = memory);
     }
+    let os = GuiOs::new();
+    let gfx = GuiGfx::new(device, swap_chain_texture_format);
+    Self { context, os, gfx }
+  }
 
-    let vertex_shader_module = device.create_shader_module(include_spirv_shader!("gui.vert"));
-    let fragment_shader_module = device.create_shader_module(include_spirv_shader!("gui.frag"));
-
-    let index_buffer = GrowableBufferBuilder::default()
-      .label("GUI index buffer")
-      .index_usage()
-      .grow_multiplier(1.5)
-      .build();
-    let vertex_buffer = GrowableBufferBuilder::default()
-      .label("GUI vertex buffer")
-      .vertex_usage()
-      .grow_multiplier(1.5)
-      .build();
-
-    // Bind group that does not change while rendering (static), containing the uniform buffer and texture sampler.
-    let uniform_buffer = BufferBuilder::new()
-      .uniform_usage()
-      .label("GUI uniform buffer")
-      .build_with_data(device, &[Uniform::default()]);
-    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
-
-    let sampler = SamplerBuilder::new()
-      .mag_filter(FilterMode::Linear)
-      .min_filter(FilterMode::Linear)
-      .label("GUI texture sampler")
-      .build(device);
-    let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
-
-    let static_bind_group = CombinedBindGroupBuilder::new()
-      .layout_entries(&[uniform_binding.layout, sampler_binding.layout])
-      .layout_label("GUI static bind group layout")
-      .entries(&[uniform_binding.entry, sampler_binding.entry])
-      .label("GUI static bind group")
-      .build(device);
-
-    // Bind group that does change while rendering, containing the current texture.
-    let texture_bind_group_layout = BindGroupLayoutBuilder::default()
-      .entries(&[BindGroupLayoutEntryBuilder::default()
-        .texture()
-        .binding(0)
-        .fragment_visibility()
-        .build()
-      ])
-      .label("GUI texture bind group layout")
-      .build(device);
-
-    let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::default()
-      .layout_label("GUI pipeline layout")
-      .bind_group_layouts(&[&static_bind_group.layout, &texture_bind_group_layout])
-      .label("GUI render pipeline")
-      .vertex_module(&vertex_shader_module)
-      .vertex_buffer_layouts(&[VertexBufferLayout {
-        // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
-        array_stride: 5 * 4,
-        step_mode: VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
-      }])
-      .fragment_module(&fragment_shader_module)
-      .fragment_targets(&[Some(ColorTargetState {
-        blend: Some(BlendState {
-          color: BlendComponent {
-            src_factor: BlendFactor::One,
-            dst_factor: BlendFactor::OneMinusSrcAlpha,
-            operation: BlendOperation::Add,
-          },
-          alpha: BlendComponent {
-            // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
-            src_factor: BlendFactor::OneMinusDstAlpha,
-            dst_factor: BlendFactor::One,
-            operation: BlendOperation::Add,
-          },
-        }),
-        ..swap_chain_texture_format.into()
-      })])
-      .build(device);
-
-    Self {
-      context,
-      clipboard: get_clipboard(),
-
-      input: EguiRawInput::default(),
-
-      cursor_icon: None,
-      cursor_in_window: false,
-
-      index_buffer,
-      vertex_buffer,
-      uniform_buffer,
-      static_bind_group,
-      texture_bind_group_layout,
-      textures: HashMap::default(),
-      _pipeline_layout: pipeline_layout,
-      render_pipeline,
-    }
+  #[inline]
+  pub fn into_context(self) -> Context {
+    self.context
   }
 
 
-  //
-  // Input processing.
-  //
-
-  #[profiling::function]
-  pub fn process_input(&mut self, input: &RawInput, process_keyboard_input: bool, process_mouse_input: bool) {
-    if process_keyboard_input {
-      // Keyboard modifiers
-      self.input.modifiers.alt = input.is_keyboard_modifier_down(KeyboardModifier::Alternate);
-      let is_control_down = input.is_keyboard_modifier_down(KeyboardModifier::Control);
-      self.input.modifiers.ctrl = is_control_down;
-      self.input.modifiers.shift = input.is_keyboard_modifier_down(KeyboardModifier::Shift);
-      let is_super_down = input.is_keyboard_modifier_down(KeyboardModifier::Super);
-      self.input.modifiers.mac_cmd = cfg!(target_os = "macos") && is_super_down;
-      self.input.modifiers.command = if cfg!(target_os = "macos") { is_super_down } else { is_control_down };
-    }
-    let modifiers = self.input.modifiers;
-
-    if process_mouse_input {
-      // Mouse wheel delta
-      if !input.mouse_wheel_pixel_delta.is_zero() {
-        let delta = input.mouse_wheel_pixel_delta.logical.into();
-        self.input.events.push(Event::MouseWheel { unit: MouseWheelUnit::Point, delta, modifiers });
-      }
-      if !input.mouse_wheel_line_delta.is_zero() {
-        let delta = input.mouse_wheel_line_delta.into();
-        self.input.events.push(Event::MouseWheel { unit: MouseWheelUnit::Line, delta, modifiers });
-      }
-
-      // Mouse movement
-      let mouse_position: Pos2 = input.mouse_position.logical.into();
-      if !input.mouse_position_delta.is_zero() {
-        self.cursor_in_window = true;
-        self.input.events.push(Event::PointerMoved(mouse_position))
-      }
-
-      // Mouse buttons
-      for button in input.mouse_buttons_pressed() {
-        if let Some(button) = button.into() {
-          self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: true, modifiers })
-        }
-      }
-      for button in input.mouse_buttons_released() {
-        if let Some(button) = button.into() {
-          self.input.events.push(Event::PointerButton { pos: mouse_position, button, pressed: false, modifiers })
-        }
-      }
-    }
-
-    if process_keyboard_input {
-      fn is_cut_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-        keycode == egui::Key::Cut
-          || (modifiers.command && keycode == egui::Key::X)
-          || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Delete)
-      }
-      fn is_copy_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-        keycode == egui::Key::Copy
-          || (modifiers.command && keycode == egui::Key::C)
-          || (cfg!(target_os = "windows") && modifiers.ctrl && keycode == egui::Key::Insert)
-      }
-      fn is_paste_command(modifiers: egui::Modifiers, keycode: egui::Key) -> bool {
-        keycode == egui::Key::Paste
-          || (modifiers.command && keycode == egui::Key::V)
-          || (cfg!(target_os = "windows") && modifiers.shift && keycode == egui::Key::Insert)
-      }
-      /// Ignore special keys (backspace, delete, F1, …) that winit sends as characters. Also ignore '\r', '\n', '\t'
-      /// since newlines are handled by the `Key::Enter` event.
-      ///
-      /// From: https://github.com/emilk/egui/blob/9f12432bcf8f8275f154cbbb8aabdb8958be9026/crates/egui-winit/src/lib.rs#L991-L1001
-      fn is_printable_char(chr: char) -> bool {
-        let is_in_private_use_area = '\u{e000}' <= chr && chr <= '\u{f8ff}'
-          || '\u{f0000}' <= chr && chr <= '\u{ffffd}'
-          || '\u{100000}' <= chr && chr <= '\u{10fffd}';
-        !is_in_private_use_area && !chr.is_ascii_control()
-      }
-
-      // Keyboard keys
-      for Key { keyboard, semantic, text } in input.keys_pressed() {
-        let physical_key: Option<egui::Key> = keyboard.and_then(|k| k.into());
-        let logical_key: Option<egui::Key> = semantic.and_then(|s| s.into());
-        let handle_text = if let Some(key) = logical_key.or(physical_key) {
-          if is_cut_command(modifiers, key) {
-            self.input.events.push(Event::Cut);
-            false
-          } else if is_copy_command(modifiers, key) {
-            self.input.events.push(Event::Copy);
-            false
-          } else if is_paste_command(modifiers, key) {
-            if let Some(contents) = self.clipboard.get() {
-              let contents = contents.replace("\r\n", "\n");
-              if !contents.is_empty() {
-                self.input.events.push(Event::Paste(contents));
-              }
-            }
-            false
-          } else {
-            self.input.events.push(Event::Key { key, physical_key, pressed: true, repeat: false, modifiers });
-            true
-          }
-        } else {
-          true
-        };
-
-        // On some platforms we get here when the user presses Cmd-C (copy), ctrl-W, etc. We need to ignore these
-        // characters that are side effects of commands.
-        let is_cmd = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
-        if handle_text && !is_cmd {
-          if let Some(text) = text {
-            if !text.is_empty() && text.chars().all(is_printable_char) {
-              self.input.events.push(Event::Text(text.to_string()))
-            }
-          }
-        }
-      }
-      for Key { keyboard, semantic, .. } in input.keys_released() {
-        let physical_key: Option<egui::Key> = keyboard.and_then(|k| k.into());
-        let logical_key: Option<egui::Key> = semantic.and_then(|s| s.into());
-        if let Some(key) = logical_key.or(physical_key) {
-          self.input.events.push(Event::Key { key, physical_key, pressed: false, repeat: false, modifiers });
-        }
-        // Note: not handling text as egui doesn't need it for released keys.
-      }
-    }
-  }
-  pub fn is_capturing_keyboard(&self) -> bool { self.context.wants_keyboard_input() }
-  pub fn is_capturing_mouse(&self) -> bool { self.context.wants_pointer_input() }
-
-  pub fn update_window_cursor(&mut self, cursor_in_window: bool) {
-    self.cursor_in_window = cursor_in_window;
-    if !cursor_in_window {
-      self.input.events.push(Event::PointerGone);
-    }
+  /// Process `input`. Only processes keyboard input if `process_keyboard` is `true`. Only processes mouse input if
+  /// `process_mouse` is `true`.
+  #[inline]
+  pub fn process_input(&mut self, input: &RawInput, process_keyboard: bool, process_mouse: bool) {
+    self.os.process_input(input, process_keyboard, process_mouse);
   }
 
-  pub fn update_window_focus(&mut self, focus: bool) {
-    self.input.focused = focus;
-    self.input.events.push(Event::WindowFocused(focus));
+  /// Process a "cursor entered/left window" event.
+  #[inline]
+  pub fn process_window_cursor_event(&mut self, cursor_in_window: bool) {
+    self.os.process_window_cursor_event(cursor_in_window);
+  }
+
+  /// Process a "window focus gained/lost" event.
+  #[inline]
+  pub fn process_window_focus_event(&mut self, focus: bool) {
+    self.os.process_window_focus_event(focus);
   }
 
 
-  fn handle_platform_output(&mut self, window: &Window, platform_output: PlatformOutput) {
-    self.set_cursor_icon(window, platform_output.cursor_icon);
-
-    if let Some(url) = platform_output.open_url {
-      open_url(&url.url, url.new_tab);
-    }
-
-    if !platform_output.copied_text.is_empty() {
-      self.clipboard.set(&platform_output.copied_text)
-    }
-  }
-
-  fn set_cursor_icon(&mut self, window: &Window, cursor_icon: CursorIcon) {
-    if self.cursor_icon == Some(cursor_icon) {
-      return;
-    }
-
-    if self.cursor_in_window {
-      self.cursor_icon = Some(cursor_icon);
-      window.set_option_cursor(cursor_icon.into())
-    } else {
-      self.cursor_icon = None;
-    }
-  }
-
-
-  //
-  // Begin GUI frame, returning the context to start building the GUI.
-  //
-
+  /// Begin a new GUI frame, returning the context to start building the GUI.
   #[profiling::function]
   pub fn begin_frame(
     &mut self,
@@ -338,292 +68,86 @@ impl GuiIntegration {
     elapsed_time_in_seconds: f64,
     predicted_duration_in_seconds: f32,
   ) -> Context {
+    let mut input = self.os.input();
+
     let screen_rect = Rect::from_min_size(Pos2::ZERO, screen_size.physical.into());
-    self.input.screen_rect = Some(screen_rect);
+    input.screen_rect = Some(screen_rect);
 
     let native_pixels_per_point: f64 = screen_size.scale.into();
-    if let Some(viewport) = self.input.viewports.get_mut(&self.input.viewport_id) {
+    if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
       viewport.native_pixels_per_point = Some(native_pixels_per_point as f32);
     }
 
-    self.input.time = Some(elapsed_time_in_seconds);
-    self.input.predicted_dt = predicted_duration_in_seconds;
+    input.time = Some(elapsed_time_in_seconds);
+    input.predicted_dt = predicted_duration_in_seconds;
 
-    let input = std::mem::take(&mut self.input);
     self.context.begin_frame(input);
     self.context.clone()
   }
 
 
-  //
-  // Rendering the built GUI.
-  //
-
+  /// End the current GUI frame, returning the full output for handling platform events and rendering.
   #[profiling::function]
+  pub fn end_frame(&mut self) -> FullOutput {
+    self.context.end_frame()
+  }
+
+  /// Process `platform_output` from [FullOutput] returned in [end_frame](Self::end_frame):
+  ///
+  /// - Set the cursor icon.
+  /// - open URL in browser if a hyperlink was clicked.
+  /// - Copy text to the clipboard if text was copied.
+  #[inline]
+  pub fn process_platform_output(&mut self, window: &Window, platform_output: PlatformOutput) {
+    self.os.process_platform_output(window, platform_output);
+  }
+
+  /// Upload texture changes in `textures_delta` to the GPU. Get [TexturesDelta] from [FullOutput] returned by
+  /// [end_frame](Self::end_frame). Call *before* [render](Self::render).
+  #[inline]
+  pub fn update_textures(&mut self, device: &Device, queue: &Queue, textures_delta: TexturesDelta) {
+    self.gfx.update_textures(device, queue, textures_delta);
+  }
+
+  /// Tessellate `shapes` at `pixels_per_point`. Get [`Vec<epaint::ClippedShape>`] and `pixels_per_point` from
+  /// [FullOutput] returned by [end_frame](Self::end_frame).
+  #[inline]
+  #[profiling::function]
+  pub fn tessellate(&mut self, shapes: Vec<epaint::ClippedShape>, pixels_per_point: f32) -> Vec<ClippedPrimitive> {
+    self.context.tessellate(shapes, pixels_per_point)
+  }
+
+  /// Render `clipped_primitives` onto `surface_texture_view` with `encoder`.
+  #[inline]
   pub fn render(
     &mut self,
-    window: &Window,
-    screen_size: ScreenSize,
     device: &Device,
     queue: &Queue,
-    encoder: &mut CommandEncoder,
+    clipped_primitives: Vec<ClippedPrimitive>,
+    screen_size: ScreenSize,
     surface_texture_view: &TextureView,
+    encoder: &mut CommandEncoder,
   ) {
-    // End the frame to get output.
+    self.gfx.render(device, queue, clipped_primitives, screen_size, surface_texture_view, encoder);
+  }
+
+
+  /// End the current GUI frame and handle the output internally.
+  #[profiling::function]
+  pub fn end_frame_and_handle(
+    &mut self,
+    window: &Window,
+    device: &Device,
+    queue: &Queue,
+    screen_size: ScreenSize,
+    surface_texture_view: &TextureView,
+    encoder: &mut CommandEncoder,
+  ) {
     let full_output = self.context.end_frame();
-    self.handle_platform_output(window, full_output.platform_output);
-
-    // Update textures
-    self.set_textures(device, queue, &full_output.textures_delta);
-
-    // Get primitives to render.
-    let clipped_primitives: Vec<ClippedPrimitive> = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
-
-    // Ensure index and vertex buffers are big enough.
-    let index_count: usize = clipped_primitives.iter()
-      .map(|cp| if let Primitive::Mesh(Mesh { indices, .. }) = &cp.primitive { indices.len() } else { 0 })
-      .sum();
-    let index_buffer = self.index_buffer.ensure_minimum_size(device, (index_count * size_of::<u32>()) as BufferAddress);
-    let vertex_count: usize = clipped_primitives.iter()
-      .map(|cp| if let Primitive::Mesh(Mesh { vertices, .. }) = &cp.primitive { vertices.len() } else { 0 })
-      .sum();
-    let vertex_buffer = self.vertex_buffer.ensure_minimum_size(device, (vertex_count * size_of::<Vertex>()) as BufferAddress);
-
-    // Write to buffers and create draw list.
-    self.uniform_buffer.write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
-    let mut index_offset = 0;
-    let mut index_buffer_offset = 0;
-    let mut vertex_offset = 0;
-    let mut vertex_buffer_offset = 0;
-    #[derive(Debug)]
-    struct Draw {
-      clip_rect: Rect,
-      texture_id: TextureId,
-      indices: Range<u32>,
-      base_vertex: usize,
-    }
-    let mut draws = Vec::with_capacity(clipped_primitives.len());
-    for ClippedPrimitive { clip_rect, primitive } in clipped_primitives {
-      if let Primitive::Mesh(Mesh { indices, vertices, texture_id, .. }) = primitive {
-        index_buffer.write_data(queue, &indices, index_buffer_offset);
-        vertex_buffer.write_data(queue, &vertices, vertex_buffer_offset);
-        draws.push(Draw { clip_rect, texture_id, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
-        index_offset += indices.len() as u32;
-        index_buffer_offset += indices.len();
-        vertex_offset += vertices.len();
-        vertex_buffer_offset += vertices.len();
-      }
-    }
-
-    // Render
-    {
-      let mut bound_texture_id = None;
-      let mut render_pass = RenderPassBuilder::new()
-        .with_label("GUI render pass")
-        .begin_render_pass_for_swap_chain_with_load(encoder, surface_texture_view);
-      render_pass.push_debug_group("Draw GUI");
-      render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
-      render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
-      let scale_factor: f64 = screen_size.scale.into();
-      let scale_factor = scale_factor as f32;
-      let physical_width = screen_size.physical.width as u32;
-      let physical_height = screen_size.physical.height as u32;
-      for Draw { clip_rect, texture_id, indices, base_vertex } in draws {
-        // Taken from:
-        // - https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
-        // - https://github.com/emilk/egui/blob/2545939c150379b85517de691da56a46f5ee0d1d/crates/egui-wgpu/src/renderer.rs#L983
-
-        // Transform clip rect to physical pixels.
-        let clip_min_x = scale_factor * clip_rect.min.x;
-        let clip_min_y = scale_factor * clip_rect.min.y;
-        let clip_max_x = scale_factor * clip_rect.max.x;
-        let clip_max_y = scale_factor * clip_rect.max.y;
-
-        // Round to integer.
-        let clip_min_x = clip_min_x.round() as u32;
-        let clip_min_y = clip_min_y.round() as u32;
-        let clip_max_x = clip_max_x.round() as u32;
-        let clip_max_y = clip_max_y.round() as u32;
-
-        // Clamp to physical pixels.
-        let clip_min_x = clip_min_x.clamp(0, physical_width);
-        let clip_min_y = clip_min_y.clamp(0, physical_height);
-        let clip_max_x = clip_max_x.clamp(clip_min_x, physical_width);
-        let clip_max_y = clip_max_y.clamp(clip_min_y, physical_height);
-
-        let x = clip_min_x;
-        let y = clip_min_y;
-        let width = clip_max_x - clip_min_x;
-        let height = clip_max_y - clip_min_y;
-
-        // Skip rendering with zero-sized clip areas.
-        if width == 0 || height == 0 {
-          continue;
-        }
-
-        render_pass.set_scissor_rect(x, y, width, height);
-
-        match bound_texture_id {
-          Some(bound_id) if texture_id == bound_id => {
-            // Do nothing, already bound correct group.
-          }
-          ref mut b => {
-            let bind_group = &self.textures
-              .get(&texture_id)
-              .unwrap_or_else(|| panic!("Cannot get bind group for {:?}; texture with that ID does not exist", texture_id)).1;
-            render_pass.set_bind_group(1, bind_group, &[]);
-            *b = Some(texture_id);
-          }
-        }
-
-        // Use `set_vertex_buffer` with offset and `draw_indexed` with `base_vertex` = 0 for WebGL2 support.
-        render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(base_vertex..));
-        render_pass.draw_indexed(indices, 0, 0..1);
-      }
-      render_pass.pop_debug_group();
-    }
-
-    // Free unused textures.
-    self.free_textures(&full_output.textures_delta);
-  }
-
-  fn set_textures(&mut self, device: &Device, queue: &Queue, textures_delta: &TexturesDelta) {
-    for (texture_id, image_delta) in &textures_delta.set {
-      self.set_texture(device, queue, *texture_id, image_delta);
-    }
-  }
-
-  // From:
-  // 1) https://github.com/hasenbanck/egui_wgpu_backend/blob/b2d3e7967351690c6425f37cd6d4ffb083a7e8e6/src/lib.rs#L379
-  // 2) https://github.com/emilk/egui/blob/2545939c150379b85517de691da56a46f5ee0d1d/crates/egui-wgpu/src/renderer.rs#L500
-  fn set_texture(&mut self, device: &Device, queue: &Queue, id: TextureId, image_delta: &ImageDelta) {
-    let label_base = match id {
-      TextureId::Managed(m) => format!("egui managed texture {}", m),
-      TextureId::User(u) => format!("egui user texture {}", u),
-    };
-
-    let width = image_delta.image.width() as u32;
-    let height = image_delta.image.height() as u32;
-    let size = Extent3d {
-      width,
-      height,
-      depth_or_array_layers: 1,
-    };
-    let layout = ImageDataLayout {
-      offset: 0,
-      bytes_per_row: Some(4 * width),
-      rows_per_image: None,
-    };
-
-    let pixels = match &image_delta.image {
-      ImageData::Color(image) => Cow::Borrowed(&image.pixels),
-      ImageData::Font(image) => Cow::Owned(image.srgba_pixels(None).collect()),
-    };
-    let data = bytemuck::cast_slice(pixels.as_slice());
-
-    match self.textures.entry(id) {
-      Entry::Occupied(mut o) => match image_delta.pos {
-        Some([x, y]) => {
-          let origin = Origin3d { x: x as u32, y: y as u32, z: 0 };
-          write_texture(queue, &o.get().0.texture, origin, data, layout, size);
-        }
-        None => {
-          let (texture, bind_group) = create_texture_and_bind_group(
-            device,
-            queue,
-            &label_base,
-            size,
-            data,
-            layout,
-            &self.texture_bind_group_layout,
-          );
-          let (texture, _) = o.insert((texture, bind_group));
-          texture.texture.destroy();
-        }
-      },
-      Entry::Vacant(v) => {
-        let (texture, bind_group) = create_texture_and_bind_group(
-          device,
-          queue,
-          &label_base,
-          size,
-          data,
-          layout,
-          &self.texture_bind_group_layout,
-        );
-        v.insert((texture, bind_group));
-      }
-    }
-  }
-
-  fn free_textures(&mut self, textures_delta: &TexturesDelta) {
-    for texture_id in textures_delta.free.iter() {
-      let (texture, _bind_group) = self.textures.
-        remove(&texture_id)
-        .unwrap_or_else(|| panic!("Cannot free texture for {:?}; texture with that ID does not exist", texture_id));
-      texture.texture.destroy();
-    }
+    self.process_platform_output(window, full_output.platform_output);
+    self.update_textures(device, queue, full_output.textures_delta);
+    let clipped_primitives = self.tessellate(full_output.shapes, full_output.pixels_per_point);
+    self.render(device, queue, clipped_primitives, screen_size, surface_texture_view, encoder);
   }
 }
 
-// Utilities
-
-#[repr(C)]
-#[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]
-struct Uniform {
-  // Note: array of size 4 due to alignment requirements for uniform buffers.
-  screen_size: [f32; 4],
-}
-
-impl Uniform {
-  #[inline]
-  pub fn from_screen_size(screen_size: ScreenSize) -> Self {
-    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32, 0.0, 0.0] }
-  }
-}
-
-fn create_texture_and_bind_group(
-  device: &Device,
-  queue: &Queue,
-  label_base: &str,
-  size: Extent3d,
-  data: &[u8],
-  layout: ImageDataLayout,
-  texture_bind_group_layout: &BindGroupLayout,
-) -> (GfxTexture, BindGroup) {
-  let texture = TextureBuilder::new()
-    .with_texture_label(label_base)
-    .with_size(size)
-    .with_rgba8_unorm_srgb_format()
-    .with_sampled_usage()
-    .with_texture_view_label(&format!("{} view", label_base))
-    .build(device);
-  write_texture(queue, &texture.texture, Origin3d::ZERO, data, layout, size);
-  let bind_group = BindGroupBuilder::default()
-    .entries(&[texture.entry(0)])
-    .label(&format!("{} bind group", label_base))
-    .build(device, texture_bind_group_layout);
-  (texture, bind_group)
-}
-
-fn write_texture(
-  queue: &Queue,
-  texture: &Texture,
-  origin: Origin3d,
-  data: &[u8],
-  layout: ImageDataLayout,
-  size: Extent3d,
-) {
-  queue.write_texture(
-    ImageCopyTexture {
-      texture,
-      mip_level: 0,
-      origin,
-      aspect: TextureAspect::All,
-    },
-    data,
-    layout,
-    size,
-  );
-}

@@ -58,7 +58,7 @@ impl<'a> TextureBuilder<'a> {
     Self::new()
       .with_2d_size(width as u32, height as u32)
       .with_sample_count(sample_count)
-      .with_format(surface.get_format())
+      .with_format(surface.get_swapchain_texture_format())
       .with_render_attachment_usage()
   }
 

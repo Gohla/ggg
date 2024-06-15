@@ -41,7 +41,7 @@ impl GfxSurface {
 
 
   pub fn get_configuration(&self) -> &SurfaceConfiguration { &self.configuration }
-  pub fn get_format(&self) -> TextureFormat { self.configuration.format }
+  pub fn get_swapchain_texture_format(&self) -> TextureFormat { self.configuration.format }
   pub fn get_size(&self) -> ScreenSize { self.size }
 
 

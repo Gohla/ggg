@@ -10,7 +10,6 @@ use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
 pub trait ContextWidgetsExt {
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
 }
-
 impl ContextWidgetsExt for &Context {
   #[inline]
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
@@ -59,7 +58,6 @@ pub trait UiWidgetsExt {
 
   fn select_align2(&mut self, align: &mut Option<Align2>);
 }
-
 impl UiWidgetsExt for Ui {
   #[inline]
   fn collapsing_open<R>(

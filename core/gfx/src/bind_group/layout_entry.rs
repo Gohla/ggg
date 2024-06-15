@@ -38,6 +38,11 @@ impl<T> BindGroupLayoutEntryBuilder<T> {
     self.visibility = visibility;
     self
   }
+  /// [ShaderStages::NONE]
+  #[inline]
+  pub fn no_visibility(self) -> Self {
+    self.visibility(ShaderStages::NONE)
+  }
   /// [ShaderStages::VERTEX]
   #[inline]
   pub fn vertex_visibility(self) -> Self {
@@ -47,6 +52,11 @@ impl<T> BindGroupLayoutEntryBuilder<T> {
   #[inline]
   pub fn fragment_visibility(self) -> Self {
     self.visibility(ShaderStages::FRAGMENT)
+  }
+  /// [ShaderStages::VERTEX_FRAGMENT]
+  #[inline]
+  pub fn vertex_fragment_visibility(self) -> Self {
+    self.visibility(ShaderStages::VERTEX_FRAGMENT)
   }
   /// [ShaderStages::COMPUTE]
   #[inline]

@@ -110,7 +110,7 @@ struct Runner<A> {
   os: Os,
   window: Window,
   gfx: Gfx,
-  gui: GuiIntegration,
+  gui_integration: GuiIntegration,
 
   app: A,
   debug_gui: DebugGui,
@@ -184,7 +184,7 @@ impl<A: Application> Runner<A> {
     tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
     let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
-    let gui = GuiIntegration::new(&device, surface.get_format(), Some(egui_memory));
+    let gui = GuiIntegration::new(Some(egui_memory), &device, surface.get_swapchain_texture_format());
 
     let sample_count = options.sample_count;
     let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {
@@ -208,7 +208,7 @@ impl<A: Application> Runner<A> {
       os,
       window,
       gfx,
-      gui,
+      gui_integration: gui,
 
       app,
       debug_gui: config.debug_gui,
@@ -250,7 +250,7 @@ impl<A: Application> Runner<A> {
     let config_dir = self.os.directories.config_dir();
     let config = Config { app_config: self.app.into_config(), debug_gui: self.debug_gui };
     config::serialize_config::<Config<A::Config>>(config_dir, &config::CONFIG_FILE_PATH, &config);
-    self.gui.context.memory(|m| config::serialize_config::<egui::Memory>(config_dir, &config::EGUI_FILE_PATH, m));
+    self.gui_integration.into_context().memory(|m| config::serialize_config::<egui::Memory>(config_dir, &config::EGUI_FILE_PATH, m));
   }
 
   #[profiling::function]
@@ -263,10 +263,10 @@ impl<A: Application> Runner<A> {
     for event in self.os.event_rx.try_iter() {
       match event {
         Event::WindowCursor { cursor_in_window } => {
-          self.gui.update_window_cursor(cursor_in_window);
+          self.gui_integration.process_window_cursor_event(cursor_in_window);
         }
         Event::WindowFocus { window_has_focus } => {
-          self.gui.update_window_focus(window_has_focus);
+          self.gui_integration.process_window_focus_event(window_has_focus);
         }
         Event::WindowSizeChange(inner_size) => {
           self.screen_size = inner_size;
@@ -294,21 +294,22 @@ impl<A: Application> Runner<A> {
     let mut raw_input = self.os.input_sys.update();
 
     // If the app is capturing keyboard and/or mouse inputs, prevent the GUI from capturing those inputs.
-    let gui_process_keyboard_events = !self.app.is_capturing_keyboard();
-    let gui_process_mouse_events = !self.app.is_capturing_mouse();
-    self.gui.process_input(&raw_input, gui_process_keyboard_events, gui_process_mouse_events);
-
-    // If the GUI is capturing keyboard and/or mouse inputs, prevent the app from capturing those inputs.
-    if gui_process_keyboard_events && self.gui.is_capturing_keyboard() {
-      raw_input.remove_keyboard_input();
-    }
-    if gui_process_mouse_events && self.gui.is_capturing_mouse() {
-      raw_input.remove_mouse_input();
-    }
+    let gui_process_keyboard = !self.app.wants_keyboard_input();
+    let gui_process_mouse = !self.app.wants_mouse_input();
+    self.gui_integration.process_input(&raw_input, gui_process_keyboard, gui_process_mouse);
 
     // Create GUI frame
     let gui = if !self.minimized {
-      let context = self.gui.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
+      let context = self.gui_integration.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
+
+      // If the GUI is capturing keyboard and/or mouse inputs, prevent the app from capturing those inputs.
+      if gui_process_keyboard && context.wants_keyboard_input() {
+        raw_input.remove_keyboard_input();
+      }
+      if gui_process_mouse && context.wants_pointer_input() {
+        raw_input.remove_mouse_input();
+      }
+
       TopBottomPanel::top("GUI top panel").show(&context, |ui| {
         self.app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
@@ -369,7 +370,7 @@ impl<A: Application> Runner<A> {
     }
     let output_texture = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-    // Render
+    // Render application
     let mut encoder = self.gfx.device.create_default_command_encoder();
     let render = Render {
       screen_size: self.screen_size,
@@ -387,7 +388,9 @@ impl<A: Application> Runner<A> {
       input: &input,
     };
     let additional_command_buffers = self.app.render(render_input);
-    self.gui.render(&self.window, self.screen_size, &self.gfx.device, &self.gfx.queue, &mut encoder, &output_texture);
+
+    // End GUI frame, handle output, and render.
+    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &output_texture, &mut encoder);
 
     // Submit command buffers
     let command_buffer = encoder.finish();

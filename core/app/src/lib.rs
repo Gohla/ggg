@@ -75,10 +75,10 @@ pub trait Application: Sized {
   /// Update this application with a new `screen_size`, possibly updating internal structures to reflect the new size.
   fn screen_resize(&mut self, os: &Os, gfx: &Gfx, screen_size: ScreenSize) {}
 
-  /// Returns `true` when this application wants to capture keyboard events, `false` otherwise.
-  fn is_capturing_keyboard(&self) -> bool { return false; }
-  /// Returns `true` when this application wants to capture mouse events, `false` otherwise.
-  fn is_capturing_mouse(&self) -> bool { return false; }
+  /// Returns `true` when this application wants to capture keyboard input, `false` otherwise.
+  fn wants_keyboard_input(&self) -> bool { return false; }
+  /// Returns `true` when this application wants to capture mouse input, `false` otherwise.
+  fn wants_mouse_input(&self) -> bool { return false; }
 
   /// Type of input this application creates, passed into `simulate` and `render`.
   type Input;
