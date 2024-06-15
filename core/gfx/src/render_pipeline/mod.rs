@@ -7,10 +7,14 @@ use wgpu::{
   TextureFormat, VertexBufferLayout, VertexState,
 };
 
-use crate::fragment_state::FragmentStateBuilder;
+use fragment_state::FragmentStateBuilder;
+use vertex_state::VertexStateBuilder;
+
 use crate::pipeline_layout::PipelineLayoutBuilder;
 use crate::surface::GfxSurface;
-use crate::vertex_state::VertexStateBuilder;
+
+pub mod vertex_state;
+pub mod fragment_state;
 
 pub struct RenderPipelineBuilder<'a> {
   layout: PipelineLayoutBuilder<'a>,

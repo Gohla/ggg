@@ -3,7 +3,7 @@ use ultraviolet::{UVec3, Vec4};
 
 use gfx::debug_renderer::DebugRenderer;
 use gfx::display_math::UVec3DisplayExt;
-use gui_widget::UiWidgetsExt;
+use gui_widget::{Gui, UiWidgetsExt};
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSampleArray};
 use voxel::chunk::size::ChunkSize;
@@ -25,8 +25,9 @@ pub struct MarchingCubesDebugging {
 }
 
 impl MarchingCubesDebugging {
-  pub fn show_gui_window(&mut self, gui: &egui::Context) {
+  pub fn show(&mut self, gui: &Gui) {
     egui::Window::new("Marching Cubes")
+      .constrain_to(gui.area_under_title_bar)
       .anchor(Align2::LEFT_TOP, egui::Vec2::default())
       .show(&gui, |ui| {
         self.draw_window_contents(ui);

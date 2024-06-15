@@ -111,7 +111,7 @@ impl app::Application for VoxelPlanets {
 
   #[profiling::function]
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.settings.camera_debugging.show_debugging_gui_window_multiple_cameras(gui, &self.cameras, &mut self.settings.camera_settings);
+    self.settings.camera_debugging.show_multiple_cameras(&gui, &self.cameras, &mut self.settings.camera_settings);
     let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
     camera.update(camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(camera);
@@ -120,9 +120,10 @@ impl app::Application for VoxelPlanets {
     let camera_view_inverse_matrix = camera.get_view_inverse_matrix();
 
     let (recreate_lod_render_data_manager, update_lod_render_data) = egui::Window::new("Voxel Planets")
+      .constrain_to(gui.area_under_title_bar)
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
       .auto_sized()
-      .show(gui, |ui| {
+      .show(&gui, |ui| {
         let mut recreate = false;
         recreate |= self.settings.draw_reset_to_defaults_button(ui);
         self.settings.draw_light_gui(ui, camera_direction_inverse);

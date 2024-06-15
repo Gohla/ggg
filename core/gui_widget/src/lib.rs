@@ -1,11 +1,22 @@
 use std::fmt::Display;
 use std::hash::Hash;
-use std::ops::RangeInclusive;
+use std::ops::{Deref, RangeInclusive};
 
-use egui::{Align2, Button, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
+use egui::{Align2, Button, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Rect, Response, Rgba, Ui, WidgetText, Window};
 use egui::color_picker::Alpha;
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
+
+pub struct Gui {
+  pub context: Context,
+  pub area_under_title_bar: Rect,
+}
+impl Deref for Gui {
+  type Target = Context;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.context }
+}
+
 
 pub trait CtxRefWidgetsExt {
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;

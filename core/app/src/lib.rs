@@ -1,5 +1,3 @@
-#![feature(never_type)]
-
 use egui::Ui;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -9,6 +7,7 @@ use common::input::RawInput;
 use common::screen::ScreenSize;
 use common::time::Offset;
 use gfx::{Gfx, Render};
+use gui_widget::Gui;
 use os::{ApplicationOptions, Os};
 pub use run::RunError;
 
@@ -39,6 +38,8 @@ pub struct Step {
   pub target_duration: Offset,
 }
 
+
+
 /// Input for [Application::render].
 pub struct RenderInput<'a, A: Application> {
   /// Operating system facade.
@@ -55,7 +56,7 @@ pub struct RenderInput<'a, A: Application> {
   /// Data and handles for rendering a frame.
   pub render: Render<'a>,
   /// Handle for creating GUIs this frame.
-  pub gui: &'a egui::Context,
+  pub gui: Gui,
   /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required
   /// to make the rendered representation sync up with the simulated representation. Thus, the renderer should
   /// extrapolate this much time into the future.

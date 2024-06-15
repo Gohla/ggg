@@ -254,10 +254,10 @@ impl Camera {
 
 
   pub fn update(
-      &mut self,
-      settings: &mut CameraSettings,
-      input: &CameraInput,
-      frame_delta: Offset,
+    &mut self,
+    settings: &mut CameraSettings,
+    input: &CameraInput,
+    frame_delta: Offset,
   ) {
     let (width, height): (f64, f64) = self.viewport.into();
     let width = width as f32;
@@ -396,20 +396,21 @@ impl CameraDebugging {
     }
   }
 
-  pub fn show_debugging_gui_window(&mut self, ctx: &egui::Context, camera: &Camera, settings: &mut CameraSettings) {
-    self.show_debugging_gui_window_multiple_cameras(ctx, std::slice::from_ref(camera), std::slice::from_mut(settings));
+  pub fn show(&mut self, gui: &gui_widget::Gui, camera: &Camera, settings: &mut CameraSettings) {
+    self.show_multiple_cameras(gui, std::slice::from_ref(camera), std::slice::from_mut(settings));
   }
 
-  pub fn show_debugging_gui_window_multiple_cameras(&mut self, ctx: &egui::Context, cameras: &[Camera], settings: &mut [CameraSettings]) {
+  pub fn show_multiple_cameras(&mut self, gui: &gui_widget::Gui, cameras: &[Camera], settings: &mut [CameraSettings]) {
     if !self.show_window { return; }
-    let mut window = egui::Window::new("Camera");
+    let mut window = egui::Window::new("Camera")
+      .constrain_to(gui.area_under_title_bar);
     if let Some(anchor) = self.window_anchor {
       window = window.anchor(anchor, egui::Vec2::ZERO);
     }
     window
       .open(&mut self.show_window)
       .auto_sized()
-      .show(ctx, |ui| Self::draw_debugging_gui(ui, &mut self.window_anchor, &mut self.selected_camera, &self.default_settings, cameras, settings));
+      .show(gui, |ui| Self::draw_debugging_gui(ui, &mut self.window_anchor, &mut self.selected_camera, &self.default_settings, cameras, settings));
   }
 
   pub fn add_to_menu(&mut self, ui: &mut egui::Ui) {

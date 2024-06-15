@@ -13,7 +13,8 @@ use gfx::{Gfx, Render};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
-use gui::Gui;
+use gui::GuiIntegration;
+use gui_widget::Gui;
 use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
 use os::OsCreateError;
 use os::window::Window;
@@ -109,7 +110,7 @@ struct Runner<A> {
   os: Os,
   window: Window,
   gfx: Gfx,
-  gui: Gui,
+  gui: GuiIntegration,
 
   app: A,
   debug_gui: DebugGui,
@@ -183,7 +184,7 @@ impl<A: Application> Runner<A> {
     tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
     let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
-    let gui = Gui::new(&device, surface.get_format(), Some(egui_memory));
+    let gui = GuiIntegration::new(&device, surface.get_format(), Some(egui_memory));
 
     let sample_count = options.sample_count;
     let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {
@@ -306,22 +307,23 @@ impl<A: Application> Runner<A> {
     }
 
     // Create GUI frame
-    let gui_context = if !self.minimized {
-      let gui_context = self.gui.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
-      TopBottomPanel::top("GUI top panel").show(&gui_context, |ui| {
+    let gui = if !self.minimized {
+      let context = self.gui.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
+      TopBottomPanel::top("GUI top panel").show(&context, |ui| {
         self.app.add_to_menu(ui);
         egui::menu::bar(ui, |ui| {
           self.debug_gui.add_debug_menu(ui, |ui| self.app.add_to_debug_menu(ui));
         })
       });
-      Some(gui_context)
+      let area_under_title_bar = context.available_rect();
+      Some(Gui { context, area_under_title_bar })
     } else {
       None
     };
 
     // Show input debugging GUI if enabled.
-    if let Some(ref gui_frame) = gui_context {
-      self.debug_gui.show_input(&gui_frame, &raw_input);
+    if let Some(gui) = gui.as_ref() {
+      self.debug_gui.show_input(&gui, &raw_input);
     }
 
     // Let the application process input.
@@ -343,7 +345,7 @@ impl<A: Application> Runner<A> {
     if self.minimized { return false; }
 
     // Show timing debugging GUI if enabled.
-    self.debug_gui.show_timing(gui_context.as_ref().unwrap(), &self.timing_stats);
+    self.debug_gui.show_timing(gui.as_ref().unwrap(), &self.timing_stats);
 
     // Get swapchain texture to draw into and present.
     let surface_texture = match self.gfx.surface.get_current_texture() {
@@ -381,7 +383,7 @@ impl<A: Application> Runner<A> {
       frame,
       render,
       extrapolate: self.updates.accumulated_lag,
-      gui: gui_context.as_ref().unwrap(),
+      gui: gui.unwrap(),
       input: &input,
     };
     let additional_command_buffers = self.app.render(render_input);

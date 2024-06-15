@@ -32,7 +32,7 @@ use os::clipboard::{get_clipboard, TextClipboard};
 use os::open_url::open_url;
 use os::window::Window;
 
-pub struct Gui {
+pub struct GuiIntegration {
   pub context: Context,
   clipboard: Box<dyn TextClipboard + Send + 'static>,
 
@@ -53,7 +53,7 @@ pub struct Gui {
 
 // Creation
 
-impl Gui {
+impl GuiIntegration {
   pub fn new(
     device: &Device,
     swap_chain_texture_format: TextureFormat,

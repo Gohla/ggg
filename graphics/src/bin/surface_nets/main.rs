@@ -103,15 +103,16 @@ impl app::Application for SurfaceNetsDemo {
 
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.config.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.config.camera_settings);
+    self.config.camera_debugging.show(&gui, &self.camera, &mut self.config.camera_settings);
     self.camera.update(&mut self.config.camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI
-    self.config.surface_nets_debugging.show_gui_window(gui);
+    self.config.surface_nets_debugging.show(&gui);
     egui::Window::new("Demo")
+      .constrain_to(gui.area_under_title_bar)
       .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
-      .show(gui, |ui| {
+      .show(&gui, |ui| {
         self.config.light_settings.render_gui(ui, self.camera.get_direction_inverse());
       });
 

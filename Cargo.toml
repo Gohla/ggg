@@ -23,7 +23,7 @@ cursor-icon = "1"
 winit = "0.30"
 wgpu = "0.20"
 naga = "0.20" # sync with wgpu
-egui = { git = "https://github.com/emilk/egui.git", rev = "9f12432" }
+egui = { git = "https://github.com/emilk/egui.git", rev = "814ad07" }
 ultraviolet = "0.9"
 image = { version = "0.25", default-features = false }
 bytemuck = "1"

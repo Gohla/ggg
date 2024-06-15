@@ -216,11 +216,11 @@ impl app::Application for Quads {
   }
 
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
+    self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    egui::Window::new("Quads").show(gui, |ui| {
+    egui::Window::new("Quads").constrain_to(gui.area_under_title_bar).show(&gui, |ui| {
       ui.label("Hello, world!");
     });
 

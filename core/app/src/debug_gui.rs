@@ -1,10 +1,10 @@
-use egui::{CollapsingHeader, Context, Grid, menu, Ui, Window};
+use egui::{CollapsingHeader, Grid, menu, Ui, Window};
 use serde::{Deserialize, Serialize};
 
 use common::input::RawInput;
 use common::sampler::{EventSampler, ValueSampler};
 use common::time::Offset;
-use gui_widget::UiWidgetsExt;
+use gui_widget::{Gui, UiWidgetsExt};
 
 use crate::{Frame, Step};
 use crate::run::{FrameEnd, StepEnd, Updates};
@@ -100,17 +100,18 @@ impl DebugGui {
   #[profiling::function]
   pub fn show_timing(
     &mut self,
-    ctx: &Context,
+    gui: &Gui,
     timing_stats: &TimingStats,
   ) {
     if !self.show_timing_window { return; }
-    let mut window = Window::new("Debug Timing");
+    let mut window = Window::new("Debug Timing")
+      .constrain_to(gui.area_under_title_bar);
     if let Some(anchor) = self.timing_window_anchor {
       window = window.anchor(anchor, egui::Vec2::ZERO);
     }
     window.open(&mut self.show_timing_window)
       .auto_sized()
-      .show(ctx, |ui| {
+      .show(gui, |ui| {
         ui.horizontal(|ui| {
           ui.label("Anchor");
           ui.select_align2(&mut self.timing_window_anchor);
@@ -200,17 +201,18 @@ impl DebugGui {
   #[profiling::function]
   pub fn show_input(
     &mut self,
-    ctx: &Context,
+    gui: &Gui,
     input: &RawInput,
   ) {
     if !self.show_input_window { return; }
-    let mut window = Window::new("Debug Input");
+    let mut window = Window::new("Debug Input")
+      .constrain_to(gui.area_under_title_bar);
     if let Some(anchor) = self.input_window_anchor {
       window = window.anchor(anchor, egui::Vec2::ZERO);
     }
     window.open(&mut self.show_input_window)
       .auto_sized()
-      .show(ctx, |ui| {
+      .show(gui, |ui| {
         ui.horizontal(|ui| {
           ui.label("Anchor");
           ui.select_align2(&mut self.input_window_anchor);
