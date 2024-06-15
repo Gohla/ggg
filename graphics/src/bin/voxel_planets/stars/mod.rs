@@ -49,9 +49,9 @@ impl StarsRenderer {
     uniform.update_screen_size(gfx.surface.get_size());
     uniform.view_inverse_matrix = view_inverse_matrix;
     let uniform_buffer = BufferBuilder::default()
-      .with_label("Stars uniform buffer")
-      .with_uniform_usage()
-      .create_with_data(&gfx.device, &[uniform]);
+      .label("Stars uniform buffer")
+      .uniform_usage()
+      .build_with_data(&gfx.device, &[uniform]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
@@ -92,7 +92,7 @@ impl StarsRenderer {
   ) {
     self.uniform.view_inverse_matrix = view_inverse_matrix;
     self.uniform.update_settings(settings);
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[self.uniform]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[self.uniform]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Stars render pass")

@@ -95,9 +95,9 @@ impl app::Application for QuadGrid {
     let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
     let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Quad grid uniform buffer")
-      .create_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
+      .uniform_usage()
+      .label("Quad grid uniform buffer")
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
@@ -116,11 +116,11 @@ impl app::Application for QuadGrid {
     let mut rng = SmallRng::seed_from_u64(101702198783735);
     let instance_buffer = {
       let buffer = BufferBuilder::new()
-        .with_size((1 * size_of::<Instance>()) as BufferAddress)
-        .with_storage_usage()
-        .with_mapped_at_creation(true)
-        .with_label("Quad grid instance storage buffer")
-        .create(&gfx.device);
+        .size((1 * size_of::<Instance>()) as BufferAddress)
+        .storage_usage()
+        .mapped_at_creation(true)
+        .label("Quad grid instance storage buffer")
+        .build(&gfx.device);
       {
         let mut view = buffer.slice(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
@@ -158,9 +158,9 @@ impl app::Application for QuadGrid {
         QUAD_INDICES[quad_local] + quad as u32 * NUM_QUAD_VERTICES as u32
       }).collect();
       BufferBuilder::new()
-        .with_static_index_usage()
-        .with_label("Quad grid static index buffer")
-        .create_with_data(&gfx.device, &data)
+        .static_index_usage()
+        .label("Quad grid static index buffer")
+        .build_with_data(&gfx.device, &data)
     };
 
     Self {
@@ -198,7 +198,7 @@ impl app::Application for QuadGrid {
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Quad grid render pass")

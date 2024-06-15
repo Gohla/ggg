@@ -27,7 +27,7 @@ pub mod display_math;
 pub mod debug_renderer;
 pub mod full_screen_triangle;
 
-/// Graphics facade: graphics handles and information.
+/// Fully initialized graphics instance.
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
@@ -42,17 +42,27 @@ pub struct Gfx {
 }
 
 impl Gfx {
+  /// Returns the depth-stencil texture format if a depth-stencil texture was set.
   #[inline]
   pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
     self.depth_stencil_texture.as_ref().map(|t| t.format)
   }
 
 
+  /// Returns a preconfigured [RenderPipelineBuilder] with:
+  /// - [depth_texture](RenderPipelineBuilder::depth_texture) if `depth_stencil_texture` is `Some`.
+  /// - [multisample_count](RenderPipelineBuilder::multisample_count) from `sample_count`.
+  /// - [surface_fragment_target](RenderPipelineBuilder::surface_fragment_target) from `surface`, which sets the
+  ///   fragment target to match the swapchain texture format.
   #[inline]
   pub fn render_pipeline_builder(&self) -> RenderPipelineBuilder {
     self.render_pipeline_builder_without_depth_stencil()
       .depth_texture(self.depth_stencil_format())
   }
+  /// Returns a preconfigured [RenderPipelineBuilder] with:
+  /// - [multisample_count](RenderPipelineBuilder::multisample_count) from `sample_count`.
+  /// - [surface_fragment_target](RenderPipelineBuilder::surface_fragment_target) from `surface`, which sets the
+  ///   fragment target to match the swapchain texture format.
   #[inline]
   pub fn render_pipeline_builder_without_depth_stencil(&self) -> RenderPipelineBuilder {
     RenderPipelineBuilder::default()
@@ -61,6 +71,8 @@ impl Gfx {
   }
 
 
+  /// Resizes the surface (and thus corresponding swapchain textures), the depth-stencil texture if set, and the
+  /// multisampled framebuffer if set.
   pub fn resize_surface(&mut self, size: ScreenSize) {
     self.surface.resize(&self.adapter, &self.device, size);
     if let Some(depth_texture) = &mut self.depth_stencil_texture {

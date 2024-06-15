@@ -114,14 +114,14 @@ impl<'a> BufferBuilder<'a> {
 
   /// Set the debug label of the buffer, used by graphics debuggers for identification.
   #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
+  pub fn label(mut self, label: &'a str) -> Self {
     self.descriptor.label = Some(label);
     self
   }
 
   /// Set the size of the buffer in bytes.
   #[inline]
-  pub fn with_size(mut self, size: BufferAddress) -> Self {
+  pub fn size(mut self, size: BufferAddress) -> Self {
     self.descriptor.size = size;
     self
   }
@@ -129,33 +129,33 @@ impl<'a> BufferBuilder<'a> {
   /// Sets the usages of the buffer. If the buffer is used in any way that isn't specified here, the operation will
   /// panic.
   #[inline]
-  pub fn with_usage(mut self, usage: BufferUsages) -> Self {
+  pub fn usage(mut self, usage: BufferUsages) -> Self {
     self.descriptor.usage = usage;
     self
   }
   #[inline]
-  pub fn with_static_vertex_usage(self) -> Self { self.with_usage(BufferUsages::VERTEX) }
+  pub fn static_vertex_usage(self) -> Self { self.usage(BufferUsages::VERTEX) }
   #[inline]
-  pub fn with_vertex_usage(self) -> Self { self.with_usage(BufferUsages::VERTEX | BufferUsages::COPY_DST) }
+  pub fn vertex_usage(self) -> Self { self.usage(BufferUsages::VERTEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_index_usage(self) -> Self { self.with_usage(BufferUsages::INDEX) }
+  pub fn static_index_usage(self) -> Self { self.usage(BufferUsages::INDEX) }
   #[inline]
-  pub fn with_index_usage(self) -> Self { self.with_usage(BufferUsages::INDEX | BufferUsages::COPY_DST) }
+  pub fn index_usage(self) -> Self { self.usage(BufferUsages::INDEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_uniform_usage(self) -> Self { self.with_usage(BufferUsages::UNIFORM) }
+  pub fn static_uniform_usage(self) -> Self { self.usage(BufferUsages::UNIFORM) }
   #[inline]
-  pub fn with_uniform_usage(self) -> Self { self.with_usage(BufferUsages::UNIFORM | BufferUsages::COPY_DST) }
+  pub fn uniform_usage(self) -> Self { self.usage(BufferUsages::UNIFORM | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_static_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE) }
+  pub fn static_storage_usage(self) -> Self { self.usage(BufferUsages::STORAGE) }
   #[inline]
-  pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
+  pub fn storage_usage(self) -> Self { self.usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
 
   /// Sets whether the buffer will be mapped immediately after creation. The buffer does not require
   /// [`BufferUsages::MAP_READ`] nor [`BufferUsages::MAP_WRITE`] use, all buffers are allowed to be mapped at creation.
   ///
-  /// If set to `true`, [`size`](Self::with_size) must be a multiple of [COPY_BUFFER_ALIGNMENT].
+  /// If set to `true`, [`size`](Self::size) must be a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn with_mapped_at_creation(mut self, mapped_at_creation: bool) -> Self {
+  pub fn mapped_at_creation(mut self, mapped_at_creation: bool) -> Self {
     self.descriptor.mapped_at_creation = mapped_at_creation;
     self
   }
@@ -167,7 +167,7 @@ impl<'a> BufferBuilder<'a> {
 impl<'a> BufferBuilder<'a> {
   /// Create the buffer on `device` without setting its content.
   #[inline]
-  pub fn create(self, device: &Device) -> GfxBuffer {
+  pub fn build(self, device: &Device) -> GfxBuffer {
     let buffer = device.create_buffer(&self.descriptor);
     GfxBuffer { buffer }
   }
@@ -177,9 +177,9 @@ impl<'a> BufferBuilder<'a> {
   /// The size of the buffer is `bytes.len().max(size)`. If that size is not a multiple of [COPY_BUFFER_ALIGNMENT], it
   /// is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
   ///
-  /// Ignores the previously set [`mapped_at_creation`](Self::with_mapped_at_creation) value.
+  /// Ignores the previously set [`mapped_at_creation`](Self::mapped_at_creation) value.
   #[inline]
-  pub fn create_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
+  pub fn build_with_bytes(self, device: &Device, bytes: &[u8]) -> GfxBuffer {
     let buffer = GfxBuffer::from_bytes_min_size(device, bytes, self.descriptor.usage, self.descriptor.size, self.descriptor.label);
     buffer
   }
@@ -189,9 +189,9 @@ impl<'a> BufferBuilder<'a> {
   /// The size of the buffer is `(data.len() * size_of::<T>()).max(size)`. If that size is not a multiple of
   /// [COPY_BUFFER_ALIGNMENT], it is increased to be a multiple of it. If that size is `0`, an empty buffer is created.
   ///
-  /// Ignores the previously set [`mapped_at_creation`](Self::with_mapped_at_creation) value.
+  /// Ignores the previously set [`mapped_at_creation`](Self::mapped_at_creation) value.
   #[inline]
-  pub fn create_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
+  pub fn build_with_data<T: Pod>(self, device: &Device, data: &[T]) -> GfxBuffer {
     GfxBuffer::from_data_min_size(device, data, self.descriptor.usage, self.descriptor.size, self.descriptor.label)
   }
 }
@@ -210,7 +210,7 @@ impl GfxBuffer {
   /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   /// - The size of `bytes` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn enqueue_write_bytes(&self, queue: &Queue, bytes: &[u8], offset: BufferAddress) {
+  pub fn write_bytes(&self, queue: &Queue, bytes: &[u8], offset: BufferAddress) {
     queue.write_buffer(&self.buffer, offset, bytes);
   }
 
@@ -221,8 +221,8 @@ impl GfxBuffer {
   /// - The size of `bytes` is larger than the size of this buffer.
   /// - The size of `bytes` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn enqueue_write_all_bytes(&self, queue: &Queue, bytes: &[u8]) {
-    self.enqueue_write_bytes(queue, bytes, 0);
+  pub fn write_all_bytes(&self, queue: &Queue, bytes: &[u8]) {
+    self.write_bytes(queue, bytes, 0);
   }
 
   /// Enqueue writing `bytes` at `offset` of this buffer, using `staging_belt` to create a staging buffer. The write
@@ -232,7 +232,7 @@ impl GfxBuffer {
   ///
   /// If the size of `bytes` is 0, nothing happens.
   ///
-  /// In contrast to [enqueue_write_bytes](Self::enqueue_write_bytes), this method supports writing bytes with a size
+  /// In contrast to [enqueue_write_bytes](Self::write_bytes), this method supports writing bytes with a size
   /// that is *not* a multiple of [COPY_BUFFER_ALIGNMENT]. It supports this by first creating a staging buffer with a
   /// size that *is* aligned, copying `bytes` into that buffer, and then scheduling a buffer copy from the staging
   /// buffer into this buffer.
@@ -244,7 +244,7 @@ impl GfxBuffer {
   ///
   /// - `bytes` overruns the end of this buffer starting at `offset`.
   /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
-  pub fn enqueue_write_bytes_via_staging_belt(
+  pub fn write_bytes_staging(
     &self,
     device: &Device,
     encoder: &mut CommandEncoder,
@@ -271,10 +271,10 @@ impl GfxBuffer {
   /// - `offset` converted to a byte offset is not a multiple of [COPY_BUFFER_ALIGNMENT].
   /// - The size of `data` in bytes is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn enqueue_write_data<T: Pod>(&self, queue: &Queue, data: &[T], offset: usize) {
+  pub fn write_data<T: Pod>(&self, queue: &Queue, data: &[T], offset: usize) {
     let bytes = bytemuck::cast_slice(data);
     let offset = offset * size_of::<T>();
-    self.enqueue_write_bytes(queue, bytes, offset as BufferAddress)
+    self.write_bytes(queue, bytes, offset as BufferAddress)
   }
 
   /// Enqueue writing `data` into this buffer. The write occurs at the next `queue` [submit](Queue::submit) call.
@@ -284,8 +284,8 @@ impl GfxBuffer {
   /// - The size of `data` is larger than the size of this buffer.
   /// - The size of `data` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn enqueue_write_all_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
-    self.enqueue_write_data::<T>(queue, data, 0);
+  pub fn write_all_data<T: Pod>(&self, queue: &Queue, data: &[T]) {
+    self.write_data::<T>(queue, data, 0);
   }
 
   /// Enqueue writing `data` at `offset` of this buffer, using `staging_belt` to create a staging buffer. The write
@@ -295,7 +295,7 @@ impl GfxBuffer {
   ///
   /// If the size of `data` is 0, nothing happens.
   ///
-  /// In contrast to [enqueue_write_data](Self::enqueue_write_data), this method supports writing data with a size
+  /// In contrast to [enqueue_write_data](Self::write_data), this method supports writing data with a size
   /// that is *not* a multiple of [COPY_BUFFER_ALIGNMENT]. It supports this by first creating a staging buffer with a
   /// size that *is* aligned, copying `data` into that buffer, and then scheduling a buffer copy from the staging
   /// buffer into this buffer.
@@ -308,7 +308,7 @@ impl GfxBuffer {
   /// - `data` overruns the end of this buffer starting at `offset`.
   /// - `offset` is not a multiple of [COPY_BUFFER_ALIGNMENT].
   #[inline]
-  pub fn enqueue_write_data_via_staging_belt<T: Pod>(
+  pub fn write_data_staging<T: Pod>(
     &self,
     device: &Device,
     encoder: &mut CommandEncoder,
@@ -318,7 +318,7 @@ impl GfxBuffer {
   ) {
     let bytes = bytemuck::cast_slice(data);
     let offset = offset * size_of::<T>();
-    self.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, offset as BufferAddress);
+    self.write_bytes_staging(device, encoder, staging_belt, bytes, offset as BufferAddress);
   }
 }
 

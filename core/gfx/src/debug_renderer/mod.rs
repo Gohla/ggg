@@ -33,9 +33,9 @@ impl DebugRenderer {
     let staging_belt = StagingBelt::new(1024 * 1024); // 1 MiB chunk size
 
     let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Debug uniform buffer")
-      .create_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
+      .uniform_usage()
+      .label("Debug uniform buffer")
+      .build_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -249,7 +249,7 @@ impl DebugRenderer {
 
     self.staging_belt.recall();
 
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform { model_view_projection }]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_pipeline {
       pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);

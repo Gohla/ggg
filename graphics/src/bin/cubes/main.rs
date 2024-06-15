@@ -100,18 +100,18 @@ impl app::Application for Cubes {
     let mut rng = SmallRng::seed_from_u64(101702198783735);
 
     let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("Cubes uniform buffer")
-      .create_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
+      .uniform_usage()
+      .label("Cubes uniform buffer")
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
       let buffer = BufferBuilder::new()
-        .with_size((MAX_INSTANCES * size_of::<Instance>()) as BufferAddress)
-        .with_storage_usage()
-        .with_mapped_at_creation(true)
-        .with_label("Cubes instance storage buffer")
-        .create(&gfx.device);
+        .size((MAX_INSTANCES * size_of::<Instance>()) as BufferAddress)
+        .storage_usage()
+        .mapped_at_creation(true)
+        .label("Cubes instance storage buffer")
+        .build(&gfx.device);
       {
         let mut view = buffer.slice(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
@@ -150,9 +150,9 @@ impl app::Application for Cubes {
         CUBE_INDICES[cube_local] + cube as u32 * NUM_CUBE_VERTICES as u32
       }).collect();
       BufferBuilder::new()
-        .with_static_index_usage()
-        .with_label("Cubes static index buffer")
-        .create_with_data(&gfx.device, &data)
+        .static_index_usage()
+        .label("Cubes static index buffer")
+        .build_with_data(&gfx.device, &data)
     };
 
     Self {
@@ -198,7 +198,7 @@ impl app::Application for Cubes {
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Cubes").show(gui, |ui| {
       ui.grid("Grid", |ui| {
@@ -214,7 +214,7 @@ impl app::Application for Cubes {
         let instances: Vec<_> = (0..self.num_cubes_to_generate)
           .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
           .collect();
-        self.instance_buffer.enqueue_write_all_data(&gfx.queue, &instances);
+        self.instance_buffer.write_all_data(&gfx.queue, &instances);
         self.num_cubes = self.num_cubes_to_generate
       }
     });

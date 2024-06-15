@@ -42,14 +42,14 @@ impl<V: Vertex + Pod> Pipeline<V> {
       // Opt in to premultiplied alpha blending
       .surface_premultiplied_alpha_blend_fragment_target(&gfx.surface)
       .build(&gfx.device);
-    let vertex_buffer = GrowableBufferBuilder::new()
-      .with_vertex_usage()
-      .with_label(format!("Debug {} vertex buffer", label))
-      .create();
-    let index_buffer = GrowableBufferBuilder::new()
-      .with_index_usage()
-      .with_label(format!("Debug {} index buffer", label))
-      .create();
+    let vertex_buffer = GrowableBufferBuilder::default()
+      .vertex_usage()
+      .label(format!("Debug {} vertex buffer", label))
+      .build();
+    let index_buffer = GrowableBufferBuilder::default()
+      .index_usage()
+      .label(format!("Debug {} index buffer", label))
+      .build();
     Self {
       render_pipeline,
       vertex_buffer,

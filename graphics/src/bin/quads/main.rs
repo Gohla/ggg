@@ -136,8 +136,8 @@ impl app::Application for Quads {
     };
 
     let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .create_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
+      .uniform_usage()
+      .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
     let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_entries(&[uniform_bind_group_layout_entry])
@@ -159,13 +159,13 @@ impl app::Application for Quads {
       .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::new()
-      .with_static_vertex_usage()
-      .with_label("Quad static vertex buffer")
-      .create_with_data(&gfx.device, VERTICES);
+      .static_vertex_usage()
+      .label("Quad static vertex buffer")
+      .build_with_data(&gfx.device, VERTICES);
     let index_buffer = BufferBuilder::new()
-      .with_static_index_usage()
-      .with_label("Quad static index buffer")
-      .create_with_data(&gfx.device, INDICES);
+      .static_index_usage()
+      .label("Quad static index buffer")
+      .build_with_data(&gfx.device, INDICES);
     let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW).flat_map(|y| {
       let y = y as f32 - (NUM_INSTANCES_PER_ROW as f32 / 2.0);
       (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -176,9 +176,9 @@ impl app::Application for Quads {
       })
     }).collect();
     let instance_buffer = BufferBuilder::new()
-      .with_static_vertex_usage()
-      .with_label("Quads instance buffer")
-      .create_with_data(&gfx.device, &instances);
+      .static_vertex_usage()
+      .label("Quads instance buffer")
+      .build_with_data(&gfx.device, &instances);
 
     Self {
       camera_settings,
@@ -219,7 +219,7 @@ impl app::Application for Quads {
   fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show_debugging_gui_window(gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
-    self.uniform_buffer.enqueue_write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     egui::Window::new("Quads").show(gui, |ui| {
       ui.label("Hello, world!");

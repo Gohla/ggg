@@ -32,19 +32,19 @@ impl VoxelRenderer {
     staging_belt: StagingBelt,
   ) -> Self {
     let camera_uniform_buffer = BufferBuilder::default()
-      .with_uniform_usage()
-      .with_label("Camera uniform buffer")
-      .create_with_data(&gfx.device, &[camera_uniform]);
+      .uniform_usage()
+      .label("Camera uniform buffer")
+      .build_with_data(&gfx.device, &[camera_uniform]);
     let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
     let light_uniform_buffer = BufferBuilder::default()
-      .with_uniform_usage()
-      .with_label("Light uniform buffer")
-      .create_with_data(&gfx.device, &[light_uniform]);
+      .uniform_usage()
+      .label("Light uniform buffer")
+      .build_with_data(&gfx.device, &[light_uniform]);
     let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
     let model_uniform_buffer = BufferBuilder::default()
-      .with_uniform_usage()
-      .with_label("Model uniform buffer")
-      .create_with_data(&gfx.device, &[model_uniform]);
+      .uniform_usage()
+      .label("Model uniform buffer")
+      .build_with_data(&gfx.device, &[model_uniform]);
     let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
 
     let vertex_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/vert"));
@@ -68,13 +68,13 @@ impl VoxelRenderer {
       .build(&gfx.device);
 
     let vertex_buffer = GrowableBufferBuilder::default()
-      .with_vertex_usage()
-      .with_label("Voxel renderer vertex buffer")
-      .create();
+      .vertex_usage()
+      .label("Voxel renderer vertex buffer")
+      .build();
     let index_buffer = GrowableBufferBuilder::default()
-      .with_index_usage()
-      .with_label("Voxel renderer index buffer")
-      .create();
+      .index_usage()
+      .label("Voxel renderer index buffer")
+      .build();
 
     Self {
       camera_uniform_buffer,
@@ -89,15 +89,15 @@ impl VoxelRenderer {
   }
 
   pub fn update_camera_uniform(&mut self, queue: &Queue, camera_uniform: CameraUniform) {
-    self.camera_uniform_buffer.enqueue_write_all_data(queue, &[camera_uniform]);
+    self.camera_uniform_buffer.write_all_data(queue, &[camera_uniform]);
   }
 
   pub fn update_light_uniform(&mut self, queue: &Queue, light_uniform: LightUniform) {
-    self.light_uniform_buffer.enqueue_write_all_data(queue, &[light_uniform]);
+    self.light_uniform_buffer.write_all_data(queue, &[light_uniform]);
   }
 
   pub fn update_model_uniform(&mut self, queue: &Queue, model_uniform: ModelUniform) {
-    self.model_uniform_buffer.enqueue_write_all_data(queue, &[model_uniform]);
+    self.model_uniform_buffer.write_all_data(queue, &[model_uniform]);
   }
 
   #[profiling::function]

@@ -8,8 +8,8 @@
 //!
 //! A growable buffer always creates buffers that fit at least your data, but buffers can be larger:
 //!
-//! - If a [with_grow_multiplier](GrowableBufferBuilder::with_grow_multiplier) is set, the minimum size of a new backing
-//!   buffer is multiplied by that number. The multiplier is only applied when the buffer needs to grow.
+//! - If a [grow_multiplier](GrowableBufferBuilder::grow_multiplier) is set, the minimum size of a new backing buffer is
+//!   multiplied by that number. The multiplier is only applied when the buffer needs to grow.
 //! - If the size of a backing buffer would not a multiple of [wgpu::COPY_BUFFER_ALIGNMENT], it is increased to be a
 //!   multiple of it.
 use std::mem::size_of_val;
@@ -40,7 +40,7 @@ impl GrowableBufferBuilder {
 impl<L> GrowableBufferBuilder<L> {
   /// Set the debug `label` for backing buffers, used by graphics debuggers for identification.
   #[inline]
-  pub fn with_label<LL>(self, label: LL) -> GrowableBufferBuilder<LL> {
+  pub fn label<LL>(self, label: LL) -> GrowableBufferBuilder<LL> {
     GrowableBufferBuilder {
       label: Some(label),
       usage: self.usage,
@@ -52,22 +52,22 @@ impl<L> GrowableBufferBuilder<L> {
   ///
   /// If a backing buffer is used in any way that is not specified here, the operation will panic.
   #[inline]
-  pub fn with_usage(mut self, usage: BufferUsages) -> Self {
+  pub fn usage(mut self, usage: BufferUsages) -> Self {
     self.usage = usage;
     self
   }
   #[inline]
-  pub fn with_vertex_usage(self) -> Self { self.with_usage(BufferUsages::VERTEX | BufferUsages::COPY_DST) }
+  pub fn vertex_usage(self) -> Self { self.usage(BufferUsages::VERTEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_index_usage(self) -> Self { self.with_usage(BufferUsages::INDEX | BufferUsages::COPY_DST) }
+  pub fn index_usage(self) -> Self { self.usage(BufferUsages::INDEX | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_uniform_usage(self) -> Self { self.with_usage(BufferUsages::UNIFORM | BufferUsages::COPY_DST) }
+  pub fn uniform_usage(self) -> Self { self.usage(BufferUsages::UNIFORM | BufferUsages::COPY_DST) }
   #[inline]
-  pub fn with_storage_usage(self) -> Self { self.with_usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
+  pub fn storage_usage(self) -> Self { self.usage(BufferUsages::STORAGE | BufferUsages::COPY_DST) }
 
   /// Sets the `grow_multiplier`, which multiplies the minimum size of the buffer when it needs to grow.
   #[inline]
-  pub fn with_grow_multiplier(mut self, grow_multiplier: f64) -> Self {
+  pub fn grow_multiplier(mut self, grow_multiplier: f64) -> Self {
     self.grow_multiplier = Some(grow_multiplier);
     self
   }
@@ -82,14 +82,14 @@ pub struct GrowableBuffer<L = &'static str> {
 impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
   /// Create a growable buffer without creating a backing buffer. The backing buffer will be created on the next write.
   #[inline]
-  pub fn create(mut self) -> GrowableBuffer<L> {
+  pub fn build(mut self) -> GrowableBuffer<L> {
     self.ensure_copy_dst_usage();
     GrowableBuffer { builder: self, buffer: None }
   }
 
   /// Create a growable buffer with a backing buffer created on `device` with `bytes` as content.
   #[inline]
-  pub fn create_with_bytes(mut self, device: &Device, bytes: &[u8]) -> GrowableBuffer<L> {
+  pub fn build_with_bytes(mut self, device: &Device, bytes: &[u8]) -> GrowableBuffer<L> {
     self.ensure_copy_dst_usage();
     let buffer = self.buffer_from_bytes_min_size(device, bytes, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
@@ -97,7 +97,7 @@ impl<L: AsRef<str> + Clone> GrowableBufferBuilder<L> {
 
   /// Create a growable buffer with a backing buffer created on `device` with `data` as content.
   #[inline]
-  pub fn create_with_data<T: Pod>(mut self, device: &Device, data: &[T]) -> GrowableBuffer<L> {
+  pub fn build_with_data<T: Pod>(mut self, device: &Device, data: &[T]) -> GrowableBuffer<L> {
     self.ensure_copy_dst_usage();
     let buffer = self.buffer_from_data_min_size(device, data, 0);
     GrowableBuffer { builder: self, buffer: Some(buffer) }
@@ -130,7 +130,7 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
   ) -> &GfxBuffer {
     match self.buffer.as_mut() {
       Some(buffer) if buffer.size() >= (bytes.len() as BufferAddress) => {
-        buffer.enqueue_write_bytes_via_staging_belt(device, encoder, staging_belt, bytes, 0);
+        buffer.write_bytes_staging(device, encoder, staging_belt, bytes, 0);
       }
       _ => {
         self.replace_with_bytes(device, bytes);
@@ -164,7 +164,7 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
   ) -> &GfxBuffer {
     match self.buffer.as_mut() {
       Some(buffer) if buffer.size() >= (size_of_val(data) as BufferAddress) => {
-        buffer.enqueue_write_data_via_staging_belt(device, encoder, staging_belt, data, 0);
+        buffer.write_data_staging(device, encoder, staging_belt, data, 0);
       }
       _ => {
         self.replace_with_data(device, data);
@@ -212,7 +212,7 @@ impl<L: AsRef<str> + Clone> GrowableBuffer<L> {
   #[inline]
   pub fn replace_with_size(&mut self, device: &Device, desired_size: BufferAddress) -> &GfxBuffer {
     let size = self.grow_size(desired_size).unwrap_or(desired_size);
-    tracing::debug!(label = %self.builder.display_label(), desired_size, size, "Recreating buffer");
+    tracing::debug!(label = %self.builder.display_label(), size, minimum_size = desired_size, "Recreating buffer");
     let buffer = self.builder.buffer_from_size(device, size);
     self.buffer.insert(buffer)
   }

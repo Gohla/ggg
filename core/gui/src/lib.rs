@@ -61,21 +61,21 @@ impl Gui {
     let fragment_shader_module = device.create_shader_module(include_spirv_shader!("gui.frag"));
 
     let index_buffer = GrowableBufferBuilder::default()
-      .with_label("GUI index buffer")
-      .with_index_usage()
-      .with_grow_multiplier(1.5)
-      .create();
+      .label("GUI index buffer")
+      .index_usage()
+      .grow_multiplier(1.5)
+      .build();
     let vertex_buffer = GrowableBufferBuilder::default()
-      .with_label("GUI vertex buffer")
-      .with_vertex_usage()
-      .with_grow_multiplier(1.5)
-      .create();
+      .label("GUI vertex buffer")
+      .vertex_usage()
+      .grow_multiplier(1.5)
+      .build();
 
     // Bind group that does not change while rendering (static), containing the uniform buffer and texture sampler.
     let uniform_buffer = BufferBuilder::new()
-      .with_uniform_usage()
-      .with_label("GUI uniform buffer")
-      .create_with_data(device, &[Uniform::default()]);
+      .uniform_usage()
+      .label("GUI uniform buffer")
+      .build_with_data(device, &[Uniform::default()]);
     let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
       uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
@@ -382,7 +382,7 @@ impl Gui {
     let vertex_buffer = self.vertex_buffer.ensure_minimum_size(device, (vertex_count * size_of::<Vertex>()) as BufferAddress);
 
     // Write to buffers and create draw list.
-    self.uniform_buffer.enqueue_write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
+    self.uniform_buffer.write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
     let mut index_offset = 0;
     let mut index_buffer_offset = 0;
     let mut vertex_offset = 0;
@@ -397,8 +397,8 @@ impl Gui {
     let mut draws = Vec::with_capacity(clipped_primitives.len());
     for ClippedPrimitive { clip_rect, primitive } in clipped_primitives {
       if let Primitive::Mesh(Mesh { indices, vertices, texture_id, .. }) = primitive {
-        index_buffer.enqueue_write_data(queue, &indices, index_buffer_offset);
-        vertex_buffer.enqueue_write_data(queue, &vertices, vertex_buffer_offset);
+        index_buffer.write_data(queue, &indices, index_buffer_offset);
+        vertex_buffer.write_data(queue, &vertices, vertex_buffer_offset);
         draws.push(Draw { clip_rect, texture_id, indices: index_offset..index_offset + indices.len() as u32, base_vertex: vertex_offset });
         index_offset += indices.len() as u32;
         index_buffer_offset += indices.len();

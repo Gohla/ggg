@@ -57,9 +57,9 @@ impl app::Application for Triangle {
       .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
     let vertex_buffer = BufferBuilder::default()
-      .with_label("Triangle static vertex buffer")
-      .with_static_vertex_usage()
-      .create_with_data(&gfx.device, VERTICES);
+      .label("Triangle static vertex buffer")
+      .static_vertex_usage()
+      .build_with_data(&gfx.device, VERTICES);
     Self {
       render_pipeline,
       vertex_buffer,
