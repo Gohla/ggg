@@ -3,7 +3,8 @@ use ultraviolet::{UVec3, Vec4};
 
 use gfx::debug_renderer::DebugRenderer;
 use gfx::fmt_math::UVec3DisplayExt;
-use gui_widget::{Gui, UiWidgetsExt};
+use gui::Gui;
+use gui::widget::UiWidgetsExt;
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSampleArray};
 use voxel::chunk::size::ChunkSize;

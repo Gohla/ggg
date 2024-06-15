@@ -9,7 +9,7 @@ publish.workspace = true
 common = { path = "../../core/common" }
 wgpu = { workspace = true }
 egui = { workspace = true, optional = true }
-gui_widget = { path = "../../core/gui_widget", optional = true }
+gui = { path = "../gui", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 image = { workspace = true, default-features = false }
 ultraviolet.workspace = true
@@ -24,4 +24,4 @@ gfxc = { path = "../gfxc" }
 [features]
 default = ["serde", "debugging_gui"]
 serde = ["dep:serde", "common/serde", "egui/serde", "ultraviolet/serde"]
-debugging_gui = ["egui", "gui_widget"]
+debugging_gui = ["dep:egui", "dep:gui"]

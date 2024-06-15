@@ -25,7 +25,7 @@ pub mod fmt_math;
 pub mod debug_renderer;
 pub mod full_screen_triangle;
 
-/// Fully initialized graphics instance.
+/// Fully initialized graphics facade: handles and data for rendering graphics.
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,

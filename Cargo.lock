@@ -114,7 +114,7 @@ dependencies = [
  "egui",
  "egui_integration",
  "gfx",
- "gui_widget",
+ "gui",
  "os",
  "pollster",
  "profiling",
@@ -966,7 +966,7 @@ dependencies = [
  "common",
  "egui",
  "gfxc",
- "gui_widget",
+ "gui",
  "image",
  "profiling",
  "serde",
@@ -1081,7 +1081,7 @@ dependencies = [
  "egui",
  "gfx",
  "gfxc",
- "gui_widget",
+ "gui",
  "image",
  "os",
  "profiling",
@@ -1094,7 +1094,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gui_widget"
+name = "gui"
 version = "0.1.0"
 dependencies = [
  "common",
@@ -2969,7 +2969,7 @@ dependencies = [
  "flagset",
  "gfx",
  "gfxc",
- "gui_widget",
+ "gui",
  "job_queue",
  "profiling",
  "rustc-hash",

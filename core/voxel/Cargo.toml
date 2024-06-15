@@ -9,7 +9,7 @@ publish.workspace = true
 [dependencies]
 common = { path = "../common" }
 gfx = { path = "../gfx" }
-gui_widget = { path = "../gui_widget" }
+gui = { path = "../gui" }
 job_queue = { path = "../job_queue" }
 simdnoise = "3"
 wgpu = { workspace = true, features = ["spirv"] }

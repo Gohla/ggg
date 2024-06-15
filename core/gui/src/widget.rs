@@ -1,35 +1,24 @@
 use std::fmt::Display;
 use std::hash::Hash;
-use std::ops::{Deref, RangeInclusive};
+use std::ops::RangeInclusive;
 
-use egui::{Align2, Button, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Rect, Response, Rgba, Ui, WidgetText, Window};
+use egui::{Align2, Button, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
 use egui::color_picker::Alpha;
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
 
-pub struct Gui {
-  pub context: Context,
-  pub area_under_title_bar: Rect,
-}
-impl Deref for Gui {
-  type Target = Context;
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.context }
-}
-
-
-pub trait CtxRefWidgetsExt {
+pub trait ContextWidgetsExt {
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
 }
 
-impl CtxRefWidgetsExt for &Context {
+impl ContextWidgetsExt for &Context {
   #[inline]
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>> {
     Window::new(title).show(self, add_contents)
   }
 }
 
-pub trait UiWidgetsExt where {
+pub trait UiWidgetsExt {
   fn collapsing_open<R>(&mut self, heading: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<R>;
   fn grid<R>(&mut self, id_source: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
   fn collapsing_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;

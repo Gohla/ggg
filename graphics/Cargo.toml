@@ -9,7 +9,7 @@ publish.workspace = true
 common = { path = "../core/common" }
 os = { path = "../core/os" }
 gfx = { path = "../core/gfx" }
-gui_widget = { path = "../core/gui_widget" }
+gui = { path = "../core/gui" }
 app = { path = "../core/app" }
 voxel = { path = "../core/voxel" }
 wgpu = { workspace = true, features = ["spirv"] }

@@ -19,7 +19,7 @@ use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
 use gfx::camera::debug::CameraDebugging;
 use gfx::render_pass::RenderPassBuilder;
-use gui_widget::UiWidgetsExt;
+use gui::widget::UiWidgetsExt;
 use os::Os;
 
 const NUM_CUBE_INDICES: usize = 3 * 3 * 2;

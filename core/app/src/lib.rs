@@ -7,7 +7,7 @@ use common::input::RawInput;
 use common::screen::ScreenSize;
 use common::time::Offset;
 use gfx::{Gfx, Render};
-use gui_widget::Gui;
+use gui::Gui;
 use os::{ApplicationOptions, Os};
 pub use run::RunError;
 
@@ -38,13 +38,11 @@ pub struct Step {
   pub target_duration: Offset,
 }
 
-
-
 /// Input for [Application::render].
 pub struct RenderInput<'a, A: Application> {
-  /// Operating system facade.
+  /// Fully initialized operating system facade.
   pub os: &'a Os,
-  /// Graphics facade.
+  /// Fully initialized graphics facade.
   pub gfx: &'a Gfx,
   /// Time elapsed since the start of the application.
   pub elapsed: Offset,
@@ -53,9 +51,9 @@ pub struct RenderInput<'a, A: Application> {
   pub frame: Frame,
   /// Application input for the current frame.
   pub input: &'a A::Input,
-  /// Data and handles for rendering a frame.
+  /// Handles and data for rendering a frame.
   pub render: Render<'a>,
-  /// Handle for creating GUIs this frame.
+  /// Handles and data for creating GUIs.
   pub gui: Gui,
   /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required
   /// to make the rendered representation sync up with the simulated representation. Thus, the renderer should

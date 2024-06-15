@@ -10,7 +10,7 @@ common = { path = "../common" }
 os = { path = "../os" }
 gfx = { path = "../gfx" }
 egui_integration = { path = "../egui_integration" }
-gui_widget = { path = "../gui_widget" }
+gui = { path = "../gui" }
 raw-window-handle.workspace = true
 wgpu.workspace = true
 egui = { workspace = true, features = ["persistence"] }

@@ -9,12 +9,12 @@ use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, R
 
 use common::screen::ScreenSize;
 use common::time::{Offset, Stopwatch};
+use egui_integration::GuiIntegration;
 use gfx::{Gfx, Render};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
-use egui_integration::GuiIntegration;
-use gui_widget::Gui;
+use gui::Gui;
 use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
 use os::OsCreateError;
 use os::window::Window;

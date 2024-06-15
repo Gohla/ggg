@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use common::input::RawInput;
 use common::sampler::{EventSampler, ValueSampler};
 use common::time::Offset;
-use gui_widget::{Gui, UiWidgetsExt};
+use gui::Gui;
+use gui::widget::UiWidgetsExt;
 
 use crate::{Frame, Step};
 use crate::run::{FrameEnd, StepEnd, Updates};

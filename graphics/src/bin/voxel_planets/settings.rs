@@ -8,7 +8,7 @@ use ultraviolet::{Isometry3, Mat4, Vec3};
 use gfx::camera::CameraSettings;
 use gfx::camera::debug::CameraDebugging;
 use gfx::Gfx;
-use gui_widget::UiWidgetsExt;
+use gui::widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
 use voxel::lod::builder::LodManagerBuilder;
 use voxel::lod::chunk_mesh::LodChunkMeshManagerParameters;

@@ -2,7 +2,8 @@ use std::slice::{from_mut, from_ref};
 
 use egui::{Align2, ComboBox, Ui, Window};
 
-use gui_widget::{Gui, UiWidgetsExt};
+use gui::Gui;
+use gui::widget::UiWidgetsExt;
 
 use super::{Camera, CameraSettings, MovementType, ProjectionType};
 
@@ -67,8 +68,6 @@ impl CameraDebugging {
     cameras: &[Camera],
     settings: &mut [CameraSettings],
   ) {
-    use egui::ComboBox;
-    use gui_widget::*;
     ui.horizontal(|ui| {
       ComboBox::from_id_source("Camera")
         .selected_text(format!("Camera #{}", selected_camera))

@@ -4,7 +4,7 @@ use egui::color_picker::Alpha;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec3, Vec4};
 
 use gfx::camera::Camera;
-use gui_widget::UiWidgetsExt;
+use gui::widget::UiWidgetsExt;
 
 // Camera
 
