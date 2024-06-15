@@ -39,20 +39,20 @@ pub struct Step {
 }
 
 /// Input for [Application::render].
-pub struct RenderInput<'a, A: Application> {
+pub struct RenderInput<'app, 'frame, A: Application> {
   /// Fully initialized operating system facade.
-  pub os: &'a Os,
+  pub os: &'app Os,
   /// Fully initialized graphics facade.
-  pub gfx: &'a Gfx,
+  pub gfx: &'app Gfx,
   /// Time elapsed since the start of the application.
   pub elapsed: Offset,
 
   /// Information about the current frame.
   pub frame: Frame,
   /// Application input for the current frame.
-  pub input: &'a A::Input,
+  pub input: &'frame A::Input,
   /// Handles and data for rendering a frame.
-  pub render: Render<'a>,
+  pub render: &'frame mut Render<'app>,
   /// Handles and data for creating GUIs.
   pub gui: Gui,
   /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required
@@ -94,7 +94,7 @@ pub trait Application: Sized {
   fn simulate(&mut self, step: Step, input: &Self::Input) {}
 
   /// Render a single frame from render `input`. May return additional command buffers to be submitted.
-  fn render<'a>(&mut self, input: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>>;
+  fn render<'app, 'frame>(&mut self, input: RenderInput<'app, 'frame, Self>) -> Box<dyn Iterator<Item=CommandBuffer>>;
 }
 
 /// Application options

@@ -5,7 +5,6 @@ use gfx::{Gfx, include_spirv_shader, Render};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
-use gfx::render_pass::RenderPassBuilder;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
 use crate::lod::render::LodRenderData;
@@ -103,17 +102,17 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  pub fn render_lod_mesh(
+  pub fn render_lod_mesh<'app, 'frame>(
     &mut self,
     gfx: &Gfx,
-    frame: &mut Render,
+    frame: &'frame mut Render<'app>,
     clear: bool,
     lod_mesh: &LodRenderData,
   ) {
     self.staging_belt.recall();
     let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.vertices);
     let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.indices);
-    let mut render_pass = Self::create_render_pass(gfx, frame, clear);
+    let mut render_pass = Self::create_render_pass(frame, clear);
     render_pass.push_debug_group("Render LOD mesh");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
@@ -127,17 +126,17 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  pub fn render_chunk_vertices(
+  pub fn render_chunk_vertices<'a>(
     &mut self,
     gfx: &Gfx,
-    frame: &mut Render,
+    frame: &'a mut Render<'a>,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
     self.staging_belt.recall();
     let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.vertices());
     let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.indices());
-    let mut render_pass = Self::create_render_pass(gfx, frame, clear);
+    let mut render_pass = Self::create_render_pass(frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
@@ -149,13 +148,13 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  fn create_render_pass<'a>(
-    gfx: &'a Gfx,
-    frame: &'a mut Render,
+  fn create_render_pass<'app, 'frame>(
+    render: &'frame mut Render<'app>,
     clear: bool,
-  ) -> RenderPass<'a> {
-    RenderPassBuilder::new()
-      .with_label("Voxel render pass")
-      .begin_render_pass_for_gfx_frame_simple(gfx, frame, true, clear)
+  ) -> RenderPass<'frame> {
+    render.render_pass_builder()
+      .label("Voxel render pass")
+      .clear_default_or_load(clear)
+      .begin()
   }
 }

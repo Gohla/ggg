@@ -202,7 +202,7 @@ impl app::Application for QuadGrid {
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     let mut render_pass = RenderPassBuilder::new()
-      .with_label("Quad grid render pass")
+      .label("Quad grid render pass")
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
     render_pass.push_debug_group("Quad grid");
     render_pass.set_pipeline(&self.render_pipeline);

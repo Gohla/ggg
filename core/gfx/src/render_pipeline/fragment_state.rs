@@ -21,6 +21,9 @@ impl<'a> Default for FragmentStateBuilder<'a> {
 
 impl<'a> FragmentStateBuilder<'a> {
   #[inline]
+  pub fn new() -> Self { Self::default() }
+
+  #[inline]
   pub fn module(mut self, module: &'a ShaderModule) -> Self {
     self.module = Some(module);
     self
@@ -43,6 +46,9 @@ impl<'a> FragmentStateBuilder<'a> {
     self.targets = targets;
     self
   }
+
+  #[inline]
+  pub fn build(self) -> Option<FragmentState<'a>> { self.into() }
 }
 
 impl<'a> From<FragmentState<'a>> for FragmentStateBuilder<'a> {
@@ -56,6 +62,7 @@ impl<'a> From<FragmentState<'a>> for FragmentStateBuilder<'a> {
     }
   }
 }
+
 impl<'a> From<FragmentStateBuilder<'a>> for Option<FragmentState<'a>> {
   fn from(builder: FragmentStateBuilder<'a>) -> Self {
     builder.module.map(|module| FragmentState {

@@ -199,7 +199,7 @@ impl<A: Application> Runner<A> {
         .build(&device)
       )
     } else { None };
-    let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisampled_framebuffer, sample_count };
+    let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisample_output_texture: multisampled_framebuffer, sample_count };
 
     let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
     let app = A::new(&os, &gfx, screen_size, config.app_config);
@@ -371,18 +371,19 @@ impl<A: Application> Runner<A> {
     let output_texture = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     // Render application
-    let mut encoder = self.gfx.device.create_default_command_encoder();
-    let render = Render {
+    let encoder = self.gfx.device.create_default_command_encoder();
+    let mut render = Render {
+      gfx: &self.gfx,
       screen_size: self.screen_size,
-      output_texture: &output_texture,
-      encoder: &mut encoder,
+      output_texture,
+      encoder,
     };
     let render_input = RenderInput {
       os: &self.os,
       gfx: &self.gfx,
       elapsed,
       frame,
-      render,
+      render: &mut render,
       extrapolate: self.updates.accumulated_lag,
       gui: gui.unwrap(),
       input: &input,
@@ -390,10 +391,10 @@ impl<A: Application> Runner<A> {
     let additional_command_buffers = self.app.render(render_input);
 
     // End GUI frame, handle output, and render.
-    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &output_texture, &mut encoder);
+    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &render.output_texture, &mut render.encoder);
 
     // Submit command buffers
-    let command_buffer = encoder.finish();
+    let command_buffer = render.encoder.finish();
     let command_buffers = std::iter::once(command_buffer).chain(additional_command_buffers);
     self.gfx.queue.submit(command_buffers);
 

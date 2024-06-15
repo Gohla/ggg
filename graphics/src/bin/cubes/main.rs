@@ -221,7 +221,7 @@ impl app::Application for Cubes {
     });
 
     let mut render_pass = RenderPassBuilder::new()
-      .with_label("Cubes render pass")
+      .label("Cubes render pass")
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
     render_pass.push_debug_group("Draw cubes");
     render_pass.set_pipeline(&self.render_pipeline);

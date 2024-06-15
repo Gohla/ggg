@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use ultraviolet::{Mat4, Vec3, Vec4};
 
-use gfx::{Render, Gfx};
+use gfx::{Gfx, Render};
 use gfx::debug_renderer::DebugRenderer;
 
 use crate::chunk::mesh::{ChunkMesh, Vertex};
@@ -20,7 +20,7 @@ pub trait LodRenderDataManager<C: ChunkSize> {
     data: &mut LodRenderData,
   );
 
-  fn debug_render<'a>(&mut self, gfx: &Gfx, frame: &mut Render<'a>, view_projection_matrix: Mat4, data: &LodRenderData);
+  fn debug_render(&mut self, gfx: &Gfx, render: &mut Render, view_projection_matrix: Mat4, data: &LodRenderData);
 
   fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters;
 }
@@ -156,8 +156,8 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
   }
 
   #[inline]
-  fn debug_render<'a>(&mut self, gfx: &Gfx, frame: &mut Render<'a>, view_projection_matrix: Mat4, data: &LodRenderData) {
-    self.debug_renderer.render(gfx, frame, view_projection_matrix * data.model);
+  fn debug_render(&mut self, gfx: &Gfx, render: &mut Render, view_projection_matrix: Mat4, data: &LodRenderData) {
+    self.debug_renderer.render(gfx, render, view_projection_matrix * data.model);
   }
 
   #[inline]

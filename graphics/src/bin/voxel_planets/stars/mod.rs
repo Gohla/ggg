@@ -8,7 +8,6 @@ use gfx::{Gfx, include_spirv_shader_for_bin, Render};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
-use gfx::render_pass::RenderPassBuilder;
 
 pub struct StarsRenderer {
   uniform: Uniform,
@@ -86,7 +85,7 @@ impl StarsRenderer {
   pub fn render(
     &mut self,
     gfx: &Gfx,
-    frame: &mut Render,
+    render: &mut Render,
     view_inverse_matrix: Mat4,
     settings: &StarsRendererSettings,
   ) {
@@ -94,9 +93,10 @@ impl StarsRenderer {
     self.uniform.update_settings(settings);
     self.uniform_buffer.write_all_data(&gfx.queue, &[self.uniform]);
 
-    let mut render_pass = RenderPassBuilder::new()
-      .with_label("Stars render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, frame, false);
+    let mut render_pass = render.render_pass_builder_without_depth_stencil()
+      .label("Stars render pass")
+      .clear_default()
+      .begin();
     render_pass.push_debug_group("Render stars");
     render_pass.set_pipeline(&self.render_pipeline);
     render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);

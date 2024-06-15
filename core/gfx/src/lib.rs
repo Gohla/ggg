@@ -2,6 +2,7 @@ use wgpu::{Adapter, CommandEncoder, Device, Instance, Queue, TextureFormat, Text
 
 use common::screen::ScreenSize;
 
+use crate::render_pass::SingleRenderPassBuilder;
 use crate::render_pipeline::RenderPipelineBuilder;
 use crate::surface::GfxSurface;
 use crate::texture::{GfxTexture, TextureBuilder};
@@ -35,17 +36,37 @@ pub struct Gfx {
   pub surface: GfxSurface,
 
   pub depth_stencil_texture: Option<GfxTexture>,
-  pub multisampled_framebuffer: Option<GfxTexture>,
+  pub multisample_output_texture: Option<GfxTexture>,
   pub sample_count: u32,
 }
 
 impl Gfx {
+  /// Returns the depth-stencil texture if a depth-stencil texture was set.
+  #[inline]
+  pub fn depth_stencil_texture(&self) -> Option<&GfxTexture> {
+    self.depth_stencil_texture.as_ref()
+  }
   /// Returns the depth-stencil texture format if a depth-stencil texture was set.
   #[inline]
   pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
-    self.depth_stencil_texture.as_ref().map(|t| t.format())
+    self.depth_stencil_texture().map(|t| t.format())
+  }
+  /// Returns the depth-stencil texture view if a depth-stencil texture was set.
+  #[inline]
+  pub fn depth_stencil_texture_view(&self) -> Option<&TextureView> {
+    self.depth_stencil_texture().map(|texture| &texture.view)
   }
 
+  /// Returns the multisample output texture if `sample_count > 1`.
+  #[inline]
+  pub fn multisample_output_texture(&self) -> Option<&GfxTexture> {
+    self.multisample_output_texture.as_ref()
+  }
+  /// Returns the multisample output texture view if `sample_count > 1`.
+  #[inline]
+  pub fn multisample_output_texture_view(&self) -> Option<&TextureView> {
+    self.multisample_output_texture().map(|texture| &texture.view)
+  }
 
   /// Returns a preconfigured [RenderPipelineBuilder] with:
   /// - [depth_texture](RenderPipelineBuilder::depth_texture) if `depth_stencil_texture` is `Some`.
@@ -68,7 +89,6 @@ impl Gfx {
       .multisample_count(self.sample_count)
   }
 
-
   /// Resizes the surface (and thus corresponding swapchain textures), the depth-stencil texture if set, and the
   /// multisampled framebuffer if set.
   pub fn resize_surface(&mut self, size: ScreenSize) {
@@ -78,7 +98,7 @@ impl Gfx {
         .with_sample_count(self.sample_count)
         .build(&self.device);
     }
-    if let Some(multisampled_framebuffer) = &mut self.multisampled_framebuffer {
+    if let Some(multisampled_framebuffer) = &mut self.multisample_output_texture {
       *multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&self.surface, self.sample_count)
         .build(&self.device);
     }
@@ -87,14 +107,35 @@ impl Gfx {
 
 /// Data and handles for rendering a frame.
 #[derive(Debug)]
-pub struct Render<'a> {
+pub struct Render<'app> {
+  /// Convenient reference back to graphics facade.
+  pub gfx: &'app Gfx,
   /// Current size of the screen/window/viewport.
   pub screen_size: ScreenSize,
-  /// Swapchain texture to output pixels to.
-  pub output_texture: &'a TextureView,
+  /// Texture to output pixels to.
+  pub output_texture:TextureView,
   /// Primary command encoder for recording GPU operations.
-  pub encoder: &'a mut CommandEncoder,
+  pub encoder:CommandEncoder,
 }
+
+impl<'app, 'frame> Render<'app> {
+  #[inline]
+  pub fn render_pass_builder(&'frame mut self) -> SingleRenderPassBuilder<'frame, '_> {
+    SingleRenderPassBuilder::new(&mut self.encoder)
+      .view(&self.output_texture)
+      .resolve_target(self.gfx.multisample_output_texture_view())
+      .depth_reverse_z(self.gfx.depth_stencil_texture_view())
+  }
+  #[inline]
+  pub fn render_pass_builder_without_depth_stencil(&'frame mut self) -> SingleRenderPassBuilder<'frame, '_> {
+    SingleRenderPassBuilder::new(&mut self.encoder)
+      .view(&self.output_texture)
+      .resolve_target(self.gfx.multisample_output_texture_view())
+  }
+}
+
+
+// Shader loading macros
 
 #[macro_export]
 macro_rules! spirv_shader_file {

@@ -21,6 +21,9 @@ impl<'a> Default for VertexStateBuilder<'a> {
 
 impl<'a> VertexStateBuilder<'a> {
   #[inline]
+  pub fn new() -> Self { Self::default() }
+
+  #[inline]
   pub fn module(mut self, module: &'a ShaderModule) -> Self {
     self.module = Some(module);
     self
@@ -45,9 +48,7 @@ impl<'a> VertexStateBuilder<'a> {
   }
 
   #[inline]
-  pub fn build(self) -> Option<VertexState<'a>> {
-    self.into()
-  }
+  pub fn build(self) -> Option<VertexState<'a>> { self.into() }
 }
 
 impl<'a> From<VertexState<'a>> for VertexStateBuilder<'a> {
@@ -61,6 +62,7 @@ impl<'a> From<VertexState<'a>> for VertexStateBuilder<'a> {
     }
   }
 }
+
 impl<'a> From<VertexStateBuilder<'a>> for Option<VertexState<'a>> {
   fn from(builder: VertexStateBuilder<'a>) -> Self {
     builder.module.map(|module| VertexState {

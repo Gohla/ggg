@@ -14,7 +14,7 @@ use gfx::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::include_spirv_shader;
-use gfx::render_pass::RenderPassBuilder;
+use gfx::render_pass::SingleRenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::{GfxTexture, TextureBuilder};
@@ -205,7 +205,7 @@ impl GuiGfx {
     queue: &Queue,
     clipped_primitives: Vec<ClippedPrimitive>,
     screen_size: ScreenSize,
-    surface_texture_view: &TextureView,
+    output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
     // Ensure index and vertex buffers are big enough.
@@ -247,9 +247,11 @@ impl GuiGfx {
     // Render
     {
       let mut bound_texture_id = None;
-      let mut render_pass = RenderPassBuilder::new()
-        .with_label("GUI render pass")
-        .begin_render_pass_for_swap_chain_with_load(encoder, surface_texture_view);
+      let mut render_pass = SingleRenderPassBuilder::new(encoder)
+        .label("GUI render pass")
+        .view(output_texture)
+        .load()
+        .begin();
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);

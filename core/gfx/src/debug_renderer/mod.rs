@@ -9,7 +9,6 @@ use crate::{Gfx, include_spirv_shader, Render};
 use crate::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::debug_renderer::pipeline::{Pipeline, Vertex};
-use crate::render_pass::RenderPassBuilder;
 
 mod pipeline;
 
@@ -241,7 +240,7 @@ impl DebugRenderer {
     }
   }
 
-  pub fn render<'a>(&mut self, gfx: &Gfx, frame: &mut Render<'a>, model_view_projection: Mat4) {
+  pub fn render(&mut self, gfx: &Gfx, render: &mut Render, model_view_projection: Mat4) {
     if self.point_list_pipeline.is_some() && self.line_list_pipeline.is_none() &&
       self.line_strip_pipeline.is_none() && self.line_triangle_list_pipeline.is_none() {
       return; // Nothing to do
@@ -252,21 +251,22 @@ impl DebugRenderer {
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_strip_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_triangle_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
     }
 
-    let mut render_pass = RenderPassBuilder::new()
-      .with_label("Debug render pass")
-      .begin_render_pass_for_gfx_frame_with_load(gfx, frame, false);
+    let mut render_pass = render.render_pass_builder_without_depth_stencil()
+      .label("Debug render pass")
+      .load()
+      .begin();
     render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     if let Some(pipeline) = &mut self.point_list_pipeline {
       pipeline.draw(&mut render_pass);
@@ -282,6 +282,8 @@ impl DebugRenderer {
     }
 
     self.staging_belt.finish();
+
+    drop(render_pass);
   }
 }
 

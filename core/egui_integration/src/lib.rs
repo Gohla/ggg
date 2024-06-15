@@ -125,10 +125,10 @@ impl GuiIntegration {
     queue: &Queue,
     clipped_primitives: Vec<ClippedPrimitive>,
     screen_size: ScreenSize,
-    surface_texture_view: &TextureView,
+    output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
-    self.gfx.render(device, queue, clipped_primitives, screen_size, surface_texture_view, encoder);
+    self.gfx.render(device, queue, clipped_primitives, screen_size, output_texture, encoder);
   }
 
 
@@ -140,14 +140,14 @@ impl GuiIntegration {
     device: &Device,
     queue: &Queue,
     screen_size: ScreenSize,
-    surface_texture_view: &TextureView,
+    output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
     let full_output = self.context.end_frame();
     self.process_platform_output(window, full_output.platform_output);
     self.update_textures(device, queue, full_output.textures_delta);
     let clipped_primitives = self.tessellate(full_output.shapes, full_output.pixels_per_point);
-    self.render(device, queue, clipped_primitives, screen_size, surface_texture_view, encoder);
+    self.render(device, queue, clipped_primitives, screen_size, output_texture, encoder);
   }
 }
 

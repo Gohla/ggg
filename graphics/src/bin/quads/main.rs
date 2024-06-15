@@ -226,7 +226,7 @@ impl app::Application for Quads {
     });
 
     let mut render_pass = RenderPassBuilder::new()
-      .with_label("Quads render pass")
+      .label("Quads render pass")
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
     render_pass.push_debug_group("Draw quads");
     render_pass.set_pipeline(&self.render_pipeline);
