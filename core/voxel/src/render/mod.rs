@@ -1,7 +1,7 @@
 use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
 use wgpu::util::StagingBelt;
 
-use gfx::{Gfx, Render};
+use gfx::{Gfx, include_spirv_shader, Render};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -47,8 +47,8 @@ impl VoxelRenderer {
       .build_with_data(&gfx.device, &[model_uniform]);
     let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
 
-    let vertex_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/vert"));
-    let fragment_shader_module = gfx.device.create_shader_module(gfx::include_spirv_shader!("render/frag"));
+    let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/vert"));
+    let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/frag"));
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_label("Voxel renderer uniform bind group layout")

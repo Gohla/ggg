@@ -225,24 +225,27 @@ impl<'a> GfxTexture {
 impl<'a> GfxTexture {
   #[inline]
   pub fn create_default_float_2d_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
-    BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
-      .with_binding(binding_index)
-      .with_shader_visibility(shader_visibility)
+    BindGroupLayoutEntryBuilder::default()
+      .texture()
+      .binding_index(binding_index)
+      .shader_visibility(shader_visibility)
       .build()
   }
 
   #[inline]
   pub fn create_default_float_2d_array_bind_group_layout_entry(&self, binding_index: u32, shader_visibility: ShaderStages) -> BindGroupLayoutEntry {
-    BindGroupLayoutEntryBuilder::new_default_float_2d_array_texture()
-      .with_binding(binding_index)
-      .with_shader_visibility(shader_visibility)
+    BindGroupLayoutEntryBuilder::default()
+      .texture()
+      .d2_array()
+      .binding_index(binding_index)
+      .shader_visibility(shader_visibility)
       .build()
   }
 
   #[inline]
   pub fn create_bind_group_entry(&'a self, binding_index: u32) -> BindGroupEntry<'a> {
     BindGroupEntryBuilder::new_texture_view(&self.view)
-      .with_binding(binding_index)
+      .binding_index(binding_index)
       .build()
   }
 

@@ -95,9 +95,10 @@ impl Gui {
 
     // Bind group that does change while rendering, containing the current texture.
     let texture_bind_group_layout = BindGroupLayoutBuilder::new()
-      .with_entries(&[BindGroupLayoutEntryBuilder::new_default_float_2d_texture()
-        .with_binding(0)
-        .with_fragment_shader_visibility()
+      .with_entries(&[BindGroupLayoutEntryBuilder::default()
+        .texture()
+        .binding_index(0)
+        .fragment_shader_visibility()
         .build()
       ])
       .with_label("GUI texture bind group layout")
