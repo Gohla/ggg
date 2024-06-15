@@ -112,8 +112,8 @@ dependencies = [
  "common",
  "console_error_panic_hook",
  "egui",
+ "egui_integration",
  "gfx",
- "gui",
  "gui_widget",
  "os",
  "pollster",
@@ -742,6 +742,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_integration"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "common",
+ "egui",
+ "gfx",
+ "gfxc",
+ "os",
+ "profiling",
+ "thiserror",
+ "tracing",
+ "wgpu",
+]
+
+[[package]]
 name = "either"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1074,22 +1090,6 @@ dependencies = [
  "tracing",
  "ultraviolet",
  "voxel",
- "wgpu",
-]
-
-[[package]]
-name = "gui"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "common",
- "egui",
- "gfx",
- "gfxc",
- "os",
- "profiling",
- "thiserror",
- "tracing",
  "wgpu",
 ]
 

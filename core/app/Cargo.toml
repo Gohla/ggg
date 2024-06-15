@@ -9,7 +9,7 @@ publish.workspace = true
 common = { path = "../common" }
 os = { path = "../os" }
 gfx = { path = "../gfx" }
-gui = { path = "../gui" }
+egui_integration = { path = "../egui_integration" }
 gui_widget = { path = "../gui_widget" }
 raw-window-handle.workspace = true
 wgpu.workspace = true

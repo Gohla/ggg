@@ -13,7 +13,7 @@ use gfx::{Gfx, Render};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
-use gui::GuiIntegration;
+use egui_integration::GuiIntegration;
 use gui_widget::Gui;
 use os::event::{Event, EventLoopRunError, EventLoopStopError, EventLoopStopper};
 use os::OsCreateError;

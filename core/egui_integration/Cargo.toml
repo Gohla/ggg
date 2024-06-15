@@ -1,5 +1,5 @@
 [package]
-name = "gui"
+name = "egui_integration"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
