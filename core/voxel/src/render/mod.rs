@@ -1,8 +1,8 @@
-use wgpu::{BindGroup, Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
+use wgpu::{Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
 use wgpu::util::StagingBelt;
 
 use gfx::{Gfx, include_spirv_shader, Render};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::render_pass::RenderPassBuilder;
@@ -15,7 +15,7 @@ pub struct VoxelRenderer {
   camera_uniform_buffer: GfxBuffer,
   light_uniform_buffer: GfxBuffer,
   model_uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
+  uniform_bind_group: CombinedBindGroup,
   render_pipeline: RenderPipeline,
   staging_belt: StagingBelt,
   vertex_buffer: GrowableBuffer,
@@ -52,16 +52,16 @@ impl VoxelRenderer {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/frag"));
 
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_label("Voxel renderer uniform bind group layout")
-      .with_label("Voxel renderer uniform bind group")
-      .with_layout_entries(&[camera_uniform_binding.layout, light_uniform_binding.layout, model_uniform_binding.layout])
-      .with_entries(&[camera_uniform_binding.entry, light_uniform_binding.entry, model_uniform_binding.entry])
+    let uniform_bind_group = CombinedBindGroupBuilder::new()
+      .layout_label("Voxel renderer uniform bind group layout")
+      .label("Voxel renderer uniform bind group")
+      .layout_entries(&[camera_uniform_binding.layout, light_uniform_binding.layout, model_uniform_binding.layout])
+      .entries(&[camera_uniform_binding.entry, light_uniform_binding.entry, model_uniform_binding.entry])
       .build(&gfx.device);
 
     let (_, render_pipeline) = gfx.render_pipeline_builder()
       .layout_label("Voxel renderer pipeline layout")
-      .bind_group_layouts(&[&uniform_bind_group_layout])
+      .bind_group_layouts(&[&uniform_bind_group.layout])
       .label("Voxel renderer render pipeline")
       .vertex_module(&vertex_shader_module)
       .vertex_buffer_layouts(&[Vertex::buffer_layout()])
@@ -116,7 +116,7 @@ impl VoxelRenderer {
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render LOD mesh");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     for draw in &lod_mesh.draws {
       render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(draw.base_vertex..));
@@ -140,7 +140,7 @@ impl VoxelRenderer {
     let mut render_pass = Self::create_render_pass(gfx, frame, clear);
     render_pass.push_debug_group("Render chunk vertices");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
     render_pass.draw_indexed(0..chunk_vertices.indices().len() as u32, 0, 0..1);

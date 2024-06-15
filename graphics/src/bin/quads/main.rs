@@ -5,13 +5,13 @@ use std::mem::size_of;
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
@@ -90,10 +90,10 @@ pub struct Quads {
   camera_debugging: CameraDebugging,
   camera: Camera,
 
-  diffuse_bind_group: BindGroup,
+  diffuse_bind_group: CombinedBindGroup,
 
   uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
+  uniform_bind_group: CombinedBindGroup,
 
   render_pipeline: RenderPipeline,
 
@@ -114,7 +114,7 @@ impl app::Application for Quads {
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
     let camera = Camera::new(screen_size.physical, &mut camera_settings);
 
-    let (diffuse_bind_group_layout, diffuse_bind_group) = {
+    let diffuse_bind_group = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
       let texture = TextureBuilder::new_from_2d_rgba_image(&image)
         .with_texture_label("Cobblestone diffuse texture")
@@ -126,11 +126,11 @@ impl app::Application for Quads {
         .build(&gfx.device);
       let texture_binding = texture.binding(0, ShaderStages::FRAGMENT);
       let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
-      CombinedBindGroupLayoutBuilder::new()
-        .with_layout_entries(&[texture_binding.layout, sampler_binding.layout])
-        .with_entries(&[texture_binding.entry, sampler_binding.entry])
-        .with_layout_label("Cobblestone diffuse bind group layout")
-        .with_label("Cobblestone diffuse bind group")
+      CombinedBindGroupBuilder::new()
+        .layout_entries(&[texture_binding.layout, sampler_binding.layout])
+        .entries(&[texture_binding.entry, sampler_binding.entry])
+        .layout_label("Cobblestone diffuse bind group layout")
+        .label("Cobblestone diffuse bind group")
         .build(&gfx.device)
     };
 
@@ -138,11 +138,11 @@ impl app::Application for Quads {
       .uniform_usage()
       .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout])
-      .with_entries(&[uniform_binding.entry])
-      .with_layout_label("Quads uniform bind group layout")
-      .with_label("Quads uniform bind group")
+    let uniform_bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[uniform_binding.layout])
+      .entries(&[uniform_binding.entry])
+      .layout_label("Quads uniform bind group layout")
+      .label("Quads uniform bind group")
       .build(&gfx.device);
     let uniform_buffer = uniform_buffer;
 
@@ -151,7 +151,7 @@ impl app::Application for Quads {
 
     let (_, render_pipeline) = gfx.render_pipeline_builder()
       .layout_label("Quads pipeline layout")
-      .bind_group_layouts(&[&diffuse_bind_group_layout, &uniform_bind_group_layout])
+      .bind_group_layouts(&[&diffuse_bind_group.layout, &uniform_bind_group.layout])
       .label("Quads render pipeline")
       .vertex_module(&vertex_shader_module)
       .vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
@@ -229,8 +229,8 @@ impl app::Application for Quads {
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
     render_pass.push_debug_group("Draw quads");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-    render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.diffuse_bind_group.entry, &[]);
+    render_pass.set_bind_group(1, &self.uniform_bind_group.entry, &[]);
     render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
     render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));

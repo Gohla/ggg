@@ -1,11 +1,11 @@
 use image::{DynamicImage, GenericImageView};
 use thiserror::Error;
-use wgpu::{BindGroup, BindGroupLayout, Device, Extent3d, Queue, ShaderStages};
+use wgpu::{Device, Extent3d, Queue, ShaderStages};
 
 use common::idx_assigner;
 use common::idx_assigner::IdxAssigner;
 
-use crate::bind_group::CombinedBindGroupLayoutBuilder;
+use crate::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use crate::sampler::{GfxSampler, SamplerBuilder};
 use crate::texture::{GfxTexture, TextureBuilder};
 
@@ -77,16 +77,15 @@ impl ArrayTextureDefBuilder {
       .label(sampler_label)
       .build(device);
     let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
-    let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[texture_binding.layout, sampler_binding.layout])
-      .with_entries(&[texture_binding.entry, sampler_binding.entry])
-      .with_layout_label(bind_group_layout_label)
-      .with_label(bind_group_label)
+    let bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[texture_binding.layout, sampler_binding.layout])
+      .entries(&[texture_binding.entry, sampler_binding.entry])
+      .layout_label(bind_group_layout_label)
+      .label(bind_group_label)
       .build(device);
     ArrayTextureDef {
       texture,
       sampler,
-      bind_group_layout,
       bind_group,
     }
   }
@@ -97,8 +96,7 @@ impl ArrayTextureDefBuilder {
 pub struct ArrayTextureDef {
   pub texture: GfxTexture,
   pub sampler: GfxSampler,
-  pub bind_group_layout: BindGroupLayout,
-  pub bind_group: BindGroup,
+  pub bind_group: CombinedBindGroup,
 }
 
 // Implementations

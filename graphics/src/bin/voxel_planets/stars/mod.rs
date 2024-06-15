@@ -1,11 +1,11 @@
 use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};
 use ultraviolet::{Mat4, Vec4};
-use wgpu::{BindGroup, RenderPipeline, ShaderStages};
+use wgpu::{RenderPipeline, ShaderStages};
 
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin, Render};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
 use gfx::render_pass::RenderPassBuilder;
@@ -13,7 +13,7 @@ use gfx::render_pass::RenderPassBuilder;
 pub struct StarsRenderer {
   uniform: Uniform,
   uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
+  uniform_bind_group: CombinedBindGroup,
   full_screen_triangle: FullScreenTriangle,
   render_pipeline: RenderPipeline,
 }
@@ -54,18 +54,18 @@ impl StarsRenderer {
       .build_with_data(&gfx.device, &[uniform]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::FRAGMENT);
 
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_label("Stars uniform bind group layout")
-      .with_layout_entries(&[uniform_binding.layout])
-      .with_label("Stars uniform bind group")
-      .with_entries(&[uniform_binding.entry])
+    let uniform_bind_group = CombinedBindGroupBuilder::new()
+      .layout_label("Stars uniform bind group layout")
+      .layout_entries(&[uniform_binding.layout])
+      .label("Stars uniform bind group")
+      .entries(&[uniform_binding.entry])
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("stars/frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder(&gfx)
       .layout_label("Stars pipeline layout")
-      .bind_group_layouts(&[&uniform_bind_group_layout])
+      .bind_group_layouts(&[&uniform_bind_group.layout])
       .label("Stars render pipeline")
       .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
@@ -99,7 +99,7 @@ impl StarsRenderer {
       .begin_render_pass_for_gfx_frame_with_clear(gfx, frame, false);
     render_pass.push_debug_group("Render stars");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     self.full_screen_triangle.draw(&mut render_pass);
     render_pass.pop_debug_group();
   }

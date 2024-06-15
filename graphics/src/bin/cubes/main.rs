@@ -8,13 +8,13 @@ use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
+use wgpu::{BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
@@ -69,7 +69,7 @@ pub struct Cubes {
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
-  static_bind_group: BindGroup,
+  static_bind_group: CombinedBindGroup,
 
   render_pipeline: RenderPipeline,
 
@@ -125,11 +125,11 @@ impl app::Application for Cubes {
     };
     let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
-    let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout, instance_binding.layout])
-      .with_entries(&[uniform_binding.entry, instance_binding.entry])
-      .with_layout_label("Cubes static bind group layout")
-      .with_label("Cubes static bind group")
+    let static_bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[uniform_binding.layout, instance_binding.layout])
+      .entries(&[uniform_binding.entry, instance_binding.entry])
+      .layout_label("Cubes static bind group layout")
+      .label("Cubes static bind group")
       .build(&gfx.device);
 
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
@@ -137,7 +137,7 @@ impl app::Application for Cubes {
 
     let (_, render_pipeline) = gfx.render_pipeline_builder()
       .layout_label("Cubes pipeline layout")
-      .bind_group_layouts(&[&static_bind_group_layout])
+      .bind_group_layouts(&[&static_bind_group.layout])
       .label("Cubes render pipeline")
       .vertex_module(&vertex_shader_module)
       .fragment_module(&fragment_shader_module)
@@ -224,7 +224,7 @@ impl app::Application for Cubes {
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
     render_pass.push_debug_group("Draw cubes");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.static_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
     render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
     let num_indices = self.num_cubes * NUM_CUBE_INDICES as u32;
     render_pass.draw_indexed(0..num_indices, 0, 0..1);

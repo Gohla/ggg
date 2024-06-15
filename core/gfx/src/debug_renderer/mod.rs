@@ -2,11 +2,11 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Mat4, Vec3, Vec4};
-use wgpu::{BindGroup, BufferAddress, Features, PolygonMode, PrimitiveTopology, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BufferAddress, Features, PolygonMode, PrimitiveTopology, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 use wgpu::util::StagingBelt;
 
-use crate::{Render, Gfx, include_spirv_shader};
-use crate::bind_group::CombinedBindGroupLayoutBuilder;
+use crate::{Gfx, include_spirv_shader, Render};
+use crate::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::debug_renderer::pipeline::{Pipeline, Vertex};
 use crate::render_pass::RenderPassBuilder;
@@ -16,7 +16,7 @@ mod pipeline;
 pub struct DebugRenderer {
   staging_belt: StagingBelt,
   uniform_buffer: GfxBuffer,
-  uniform_bind_group: BindGroup,
+  uniform_bind_group: CombinedBindGroup,
 
   point_list_pipeline: Option<Pipeline<PointVertex>>,
   line_list_pipeline: Option<Pipeline<RegularVertex>>,
@@ -37,11 +37,11 @@ impl DebugRenderer {
       .label("Debug uniform buffer")
       .build_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX_FRAGMENT);
-    let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout])
-      .with_entries(&[uniform_binding.entry])
-      .with_layout_label("Debug uniform bind group layout")
-      .with_label("Debug uniform bind group")
+    let uniform_bind_group = CombinedBindGroupBuilder::default()
+      .layout_label("Debug uniform bind group layout")
+      .layout_entries(&[uniform_binding.layout])
+      .label("Debug uniform bind group")
+      .entries(&[uniform_binding.entry])
       .build(&gfx.device);
 
     let point_vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("debug_renderer/point_vert"));
@@ -53,7 +53,7 @@ impl DebugRenderer {
       gfx,
       &point_vertex_shader_module,
       &fragment_shader_module,
-      &uniform_bind_group_layout,
+      &uniform_bind_group.layout,
       PrimitiveTopology::PointList,
       PolygonMode::Point,
       "point list",
@@ -64,7 +64,7 @@ impl DebugRenderer {
       gfx,
       &vertex_shader_module,
       &fragment_shader_module,
-      &uniform_bind_group_layout,
+      &uniform_bind_group.layout,
       PrimitiveTopology::LineList,
       PolygonMode::Line,
       "line list",
@@ -73,7 +73,7 @@ impl DebugRenderer {
       gfx,
       &vertex_shader_module,
       &fragment_shader_module,
-      &uniform_bind_group_layout,
+      &uniform_bind_group.layout,
       PrimitiveTopology::LineStrip,
       PolygonMode::Line,
       "line strip",
@@ -82,7 +82,7 @@ impl DebugRenderer {
       gfx,
       &vertex_shader_module,
       &fragment_shader_module,
-      &uniform_bind_group_layout,
+      &uniform_bind_group.layout,
       PrimitiveTopology::TriangleList,
       PolygonMode::Line,
       "line triangle list",
@@ -267,7 +267,7 @@ impl DebugRenderer {
     let mut render_pass = RenderPassBuilder::new()
       .with_label("Debug render pass")
       .begin_render_pass_for_gfx_frame_with_load(gfx, frame, false);
-    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     if let Some(pipeline) = &mut self.point_list_pipeline {
       pipeline.draw(&mut render_pass);
     }

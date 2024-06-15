@@ -5,13 +5,21 @@ use std::mem::size_of;
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use egui::{ClippedPrimitive, Context, CursorIcon, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2, RawInput as EguiRawInput, Rect, TextureId, TexturesDelta};
+use egui::{
+  ClippedPrimitive, Context, CursorIcon, Event, ImageData, MouseWheelUnit, PlatformOutput, Pos2,
+  RawInput as EguiRawInput, Rect, TextureId, TexturesDelta,
+};
 use egui::epaint::{ImageDelta, Mesh, Primitive, Vertex};
-use wgpu::{BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState, CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d, PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView, VertexBufferLayout, VertexStepMode};
+use wgpu::{
+  BindGroup, BindGroupLayout, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, ColorTargetState,
+  CommandEncoder, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, IndexFormat, Origin3d,
+  PipelineLayout, Queue, RenderPipeline, ShaderStages, Texture, TextureAspect, TextureFormat, TextureView,
+  VertexBufferLayout, VertexStepMode,
+};
 
 use common::input::{Key, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
-use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, CombinedBindGroupLayoutBuilder};
+use gfx::bind_group::{BindGroupBuilder, BindGroupLayoutBuilder, CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -36,8 +44,7 @@ pub struct Gui {
   index_buffer: GrowableBuffer,
   vertex_buffer: GrowableBuffer,
   uniform_buffer: GfxBuffer,
-  _static_bind_group_layout: BindGroupLayout,
-  static_bind_group: BindGroup,
+  static_bind_group: CombinedBindGroup,
   texture_bind_group_layout: BindGroupLayout,
   textures: HashMap<TextureId, (GfxTexture, BindGroup)>,
   _pipeline_layout: PipelineLayout,
@@ -85,30 +92,31 @@ impl Gui {
       .build(device);
     let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
 
-    let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout, sampler_binding.layout])
-      .with_layout_label("GUI static bind group layout")
-      .with_entries(&[uniform_binding.entry, sampler_binding.entry])
-      .with_label("GUI static bind group")
+    let static_bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[uniform_binding.layout, sampler_binding.layout])
+      .layout_label("GUI static bind group layout")
+      .entries(&[uniform_binding.entry, sampler_binding.entry])
+      .label("GUI static bind group")
       .build(device);
 
     // Bind group that does change while rendering, containing the current texture.
-    let texture_bind_group_layout = BindGroupLayoutBuilder::new()
-      .with_entries(&[BindGroupLayoutEntryBuilder::default()
+    let texture_bind_group_layout = BindGroupLayoutBuilder::default()
+      .entries(&[BindGroupLayoutEntryBuilder::default()
         .texture()
         .binding(0)
         .fragment_visibility()
         .build()
       ])
-      .with_label("GUI texture bind group layout")
+      .label("GUI texture bind group layout")
       .build(device);
 
     let (pipeline_layout, render_pipeline) = RenderPipelineBuilder::default()
       .layout_label("GUI pipeline layout")
-      .bind_group_layouts(&[&static_bind_group_layout, &texture_bind_group_layout])
+      .bind_group_layouts(&[&static_bind_group.layout, &texture_bind_group_layout])
       .label("GUI render pipeline")
       .vertex_module(&vertex_shader_module)
-      .vertex_buffer_layouts(&[VertexBufferLayout { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
+      .vertex_buffer_layouts(&[VertexBufferLayout {
+        // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L174-L180
         array_stride: 5 * 4,
         step_mode: VertexStepMode::Vertex,
         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Uint32],
@@ -121,7 +129,8 @@ impl Gui {
             dst_factor: BlendFactor::OneMinusSrcAlpha,
             operation: BlendOperation::Add,
           },
-          alpha: BlendComponent { // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
+          alpha: BlendComponent {
+            // Taken from: https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L201-L210
             src_factor: BlendFactor::OneMinusDstAlpha,
             dst_factor: BlendFactor::One,
             operation: BlendOperation::Add,
@@ -143,7 +152,6 @@ impl Gui {
       index_buffer,
       vertex_buffer,
       uniform_buffer,
-      _static_bind_group_layout: static_bind_group_layout,
       static_bind_group,
       texture_bind_group_layout,
       textures: HashMap::default(),
@@ -415,7 +423,7 @@ impl Gui {
         .begin_render_pass_for_swap_chain_with_load(encoder, surface_texture_view);
       render_pass.push_debug_group("Draw GUI");
       render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_bind_group(0, &self.static_bind_group, &[]);
+      render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
       let scale_factor: f64 = screen_size.scale.into();
       let scale_factor = scale_factor as f32;
@@ -592,10 +600,10 @@ fn create_texture_and_bind_group(
     .with_texture_view_label(&format!("{} view", label_base))
     .build(device);
   write_texture(queue, &texture.texture, Origin3d::ZERO, data, layout, size);
-  let bind_group = BindGroupBuilder::new(texture_bind_group_layout)
-    .with_entries(&[texture.entry(0)])
-    .with_label(&format!("{} bind group", label_base))
-    .build(device);
+  let bind_group = BindGroupBuilder::default()
+    .entries(&[texture.entry(0)])
+    .label(&format!("{} bind group", label_base))
+    .build(device, texture_bind_group_layout);
   (texture, bind_group)
 }
 

@@ -1,8 +1,9 @@
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Device};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Device, Label};
 
 pub mod layout_entry;
 pub mod entry;
 
+#[derive(Clone, Debug)]
 pub struct CombinedBinding<'a> {
   pub layout: BindGroupLayoutEntry,
   pub entry: BindGroupEntry<'a>,
@@ -17,132 +18,117 @@ impl<'a> CombinedBinding<'a> {
 
 // Bind group layout creation
 
+#[derive(Default, Copy, Clone, Debug)]
 pub struct BindGroupLayoutBuilder<'a> {
-  descriptor: BindGroupLayoutDescriptor<'a>,
+  label: Label<'a>,
+  entries: &'a [BindGroupLayoutEntry],
 }
-
 impl<'a> BindGroupLayoutBuilder<'a> {
   #[inline]
-  pub fn new() -> Self {
-    Self {
-      descriptor: BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[],
-      }
-    }
-  }
+  pub fn new() -> Self { Self::default() }
 
   #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
-    self.descriptor.entries = entries;
+  pub fn label(mut self, label: &'a str) -> Self {
+    self.label = Some(label);
     self
   }
 
   #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.descriptor.label = Some(label);
+  pub fn entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
+    self.entries = entries;
     self
   }
 
   #[inline]
   pub fn build(self, device: &Device) -> BindGroupLayout {
-    device.create_bind_group_layout(&self.descriptor)
+    device.create_bind_group_layout(&BindGroupLayoutDescriptor { label: self.label, entries: self.entries })
   }
 }
 
 
 // Bind group creation
 
+#[derive(Default, Copy, Clone, Debug)]
 pub struct BindGroupBuilder<'a> {
-  descriptor: BindGroupDescriptor<'a>,
+  label: Label<'a>,
+  entries: &'a [BindGroupEntry<'a>],
 }
-
 impl<'a> BindGroupBuilder<'a> {
   #[inline]
-  pub fn new(layout: &'a BindGroupLayout) -> Self {
-    Self {
-      descriptor: BindGroupDescriptor {
-        label: None,
-        layout,
-        entries: &[],
-      }
-    }
-  }
+  pub fn new() -> Self { Self::default() }
 
   #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
-    self.descriptor.entries = entries;
+  pub fn label(mut self, label: &'a str) -> Self {
+    self.label = Some(label);
     self
   }
 
   #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.descriptor.label = Some(label);
+  pub fn entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
+    self.entries = entries;
     self
   }
 
   #[inline]
-  pub fn build(self, device: &Device) -> BindGroup {
-    device.create_bind_group(&self.descriptor)
+  pub fn build(self, device: &Device, layout: &BindGroupLayout) -> BindGroup {
+    device.create_bind_group(&BindGroupDescriptor { label: self.label, layout, entries: self.entries })
   }
 }
 
 
 // Combined bind group (layout) creation
 
-pub struct CombinedBindGroupLayoutBuilder<'a> {
-  layout_label: Option<&'a str>,
-  layout_entries: &'a [BindGroupLayoutEntry],
-  label: Option<&'a str>,
-  entries: &'a [BindGroupEntry<'a>],
+#[derive(Default, Copy, Clone, Debug)]
+pub struct CombinedBindGroupBuilder<'a> {
+  layout: BindGroupLayoutBuilder<'a>,
+  entry: BindGroupBuilder<'a>,
+}
+impl<'a> CombinedBindGroupBuilder<'a> {
+  #[inline]
+  pub fn new() -> Self { Self::default() }
+
+  #[inline]
+  pub fn layout_label(mut self, label: &'a str) -> Self {
+    self.layout = self.layout.label(label);
+    self
+  }
+
+  #[inline]
+  pub fn layout_entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
+    self.layout = self.layout.entries(entries);
+    self
+  }
+
+  #[inline]
+  pub fn label(mut self, label: &'a str) -> Self {
+    self.entry = self.entry.label(label);
+    self
+  }
+
+  #[inline]
+  pub fn entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
+    self.entry = self.entry.entries(entries);
+    self
+  }
 }
 
-impl<'a> CombinedBindGroupLayoutBuilder<'a> {
+#[derive(Debug)]
+pub struct CombinedBindGroup {
+  pub layout: BindGroupLayout,
+  pub entry: BindGroup,
+}
+impl CombinedBindGroup {
   #[inline]
-  pub fn new() -> Self {
-    Self {
-      layout_label: None,
-      layout_entries: &[],
-      label: None,
-      entries: &[],
-    }
-  }
-
-  #[inline]
-  pub fn with_layout_entries(mut self, entries: &'a [BindGroupLayoutEntry]) -> Self {
-    self.layout_entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_layout_label(mut self, label: &'a str) -> Self {
-    self.layout_label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn with_entries(mut self, entries: &'a [BindGroupEntry]) -> Self {
-    self.entries = entries;
-    self
-  }
-
-  #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
-    self.label = Some(label);
-    self
-  }
-
-  #[inline]
-  pub fn build(self, device: &Device) -> (BindGroupLayout, BindGroup) {
-    let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-      label: self.layout_label,
-      entries: self.layout_entries,
-    });
-    let bind = device.create_bind_group(&BindGroupDescriptor {
-      label: self.label,
-      layout: &layout,
-      entries: self.entries,
-    });
-    (layout, bind)
+  pub fn new(layout: BindGroupLayout, entry: BindGroup) -> Self {
+    Self { layout, entry }
   }
 }
+impl<'a> CombinedBindGroupBuilder<'a> {
+  #[inline]
+  pub fn build(self, device: &Device) -> CombinedBindGroup {
+    let layout = self.layout.build(device);
+    let entry = self.entry.build(device, &layout);
+    CombinedBindGroup::new(layout, entry)
+  }
+}
+

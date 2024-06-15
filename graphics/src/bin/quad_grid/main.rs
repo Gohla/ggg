@@ -7,14 +7,14 @@ use bytemuck::{Pod, Zeroable};
 use egui::Ui;
 use rand::prelude::*;
 use ultraviolet::Mat4;
-use wgpu::{BindGroup, BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
+use wgpu::{BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
 use app::{AppRunner, RenderInput};
 use common::idx_assigner::Item;
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
 use gfx::render_pass::RenderPassBuilder;
@@ -77,7 +77,7 @@ pub struct QuadGrid {
 
   uniform_buffer: GfxBuffer,
   _instance_buffer: GfxBuffer,
-  bind_group: BindGroup,
+  bind_group: CombinedBindGroup,
 
   array_texture_def: ArrayTextureDef,
 
@@ -134,18 +134,18 @@ impl app::Application for QuadGrid {
     };
     let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
-    let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout, instance_binding.layout])
-      .with_entries(&[uniform_binding.entry, instance_binding.entry])
-      .with_layout_label("Quad grid bind group layout")
-      .with_label("Quad grid bind group")
+    let bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[uniform_binding.layout, instance_binding.layout])
+      .entries(&[uniform_binding.entry, instance_binding.entry])
+      .layout_label("Quad grid bind group layout")
+      .label("Quad grid bind group")
       .build(&gfx.device);
 
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = gfx.render_pipeline_builder()
       .layout_label("Quad grid pipeline layout")
-      .bind_group_layouts(&[&bind_group_layout, &array_texture_def.bind_group_layout])
+      .bind_group_layouts(&[&bind_group.layout, &array_texture_def.bind_group.layout])
       .label("Quad grid render pipeline")
       .vertex_module(&vertex_shader_module)
       .fragment_module(&fragment_shader_module)
@@ -205,8 +205,8 @@ impl app::Application for QuadGrid {
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
     render_pass.push_debug_group("Quad grid");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.bind_group, &[]);
-    render_pass.set_bind_group(1, &self.array_texture_def.bind_group, &[]);
+    render_pass.set_bind_group(0, &self.bind_group.entry, &[]);
+    render_pass.set_bind_group(1, &self.array_texture_def.bind_group.entry, &[]);
     render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
     render_pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
     render_pass.pop_debug_group();

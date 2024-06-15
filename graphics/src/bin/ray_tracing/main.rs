@@ -2,13 +2,13 @@
 
 use bytemuck::{Pod, Zeroable};
 use ultraviolet::{Vec3, Vec4};
-use wgpu::{BindGroup, CommandBuffer, RenderPipeline, ShaderStages};
+use wgpu::{CommandBuffer, RenderPipeline, ShaderStages};
 
 use app::{AppRunner, RenderInput};
 use common::input::{KeyboardKey, KeyboardModifier, RawInput};
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
-use gfx::bind_group::CombinedBindGroupLayoutBuilder;
+use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
 use gfx::render_pass::RenderPassBuilder;
@@ -44,7 +44,7 @@ pub struct Input {
 
 pub struct RayTracing {
   uniform_buffer: GfxBuffer,
-  static_bind_group: BindGroup,
+  static_bind_group: CombinedBindGroup,
 
   full_screen_triangle: FullScreenTriangle,
   render_pipeline: RenderPipeline,
@@ -65,20 +65,20 @@ impl app::Application for RayTracing {
       .uniform_usage()
       .label("Ray tracing uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::new(screen_size, 0.0, camera_aperture, camera_origin, v_fov)]);
-    let uniform_binding= uniform_buffer.binding(0, ShaderStages::FRAGMENT);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::FRAGMENT);
 
-    let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_binding.layout])
-      .with_entries(&[uniform_binding.entry])
-      .with_layout_label("Ray tracing static bind group layout")
-      .with_label("Ray tracing static bind group")
+    let static_bind_group = CombinedBindGroupBuilder::new()
+      .layout_entries(&[uniform_binding.layout])
+      .entries(&[uniform_binding.entry])
+      .layout_label("Ray tracing static bind group layout")
+      .label("Ray tracing static bind group")
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = full_screen_triangle.create_render_pipeline_builder(&gfx)
       .layout_label("Ray tracing pipeline layout")
-      .bind_group_layouts(&[&static_bind_group_layout])
+      .bind_group_layouts(&[&static_bind_group.layout])
       .label("Ray tracing render pipeline")
       .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
@@ -145,7 +145,7 @@ impl app::Application for RayTracing {
       .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
     render_pass.push_debug_group("Trace rays");
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.static_bind_group, &[]);
+    render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
     self.full_screen_triangle.draw(&mut render_pass);
     render_pass.pop_debug_group();
     Box::new(std::iter::empty())
