@@ -11,7 +11,6 @@ use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::render_pass::RenderPassBuilder;
 use os::Os;
 
 #[repr(C)]
@@ -45,8 +44,7 @@ pub struct Triangle {
 
 impl app::Application for Triangle {
   type Config = ();
-
-  fn new(_os: &Os, gfx: &Gfx, _screen_size: ScreenSize, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, _viewport: ScreenSize, _config: Self::Config) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = gfx.render_pipeline_builder()
@@ -66,21 +64,16 @@ impl app::Application for Triangle {
     }
   }
 
-
   type Input = ();
-
   fn process_input(&mut self, _raw_input: RawInput) -> () {}
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, gfx_frame: mut render, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    let mut render_pass = RenderPassBuilder::new()
-      .label("Triangle render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
-    render_pass.push_debug_group("Draw triangle");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    render_pass.draw(0..VERTICES.len() as u32, 0..1);
-    render_pass.pop_debug_group();
+  fn render(&mut self, RenderInput { gfx_frame, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+    let mut pass = gfx_frame.render_pass_builder().label("Triangle render pass").begin();
+    pass.push_debug_group("Draw triangle");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    pass.draw(0..VERTICES.len() as u32, 0..1);
+    pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }

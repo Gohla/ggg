@@ -18,7 +18,6 @@ use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
 use gfx::camera::debug::CameraDebugging;
-use gfx::render_pass::RenderPassBuilder;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
 use os::Os;
 
@@ -89,13 +88,12 @@ pub struct QuadGrid {
 
 impl app::Application for QuadGrid {
   type Config = ();
-
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(screen_size.physical, &mut camera_settings);
+    let camera = Camera::new(viewport.physical, &mut camera_settings);
 
-    let uniform_buffer = BufferBuilder::new()
+    let uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .label("Quad grid uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
@@ -116,7 +114,7 @@ impl app::Application for QuadGrid {
 
     let mut rng = SmallRng::seed_from_u64(101702198783735);
     let instance_buffer = {
-      let buffer = BufferBuilder::new()
+      let buffer = BufferBuilder::default()
         .size((1 * size_of::<Instance>()) as BufferAddress)
         .storage_usage()
         .mapped_at_creation(true)
@@ -135,7 +133,7 @@ impl app::Application for QuadGrid {
     };
     let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
-    let bind_group = CombinedBindGroupBuilder::new()
+    let bind_group = CombinedBindGroupBuilder::default()
       .layout_entries(&[uniform_binding.layout, instance_binding.layout])
       .entries(&[uniform_binding.entry, instance_binding.entry])
       .layout_label("Quad grid bind group layout")
@@ -158,7 +156,7 @@ impl app::Application for QuadGrid {
         let quad_local = i % NUM_QUAD_INDICES;
         QUAD_INDICES[quad_local] + quad as u32 * NUM_QUAD_VERTICES as u32
       }).collect();
-      BufferBuilder::new()
+      BufferBuilder::default()
         .static_index_usage()
         .label("Quad grid static index buffer")
         .build_with_data(&gfx.device, &data)
@@ -177,40 +175,33 @@ impl app::Application for QuadGrid {
     }
   }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.set_viewport(screen_size.physical);
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
+    self.camera.set_viewport(viewport.physical);
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    let mut render_pass = RenderPassBuilder::new()
-      .label("Quad grid render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
-    render_pass.push_debug_group("Quad grid");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.bind_group.entry, &[]);
-    render_pass.set_bind_group(1, &self.array_texture_def.bind_group.entry, &[]);
-    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-    render_pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
-    render_pass.pop_debug_group();
+    let mut pass = gfx_frame.render_pass_builder().label("Quad grid render pass").begin();
+    pass.push_debug_group("Quad grid");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.bind_group.entry, &[]);
+    pass.set_bind_group(1, &self.array_texture_def.bind_group.entry, &[]);
+    pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
+    pass.draw_indexed(0..MAX_INDICES as u32, 0, 0..1);
+    pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }

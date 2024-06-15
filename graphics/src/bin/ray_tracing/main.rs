@@ -11,7 +11,6 @@ use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
-use gfx::render_pass::RenderPassBuilder;
 use os::Os;
 
 #[repr(C)]
@@ -22,9 +21,9 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn new(screen_size: ScreenSize, elapsed: f32, camera_aperture: f32, camera_origin: Vec3, v_fov: f32) -> Self {
+  pub fn new(viewport: ScreenSize, elapsed: f32, camera_aperture: f32, camera_origin: Vec3, v_fov: f32) -> Self {
     Self {
-      viewport_and_elapsed_and_aperture: Vec4::new(screen_size.physical.width as f32, screen_size.physical.height as f32, elapsed, camera_aperture),
+      viewport_and_elapsed_and_aperture: Vec4::new(viewport.physical.width as f32, viewport.physical.height as f32, elapsed, camera_aperture),
       camera_origin_and_v_fov: Vec4::new(camera_origin.x, camera_origin.y, camera_origin.z, v_fov),
     }
   }
@@ -56,22 +55,21 @@ pub struct RayTracing {
 
 impl app::Application for RayTracing {
   type Config = ();
-
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
     let camera_aperture = 0.1;
     let camera_origin = Vec3::new(0.0, 1.0, 3.0);
     let v_fov = 45.0;
-    let uniform_buffer = BufferBuilder::new()
-      .uniform_usage()
+    let uniform_buffer = BufferBuilder::default()
       .label("Ray tracing uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::new(screen_size, 0.0, camera_aperture, camera_origin, v_fov)]);
+      .uniform_usage()
+      .build_with_data(&gfx.device, &[Uniform::new(viewport, 0.0, camera_aperture, camera_origin, v_fov)]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::FRAGMENT);
 
-    let static_bind_group = CombinedBindGroupBuilder::new()
-      .layout_entries(&[uniform_binding.layout])
-      .entries(&[uniform_binding.entry])
+    let static_bind_group = CombinedBindGroupBuilder::default()
       .layout_label("Ray tracing static bind group layout")
+      .layout_entries(&[uniform_binding.layout])
       .label("Ray tracing static bind group")
+      .entries(&[uniform_binding.entry])
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);
@@ -96,9 +94,7 @@ impl app::Application for RayTracing {
     }
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, raw_input: RawInput) -> Input {
     let mut input = Input::default();
     if raw_input.is_keyboard_key_down(KeyboardKey::KeyW) {
@@ -127,8 +123,7 @@ impl app::Application for RayTracing {
     input
   }
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, frame, elapsed, input, gfx_frame: mut render, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, elapsed, input, gfx_frame, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let duration = frame.duration.into_seconds() as f32;
     if input.forward { self.camera_origin.z -= 1.0 * duration; }
     if input.backward { self.camera_origin.z += 1.0 * duration; }
@@ -138,16 +133,16 @@ impl app::Application for RayTracing {
     if input.down { self.camera_origin.y -= 1.0 * duration; }
     self.v_fov += input.v_fov_delta;
     self.camera_aperture += input.aperture_delta;
-    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::new(render.screen_size, elapsed.into_seconds() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::new(gfx_frame.viewport, elapsed.into_seconds() as f32, self.camera_aperture, self.camera_origin, self.v_fov)]);
 
-    let mut render_pass = RenderPassBuilder::new()
+    let mut pass = gfx_frame.render_pass_builder()
       .label("Ray tracing render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, false);
-    render_pass.push_debug_group("Trace rays");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
-    self.full_screen_triangle.draw(&mut render_pass);
-    render_pass.pop_debug_group();
+      .begin();
+    pass.push_debug_group("Trace rays");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
+    self.full_screen_triangle.draw(&mut pass);
+    pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }

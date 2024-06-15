@@ -13,17 +13,6 @@ impl<'pass> DepthStencilAttachmentBuilder<'pass> {
 
 
   #[inline]
-  pub fn depth_reverse_z(mut self, view: Option<&'pass TextureView>) -> Self {
-    self.view = view;
-    self.depth_reverse_z_clear_store()
-  }
-  #[inline]
-  pub fn without_depth(self) -> Self {
-    self.without_depth_ops() // TODO: also set view to None?
-  }
-
-
-  #[inline]
   pub fn view(mut self, view: &'pass TextureView) -> Self {
     self.view = Some(view);
     self
@@ -46,37 +35,57 @@ impl<'pass> DepthStencilAttachmentBuilder<'pass> {
     self
   }
   #[inline]
-  pub fn depth_reverse_z_clear_store(self) -> Self {
-    // Using "reverse Z", so clearing depth to 0 instead of 1.
-    self.depth_ops(Operations { load: LoadOp::Clear(0.0), store: StoreOp::Store })
+  pub fn depth_ops_reverse_z_clear_store(self) -> Self {
+    self.depth_clear_reverse_z().depth_store()
+  }
+  #[inline]
+  pub fn depth_ops_load_store(self) -> Self {
+    self.depth_load().depth_store()
   }
 
   #[inline]
-  pub fn load_depth_op(mut self, load: LoadOp<f32>) -> Self {
+  pub fn depth_load_op(mut self, load: LoadOp<f32>) -> Self {
     self.depth_ops.get_or_insert(Operations::default()).load = load;
     self
   }
   #[inline]
-  pub fn load_depth(self) -> Self {
-    self.load_depth_op(LoadOp::Load)
+  pub fn depth_load(self) -> Self {
+    self.depth_load_op(LoadOp::Load)
   }
   #[inline]
-  pub fn clear_depth(self, value: f32) -> Self {
-    self.load_depth_op(LoadOp::Clear(value))
+  pub fn depth_clear(self, value: f32) -> Self {
+    self.depth_load_op(LoadOp::Clear(value))
+  }
+  #[inline]
+  pub fn depth_clear_reverse_z(self) -> Self {
+    // Using "reverse Z", so clearing depth to 0 instead of 1.
+    self.depth_clear(0.0)
   }
 
   #[inline]
-  pub fn store_depth_op(mut self, store: StoreOp) -> Self {
+  pub fn depth_store_op(mut self, store: StoreOp) -> Self {
     self.depth_ops.get_or_insert(Operations::default()).store = store;
     self
   }
   #[inline]
-  pub fn store_depth(self) -> Self {
-    self.store_depth_op(StoreOp::Store)
+  pub fn depth_store(self) -> Self {
+    self.depth_store_op(StoreOp::Store)
   }
   #[inline]
-  pub fn discard_depth(self) -> Self {
-    self.store_depth_op(StoreOp::Discard)
+  pub fn depth_discard(self) -> Self {
+    self.depth_store_op(StoreOp::Discard)
+  }
+
+  #[inline]
+  pub fn maybe_depth_reverse_z(self, view: Option<&'pass TextureView>) -> Self {
+    if let Some(view) = view {
+      self
+        .view(view)
+        .depth_clear_reverse_z()
+        .depth_store()
+    } else {
+      self
+    }
   }
 
 
@@ -92,31 +101,31 @@ impl<'pass> DepthStencilAttachmentBuilder<'pass> {
   }
 
   #[inline]
-  pub fn load_stencil_op(mut self, load: LoadOp<u32>) -> Self {
+  pub fn stencil_load_op(mut self, load: LoadOp<u32>) -> Self {
     self.stencil_ops.get_or_insert(Operations::default()).load = load;
     self
   }
   #[inline]
-  pub fn load_stencil(self) -> Self {
-    self.load_stencil_op(LoadOp::Load)
+  pub fn stencil_load(self) -> Self {
+    self.stencil_load_op(LoadOp::Load)
   }
   #[inline]
-  pub fn clear_stencil(self, value: u32) -> Self {
-    self.load_stencil_op(LoadOp::Clear(value))
+  pub fn stencil_clear(self, value: u32) -> Self {
+    self.stencil_load_op(LoadOp::Clear(value))
   }
 
   #[inline]
-  pub fn store_stencil_op(mut self, store: StoreOp) -> Self {
+  pub fn stencil_store_op(mut self, store: StoreOp) -> Self {
     self.stencil_ops.get_or_insert(Operations::default()).store = store;
     self
   }
   #[inline]
-  pub fn store_stencil(self) -> Self {
-    self.store_stencil_op(StoreOp::Store)
+  pub fn stencil_store(self) -> Self {
+    self.stencil_store_op(StoreOp::Store)
   }
   #[inline]
-  pub fn discard_stencil(self) -> Self {
-    self.store_stencil_op(StoreOp::Discard)
+  pub fn stencil_discard(self) -> Self {
+    self.stencil_store_op(StoreOp::Discard)
   }
 
 

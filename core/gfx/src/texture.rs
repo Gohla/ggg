@@ -54,7 +54,7 @@ impl<'a> TextureBuilder<'a> {
   }
   #[inline]
   pub fn new_multisampled_framebuffer(surface: &GfxSurface, sample_count: u32) -> Self {
-    let (width, height): (u64, u64) = surface.get_size().physical.into();
+    let (width, height): (u64, u64) = surface.get_viewport().physical.into();
     Self::new()
       .with_2d_size(width as u32, height as u32)
       .with_sample_count(sample_count)

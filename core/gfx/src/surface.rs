@@ -6,7 +6,7 @@ use common::screen::ScreenSize;
 pub struct GfxSurface {
   inner: Surface<'static>,
   configuration: SurfaceConfiguration,
-  size: ScreenSize,
+  viewport: ScreenSize,
 
   pub non_blend_target: [Option<ColorTargetState>; 1],
   pub replace_blend_target: [Option<ColorTargetState>; 1],
@@ -15,8 +15,8 @@ pub struct GfxSurface {
 }
 
 impl GfxSurface {
-  pub fn new(surface: Surface<'static>, adapter: &Adapter, device: &Device, present_mode: PresentMode, size: ScreenSize) -> Self {
-    let configuration = Self::create_configuration(&surface, adapter, present_mode, size);
+  pub fn new(surface: Surface<'static>, adapter: &Adapter, device: &Device, present_mode: PresentMode, viewport: ScreenSize) -> Self {
+    let configuration = Self::create_configuration(&surface, adapter, present_mode, viewport);
     surface.configure(device, &configuration);
 
     let non_blend_target = [Some(configuration.format.into())];
@@ -33,34 +33,36 @@ impl GfxSurface {
       ..configuration.format.into()
     })];
 
-    Self { inner: surface, configuration, size, non_blend_target, replace_blend_target, alpha_blend_target, premultiplied_alpha_blend_target }
+    Self { inner: surface, configuration, viewport, non_blend_target, replace_blend_target, alpha_blend_target, premultiplied_alpha_blend_target }
   }
   pub fn new_with_defaults(surface: Surface<'static>, adapter: &Adapter, device: &Device, size: ScreenSize) -> Self {
     Self::new(surface, adapter, device, PresentMode::Mailbox, size)
   }
 
-
+  #[inline]
   pub fn get_configuration(&self) -> &SurfaceConfiguration { &self.configuration }
+  #[inline]
   pub fn get_swapchain_texture_format(&self) -> TextureFormat { self.configuration.format }
-  pub fn get_size(&self) -> ScreenSize { self.size }
+  #[inline]
+  pub fn get_viewport(&self) -> ScreenSize { self.viewport }
 
 
-  pub fn resize(&mut self, adapter: &Adapter, device: &Device, size: ScreenSize) {
-    let configuration = Self::create_configuration(&self.inner, adapter, self.configuration.present_mode, size);
+  pub fn resize(&mut self, adapter: &Adapter, device: &Device, viewport: ScreenSize) {
+    let configuration = Self::create_configuration(&self.inner, adapter, self.configuration.present_mode, viewport);
     self.inner.configure(device, &configuration);
-    self.size = size;
+    self.viewport = viewport;
   }
 
 
-  fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, size: ScreenSize) -> SurfaceConfiguration {
+  fn create_configuration(surface: &Surface, adapter: &Adapter, present_mode: PresentMode, viewport: ScreenSize) -> SurfaceConfiguration {
     let capabilities = surface.get_capabilities(adapter);
     tracing::debug!(?capabilities, "Queried surface capabilities");
     SurfaceConfiguration {
       usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
       format: *capabilities.formats.get(0)
         .unwrap_or_else(|| panic!("No supported formats; surface is incompatible with the adapter")),
-      width: size.physical.width as u32,
-      height: size.physical.height as u32,
+      width: viewport.physical.width as u32,
+      height: viewport.physical.height as u32,
       present_mode, // TODO: check against capabilities?
       desired_maximum_frame_latency: 1, // TODO: make configurable
       alpha_mode: CompositeAlphaMode::Auto, // TODO: make configurable

@@ -1,4 +1,4 @@
-use egui::{CollapsingHeader, Grid, menu, Ui, Window};
+use egui::{CollapsingHeader, Grid, menu, Ui};
 use serde::{Deserialize, Serialize};
 
 use common::input::RawInput;
@@ -105,8 +105,7 @@ impl DebugGui {
     timing_stats: &TimingStats,
   ) {
     if !self.show_timing_window { return; }
-    let mut window = Window::new("Debug Timing")
-      .constrain_to(gui.area_under_title_bar);
+    let mut window = gui.window("Debug Timing");
     if let Some(anchor) = self.timing_window_anchor {
       window = window.anchor(anchor, egui::Vec2::ZERO);
     }
@@ -206,8 +205,7 @@ impl DebugGui {
     input: &RawInput,
   ) {
     if !self.show_input_window { return; }
-    let mut window = Window::new("Debug Input")
-      .constrain_to(gui.area_under_title_bar);
+    let mut window = gui.window("Debug Input");
     if let Some(anchor) = self.input_window_anchor {
       window = window.anchor(anchor, egui::Vec2::ZERO);
     }

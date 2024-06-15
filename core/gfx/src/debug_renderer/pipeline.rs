@@ -29,7 +29,7 @@ impl<V: Vertex + Pod> Pipeline<V> {
     polygon_mode: PolygonMode,
     label: &'static str,
   ) -> Self {
-    let (_, render_pipeline) = gfx.render_pipeline_builder_without_depth_stencil()
+    let (_, render_pipeline) = gfx.render_pipeline_builder()
       .layout_label(&format!("Debug {} pipeline layout", label))
       .bind_group_layouts(&[&uniform_bind_group_layout])
       .label(&format!("Debug {} render pipeline", label))
@@ -99,18 +99,18 @@ impl<V: Vertex + Pod> Pipeline<V> {
     self.write_buffers = false;
   }
 
-  pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut RenderPass<'a>) {
+  pub fn draw<'a>(&'a self, pass: &mut RenderPass<'a>) {
     if let (Some(vertex_buffer), Some(index_buffer)) = (self.vertex_buffer.backing_buffer(), self.index_buffer.backing_buffer()) {
-      render_pass.push_debug_group(&format!("Debug draw {}", self.label));
-      render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+      pass.push_debug_group(&format!("Debug draw {}", self.label));
+      pass.set_pipeline(&self.render_pipeline);
+      pass.set_vertex_buffer(0, vertex_buffer.slice(..));
       if !self.indices.is_empty() {
-        render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
-        render_pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
+        pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
+        pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
       } else {
-        render_pass.draw(0..self.vertices.len() as u32, 0..1);
+        pass.draw(0..self.vertices.len() as u32, 0..1);
       }
-      render_pass.pop_debug_group();
+      pass.pop_debug_group();
     }
   }
 

@@ -112,16 +112,16 @@ impl VoxelRenderer {
     self.staging_belt.recall();
     let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.vertices);
     let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &lod_mesh.indices);
-    let mut render_pass = Self::create_render_pass(frame, clear);
-    render_pass.push_debug_group("Render LOD mesh");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
-    render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
+    let mut pass = Self::create_render_pass(frame, clear);
+    pass.push_debug_group("Render LOD mesh");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
+    pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
     for draw in &lod_mesh.draws {
-      render_pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(draw.base_vertex..));
-      render_pass.draw_indexed(draw.indices.clone(), 0, 0..1);
+      pass.set_vertex_buffer(0, vertex_buffer.slice_data::<Vertex>(draw.base_vertex..));
+      pass.draw_indexed(draw.indices.clone(), 0, 0..1);
     }
-    render_pass.pop_debug_group();
+    pass.pop_debug_group();
     self.staging_belt.finish();
   }
 
@@ -136,18 +136,17 @@ impl VoxelRenderer {
     self.staging_belt.recall();
     let vertex_buffer = self.vertex_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.vertices());
     let index_buffer = self.index_buffer.write_data(&gfx.device, &mut frame.encoder, &mut self.staging_belt, &chunk_vertices.indices());
-    let mut render_pass = Self::create_render_pass(frame, clear);
-    render_pass.push_debug_group("Render chunk vertices");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
-    render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
-    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    render_pass.draw_indexed(0..chunk_vertices.indices().len() as u32, 0, 0..1);
-    render_pass.pop_debug_group();
+    let mut pass = Self::create_render_pass(frame, clear);
+    pass.push_debug_group("Render chunk vertices");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
+    pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
+    pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+    pass.draw_indexed(0..chunk_vertices.indices().len() as u32, 0, 0..1);
+    pass.pop_debug_group();
     self.staging_belt.finish();
   }
 
-  #[profiling::function]
   fn create_render_pass<'a>(frame: &'a mut GfxFrame, clear: bool) -> RenderPass<'a> {
     frame.render_pass_builder()
       .label("Voxel render pass")

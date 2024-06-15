@@ -46,12 +46,11 @@ const EXTENDS: f32 = 0.5;
 
 impl app::Application for MarchingCubesDemo {
   type Config = ();
-
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
     camera_settings.arcball.distance = 2.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(screen_size.physical, &mut camera_settings);
+    let camera = Camera::new(viewport.physical, &mut camera_settings);
 
     let camera_uniform = CameraUniform::from_camera(&camera);
     let mut light_settings = LightSettings::default();
@@ -88,26 +87,21 @@ impl app::Application for MarchingCubesDemo {
     }
   }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.set_viewport(screen_size.physical);
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
+    self.camera.set_viewport(viewport.physical);
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
     self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
@@ -115,11 +109,9 @@ impl app::Application for MarchingCubesDemo {
 
     // Debug GUI
     self.marching_cubes_debugging.show(&gui);
-    egui::Window::new("Demo")
-      .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
-      .show(&gui, |ui| {
-        self.light_settings.render_gui(ui, self.camera.get_direction_inverse());
-      });
+    gui.window("Demo").anchor(Align2::LEFT_BOTTOM, egui::Vec2::default()).show(&gui, |ui| {
+      self.light_settings.render_gui(ui, self.camera.get_direction_inverse());
+    });
 
 
     // Write uniforms, run MC to create vertices from voxels, and render them.
@@ -127,12 +119,7 @@ impl app::Application for MarchingCubesDemo {
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.light_settings.uniform);
     let mut chunk_vertices = ChunkMesh::new();
     self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
-    self.voxel_renderer.render_chunk_vertices(
-      gfx,
-      &mut render,
-      true,
-      &chunk_vertices,
-    );
+    self.voxel_renderer.render_chunk_vertices(gfx, &mut gfx_frame, true, &chunk_vertices);
 
     // Debug rendering.
     self.debug_renderer.clear();
@@ -143,7 +130,7 @@ impl app::Application for MarchingCubesDemo {
       chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    self.debug_renderer.render(gfx, &mut render, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut gfx_frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }

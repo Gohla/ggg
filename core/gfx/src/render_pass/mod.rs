@@ -33,16 +33,41 @@ impl<'pass, 'build> RenderPassBuilder<'pass, 'build> {
     self
   }
 
+
   #[inline]
   pub fn depth_stencil_attachment(mut self, depth_stencil_attachment: RenderPassDepthStencilAttachment<'pass>) -> Self {
     self.depth_stencil_attachment = depth_stencil_attachment.into();
     self
   }
+
   #[inline]
-  pub fn depth_texture(mut self, view: Option<&'pass TextureView>) -> Self {
-    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_reverse_z(view);
+  pub fn depth_stencil_view(mut self, view: &'pass TextureView) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.view(view);
     self
   }
+  #[inline]
+  pub fn without_depth_stencil_view(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.without_view();
+    self
+  }
+
+  #[inline]
+  pub fn depth_clear_reverse_z(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_clear_reverse_z();
+    self
+  }
+  #[inline]
+  pub fn depth_load(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_load();
+    self
+  }
+
+  #[inline]
+  pub fn maybe_depth_reverse_z(mut self, view: Option<&'pass TextureView>) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.maybe_depth_reverse_z(view);
+    self
+  }
+
 
   #[inline]
   pub fn timestamp_writes(mut self, timestamp_writes: RenderPassTimestampWrites<'build>) -> Self {
@@ -93,11 +118,13 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     }
   }
 
+
   #[inline]
   pub fn label(mut self, label: &'build str) -> Self {
     self.label = Some(label);
     self
   }
+
 
   #[inline]
   pub fn color_attachment(mut self, color_attachment: RenderPassColorAttachment<'pass>) -> Self {
@@ -109,6 +136,7 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self.color_attachment = modify(self.color_attachment);
     self
   }
+
   #[inline]
   pub fn view(mut self, view: &'pass TextureView) -> Self {
     self.color_attachment = self.color_attachment.view(view);
@@ -119,8 +147,9 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self.color_attachment = self.color_attachment.without_view();
     self
   }
+
   #[inline]
-  pub fn resolve_target(mut self, resolve_target: Option<&'pass TextureView>) -> Self {
+  pub fn resolve_target(mut self, resolve_target: &'pass TextureView) -> Self {
     self.color_attachment = self.color_attachment.resolve_target(resolve_target);
     self
   }
@@ -129,6 +158,13 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self.color_attachment = self.color_attachment.without_resolve_target();
     self
   }
+
+  #[inline]
+  pub fn maybe_multisample(mut self, view: &'pass TextureView, multisample_view: Option<&'pass TextureView>) -> Self {
+    self.color_attachment = self.color_attachment.maybe_multisample(view, multisample_view);
+    self
+  }
+
   #[inline]
   pub fn load(mut self) -> Self {
     self.color_attachment = self.color_attachment.load();
@@ -154,6 +190,7 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self.color_attachment = self.color_attachment.clear_default_or_load(clear);
     self
   }
+
   #[inline]
   pub fn store(mut self) -> Self {
     self.color_attachment = self.color_attachment.store();
@@ -165,21 +202,52 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self
   }
 
+
   #[inline]
   pub fn depth_stencil_attachment(mut self, depth_stencil_attachment: RenderPassDepthStencilAttachment<'pass>) -> Self {
     self.depth_stencil_attachment = depth_stencil_attachment.into();
     self
   }
+
   #[inline]
-  pub fn depth_reverse_z(mut self, view: Option<&'pass TextureView>) -> Self {
-    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_reverse_z(view);
+  pub fn depth_stencil_view(mut self, view: &'pass TextureView) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.view(view);
     self
   }
   #[inline]
-  pub fn without_depth(mut self) -> Self {
-    self.depth_stencil_attachment = self.depth_stencil_attachment.without_depth();
+  pub fn without_depth_stencil_view(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.without_view();
     self
   }
+
+  #[inline]
+  pub fn depth_clear_reverse_z(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_clear_reverse_z();
+    self
+  }
+  #[inline]
+  pub fn depth_load(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_load();
+    self
+  }
+
+  #[inline]
+  pub fn depth_store(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_store();
+    self
+  }
+  #[inline]
+  pub fn depth_discard(mut self) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.depth_discard();
+    self
+  }
+
+  #[inline]
+  pub fn maybe_depth_reverse_z(mut self, view: Option<&'pass TextureView>) -> Self {
+    self.depth_stencil_attachment = self.depth_stencil_attachment.maybe_depth_reverse_z(view);
+    self
+  }
+
 
   #[inline]
   pub fn timestamp_writes(mut self, timestamp_writes: RenderPassTimestampWrites<'build>) -> Self {
@@ -192,6 +260,7 @@ impl<'pass, 'build> SingleRenderPassBuilder<'pass, 'build> {
     self.occlusion_query_set = Some(occlusion_query_set);
     self
   }
+
 
   #[inline]
   pub fn begin(self) -> RenderPass<'pass> {

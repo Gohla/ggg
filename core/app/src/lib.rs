@@ -69,12 +69,12 @@ pub trait Application: Sized {
   /// [into_config](Self::into_config).
   type Config: Default + Serialize + DeserializeOwned + Send + 'static;
   /// Create a new instance of the application.
-  fn new(os: &Os, gfx: &Gfx, screen_size: ScreenSize, config: Self::Config) -> Self;
+  fn new(os: &Os, gfx: &Gfx, viewport: ScreenSize, config: Self::Config) -> Self;
   /// Converts this application into its configuration.
   fn into_config(self) -> Self::Config { Self::Config::default() }
 
-  /// Update this application with a new `screen_size`, possibly updating internal structures to reflect the new size.
-  fn screen_resize(&mut self, os: &Os, gfx: &Gfx, screen_size: ScreenSize) {}
+  /// Update this application with a new `viewport`, possibly updating internal structures to reflect the new size.
+  fn viewport_resize(&mut self, os: &Os, gfx: &Gfx, viewport: ScreenSize) {}
 
   /// Returns `true` when this application wants to capture keyboard input, `false` otherwise.
   fn wants_keyboard_input(&self) -> bool { return false; }

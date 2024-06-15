@@ -18,7 +18,6 @@ use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
 use gfx::camera::debug::CameraDebugging;
-use gfx::render_pass::RenderPassBuilder;
 use gui::widget::UiWidgetsExt;
 use os::Os;
 
@@ -41,10 +40,10 @@ struct Uniform {
 }
 
 impl Uniform {
-  pub fn from_camera(camera_sys: &Camera) -> Self {
+  pub fn from_camera(camera: &Camera) -> Self {
     Self {
-      camera_position: camera_sys.get_position().into_homogeneous_point(),
-      view_projection: camera_sys.get_view_projection_matrix(),
+      camera_position: camera.get_position().into_homogeneous_point(),
+      view_projection: camera.get_view_projection_matrix(),
     }
   }
 }
@@ -89,25 +88,24 @@ pub struct Input {
 
 impl app::Application for Cubes {
   type Config = ();
-
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(screen_size.physical, &mut camera_settings);
+    let camera = Camera::new(viewport.physical, &mut camera_settings);
 
     let num_cubes_to_generate = 100_000;
     let cube_position_range = 1000.0;
     let mut rng = SmallRng::seed_from_u64(101702198783735);
 
-    let uniform_buffer = BufferBuilder::new()
+    let uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .label("Cubes uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
-      let buffer = BufferBuilder::new()
+      let buffer = BufferBuilder::default()
         .size((MAX_INSTANCES * size_of::<Instance>()) as BufferAddress)
         .storage_usage()
         .mapped_at_creation(true)
@@ -126,7 +124,7 @@ impl app::Application for Cubes {
     };
     let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
-    let static_bind_group = CombinedBindGroupBuilder::new()
+    let static_bind_group = CombinedBindGroupBuilder::default()
       .layout_entries(&[uniform_binding.layout, instance_binding.layout])
       .entries(&[uniform_binding.entry, instance_binding.entry])
       .layout_label("Cubes static bind group layout")
@@ -150,7 +148,7 @@ impl app::Application for Cubes {
         let cube_local = i % NUM_CUBE_INDICES;
         CUBE_INDICES[cube_local] + cube as u32 * NUM_CUBE_VERTICES as u32
       }).collect();
-      BufferBuilder::new()
+      BufferBuilder::default()
         .static_index_usage()
         .label("Cubes static index buffer")
         .build_with_data(&gfx.device, &data)
@@ -177,31 +175,26 @@ impl app::Application for Cubes {
     }
   }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.set_viewport(screen_size.physical);
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
+    self.camera.set_viewport(viewport.physical);
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    egui::Window::new("Cubes").constrain_to(gui.area_under_title_bar).show(&gui, |ui| {
+    gui.window("Cubes").show(&gui, |ui| {
       ui.grid("Grid", |ui| {
         ui.label("Cube instances");
         ui.add(DragValue::new(&mut self.num_cubes_to_generate).prefix("# ").speed(1000).clamp_range(0..=MAX_INSTANCES));
@@ -211,7 +204,6 @@ impl app::Application for Cubes {
         ui.end_row();
       });
       if ui.button("Regenerate").clicked() {
-        // OPTO: get mutable slice to buffer to prevent copy, but that requires use of the weird map_async API...
         let instances: Vec<_> = (0..self.num_cubes_to_generate)
           .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
           .collect();
@@ -220,16 +212,14 @@ impl app::Application for Cubes {
       }
     });
 
-    let mut render_pass = RenderPassBuilder::new()
-      .label("Cubes render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
-    render_pass.push_debug_group("Draw cubes");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
-    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
+    let mut pass = gfx_frame.render_pass_builder().label("Cubes render pass").begin();
+    pass.push_debug_group("Draw cubes");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
+    pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
     let num_indices = self.num_cubes * NUM_CUBE_INDICES as u32;
-    render_pass.draw_indexed(0..num_indices, 0, 0..1);
-    render_pass.pop_debug_group();
+    pass.draw_indexed(0..num_indices, 0, 0..1);
+    pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }

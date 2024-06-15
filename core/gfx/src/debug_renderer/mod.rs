@@ -5,7 +5,7 @@ use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BufferAddress, Features, PolygonMode, PrimitiveTopology, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 use wgpu::util::StagingBelt;
 
-use crate::{Gfx, include_spirv_shader, GfxFrame};
+use crate::{Gfx, GfxFrame, include_spirv_shader};
 use crate::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use crate::buffer::{BufferBuilder, GfxBuffer};
 use crate::debug_renderer::pipeline::{Pipeline, Vertex};
@@ -240,8 +240,8 @@ impl DebugRenderer {
     }
   }
 
-  pub fn render(&mut self, gfx: &Gfx, render: &mut GfxFrame, model_view_projection: Mat4) {
-    if self.point_list_pipeline.is_some() && self.line_list_pipeline.is_none() &&
+  pub fn render(&mut self, gfx: &Gfx, frame: &mut GfxFrame, model_view_projection: Mat4) {
+    if self.point_list_pipeline.is_none() && self.line_list_pipeline.is_none() &&
       self.line_strip_pipeline.is_none() && self.line_triangle_list_pipeline.is_none() {
       return; // Nothing to do
     }
@@ -251,39 +251,38 @@ impl DebugRenderer {
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform { model_view_projection }]);
 
     if let Some(pipeline) = &mut self.point_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_strip_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
     }
     if let Some(pipeline) = &mut self.line_triangle_list_pipeline {
-      pipeline.write_buffers_if_needed(gfx, &mut render.encoder, &mut self.staging_belt);
+      pipeline.write_buffers_if_needed(gfx, &mut frame.encoder, &mut self.staging_belt);
     }
 
-    let mut render_pass = render.render_pass_builder_without_depth_stencil()
+    let mut pass = frame.render_pass_builder()
       .label("Debug render pass")
       .load()
+      .depth_load()
       .begin();
-    render_pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
+    pass.set_bind_group(0, &self.uniform_bind_group.entry, &[]);
     if let Some(pipeline) = &mut self.point_list_pipeline {
-      pipeline.draw(&mut render_pass);
+      pipeline.draw(&mut pass);
     }
     if let Some(pipeline) = &mut self.line_list_pipeline {
-      pipeline.draw(&mut render_pass);
+      pipeline.draw(&mut pass);
     }
     if let Some(pipeline) = &mut self.line_strip_pipeline {
-      pipeline.draw(&mut render_pass);
+      pipeline.draw(&mut pass);
     }
     if let Some(pipeline) = &mut self.line_triangle_list_pipeline {
-      pipeline.draw(&mut render_pass);
+      pipeline.draw(&mut pass);
     }
 
     self.staging_belt.finish();
-
-    drop(render_pass);
   }
 }
 

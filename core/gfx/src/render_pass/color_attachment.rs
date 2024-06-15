@@ -23,14 +23,25 @@ impl<'pass> ColorAttachmentBuilder<'pass> {
   }
 
   #[inline]
-  pub fn resolve_target(mut self, resolve_target: Option<&'pass TextureView>) -> Self {
-    self.resolve_target = resolve_target;
+  pub fn resolve_target(mut self, resolve_target: &'pass TextureView) -> Self {
+    self.resolve_target = Some(resolve_target);
     self
   }
   #[inline]
   pub fn without_resolve_target(mut self) -> Self {
     self.resolve_target = None;
     self
+  }
+
+  #[inline]
+  pub fn maybe_multisample(self, view: &'pass TextureView, multisample_view: Option<&'pass TextureView>) -> Self {
+    if let Some(multisample_view) = multisample_view {
+      self
+        .view(multisample_view)
+        .resolve_target(view)
+    } else {
+      self.view(view)
+    }
   }
 
   #[inline]

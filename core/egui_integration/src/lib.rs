@@ -64,16 +64,16 @@ impl GuiIntegration {
   #[profiling::function]
   pub fn begin_frame(
     &mut self,
-    screen_size: ScreenSize,
+    viewport: ScreenSize,
     elapsed_time_in_seconds: f64,
     predicted_duration_in_seconds: f32,
   ) -> Context {
     let mut input = self.os.input();
 
-    let screen_rect = Rect::from_min_size(Pos2::ZERO, screen_size.physical.into());
+    let screen_rect = Rect::from_min_size(Pos2::ZERO, viewport.physical.into());
     input.screen_rect = Some(screen_rect);
 
-    let native_pixels_per_point: f64 = screen_size.scale.into();
+    let native_pixels_per_point: f64 = viewport.scale.into();
     if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
       viewport.native_pixels_per_point = Some(native_pixels_per_point as f32);
     }
@@ -124,11 +124,11 @@ impl GuiIntegration {
     device: &Device,
     queue: &Queue,
     clipped_primitives: Vec<ClippedPrimitive>,
-    screen_size: ScreenSize,
+    viewport: ScreenSize,
     output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
-    self.gfx.render(device, queue, clipped_primitives, screen_size, output_texture, encoder);
+    self.gfx.render(device, queue, clipped_primitives, viewport, output_texture, encoder);
   }
 
 
@@ -139,7 +139,7 @@ impl GuiIntegration {
     window: &Window,
     device: &Device,
     queue: &Queue,
-    screen_size: ScreenSize,
+    viewport: ScreenSize,
     output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
@@ -147,7 +147,7 @@ impl GuiIntegration {
     self.process_platform_output(window, full_output.platform_output);
     self.update_textures(device, queue, full_output.textures_delta);
     let clipped_primitives = self.tessellate(full_output.shapes, full_output.pixels_per_point);
-    self.render(device, queue, clipped_primitives, screen_size, output_texture, encoder);
+    self.render(device, queue, clipped_primitives, viewport, output_texture, encoder);
   }
 }
 

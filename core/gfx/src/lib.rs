@@ -29,11 +29,13 @@ pub mod full_screen_triangle;
 /// Fully initialized graphics instance: handles and data for rendering graphics.
 #[derive(Debug)]
 pub struct Gfx {
+  // DROP: drop `surface` before other fields. Dropping `surface` before `device` causes a segfault/UB.
+  pub surface: GfxSurface,
+
   pub instance: Instance,
   pub adapter: Adapter,
   pub device: Device,
   pub queue: Queue,
-  pub surface: GfxSurface,
 
   pub depth_stencil_texture: Option<GfxTexture>,
   pub multisample_output_texture: Option<GfxTexture>,
@@ -72,7 +74,7 @@ impl Gfx {
   /// - [depth_texture](RenderPipelineBuilder::depth_texture) if `depth_stencil_texture` is `Some`.
   /// - [multisample_count](RenderPipelineBuilder::multisample_count) from `sample_count`.
   /// - [surface_fragment_target](RenderPipelineBuilder::surface_fragment_target) from `surface`, which sets the
-  ///   fragment target to match the swapchain texture format.
+  ///   fragment target to match the output texture format.
   #[inline]
   pub fn render_pipeline_builder(&self) -> RenderPipelineBuilder {
     self.render_pipeline_builder_without_depth_stencil()
@@ -81,7 +83,7 @@ impl Gfx {
   /// Returns a preconfigured [RenderPipelineBuilder] with:
   /// - [multisample_count](RenderPipelineBuilder::multisample_count) from `sample_count`.
   /// - [surface_fragment_target](RenderPipelineBuilder::surface_fragment_target) from `surface`, which sets the
-  ///   fragment target to match the swapchain texture format.
+  ///   fragment target to match the output texture format.
   #[inline]
   pub fn render_pipeline_builder_without_depth_stencil(&self) -> RenderPipelineBuilder {
     RenderPipelineBuilder::default()
@@ -90,16 +92,16 @@ impl Gfx {
   }
 
   /// Resizes the surface (and thus corresponding swapchain textures), the depth-stencil texture if set, and the
-  /// multisampled framebuffer if set.
-  pub fn resize_surface(&mut self, size: ScreenSize) {
-    self.surface.resize(&self.adapter, &self.device, size);
+  /// multisample output texture if set.
+  pub fn resize(&mut self, viewport: ScreenSize) {
+    self.surface.resize(&self.adapter, &self.device, viewport);
     if let Some(depth_texture) = &mut self.depth_stencil_texture {
-      *depth_texture = TextureBuilder::new_depth(size.physical, depth_texture.format())
+      *depth_texture = TextureBuilder::new_depth(viewport.physical, depth_texture.format())
         .with_sample_count(self.sample_count)
         .build(&self.device);
     }
-    if let Some(multisampled_framebuffer) = &mut self.multisample_output_texture {
-      *multisampled_framebuffer = TextureBuilder::new_multisampled_framebuffer(&self.surface, self.sample_count)
+    if let Some(multisample_output_texture) = &mut self.multisample_output_texture {
+      *multisample_output_texture = TextureBuilder::new_multisampled_framebuffer(&self.surface, self.sample_count)
         .build(&self.device);
     }
   }
@@ -110,8 +112,8 @@ impl Gfx {
 pub struct GfxFrame<'a> {
   /// Convenient reference back to graphics facade.
   pub gfx: &'a Gfx,
-  /// Current size of the screen/window/viewport.
-  pub screen_size: ScreenSize,
+  /// Current size of the viewport.
+  pub viewport: ScreenSize,
   /// Texture to output pixels to.
   pub output_texture: TextureView,
   /// Primary command encoder for recording GPU operations.
@@ -122,15 +124,13 @@ impl<'a> GfxFrame<'a> {
   #[inline]
   pub fn render_pass_builder(&mut self) -> SingleRenderPassBuilder {
     SingleRenderPassBuilder::new(&mut self.encoder)
-      .view(&self.output_texture)
-      .resolve_target(self.gfx.multisample_output_texture_view())
-      .depth_reverse_z(self.gfx.depth_stencil_texture_view())
+      .maybe_multisample(&self.output_texture, self.gfx.multisample_output_texture_view())
+      .maybe_depth_reverse_z(self.gfx.depth_stencil_texture_view())
   }
   #[inline]
   pub fn render_pass_builder_without_depth_stencil(&mut self) -> SingleRenderPassBuilder {
     SingleRenderPassBuilder::new(&mut self.encoder)
-      .view(&self.output_texture)
-      .resolve_target(self.gfx.multisample_output_texture_view())
+      .maybe_multisample(&self.output_texture, self.gfx.multisample_output_texture_view())
   }
 }
 

@@ -226,7 +226,7 @@ impl Camera {
   #[inline]
   pub fn get_view_matrix(&self) -> Mat4 { self.view }
 
-  /// Gets the inversed view matrix.
+  /// Gets the inverse view matrix.
   #[inline]
   pub fn get_view_inverse_matrix(&self) -> Mat4 { self.view_inverse }
 
@@ -234,7 +234,7 @@ impl Camera {
   #[inline]
   pub fn get_view_projection_matrix(&self) -> Mat4 { self.view_projection }
 
-  /// Gets the inversed view-projection matrix.
+  /// Gets the inverse view-projection matrix.
   #[inline]
   pub fn get_view_projection_inverse_matrix(&self) -> Mat4 { self.view_projection_inverse }
 

@@ -45,11 +45,10 @@ const EXTENDS: f32 = C2::CELLS_IN_CHUNK_ROW_F32 / 2.0;
 
 impl app::Application for SurfaceNetsDemo {
   type Config = Config;
-
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut config: Self::Config) -> Self {
     config.update_default_camera_settings();
 
-    let camera = Camera::new(screen_size.physical, &mut config.camera_settings);
+    let camera = Camera::new(viewport.physical, &mut config.camera_settings);
     let camera_uniform = CameraUniform::from_camera(&camera);
 
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
@@ -77,31 +76,25 @@ impl app::Application for SurfaceNetsDemo {
       voxel_renderer,
     }
   }
-
   fn into_config(self) -> Self::Config {
     self.config
   }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.set_viewport(screen_size.physical);
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
+    self.camera.set_viewport(viewport.physical);
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.config.camera_debugging.add_to_menu(ui);
   }
 
-
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
     self.config.camera_debugging.show(&gui, &self.camera, &mut self.config.camera_settings);
     self.camera.update(&mut self.config.camera_settings, &input.camera, frame.duration);
@@ -109,12 +102,9 @@ impl app::Application for SurfaceNetsDemo {
 
     // Debug GUI
     self.config.surface_nets_debugging.show(&gui);
-    egui::Window::new("Demo")
-      .constrain_to(gui.area_under_title_bar)
-      .anchor(Align2::LEFT_BOTTOM, egui::Vec2::default())
-      .show(&gui, |ui| {
-        self.config.light_settings.render_gui(ui, self.camera.get_direction_inverse());
-      });
+    gui.window("Demo").anchor(Align2::LEFT_BOTTOM, egui::Vec2::default()).show(&gui, |ui| {
+      self.config.light_settings.render_gui(ui, self.camera.get_direction_inverse());
+    });
 
     // Write uniforms
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
@@ -124,12 +114,7 @@ impl app::Application for SurfaceNetsDemo {
     self.debug_renderer.clear();
     let mut chunk_vertices = ChunkMesh::new();
     self.config.surface_nets_debugging.extract_chunk_and_debug_draw(&mut chunk_vertices, &mut self.debug_renderer);
-    self.voxel_renderer.render_chunk_vertices(
-      gfx,
-      &mut render,
-      true,
-      &chunk_vertices,
-    );
+    self.voxel_renderer.render_chunk_vertices(gfx, &mut gfx_frame, true, &chunk_vertices);
 
     // Debug rendering.
     self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
@@ -138,7 +123,7 @@ impl app::Application for SurfaceNetsDemo {
       chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    self.debug_renderer.render(gfx, &mut render, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut gfx_frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }

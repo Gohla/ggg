@@ -46,31 +46,30 @@ impl app::Application for VoxelPlanets {
   type Config = Settings;
 
   #[profiling::function]
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut config: Self::Config) -> Self {
-    config.update_default_camera_settings();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut settings: Self::Config) -> Self {
+    settings.update_default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let viewport = screen_size.physical;
-    let camera_0 = Camera::new(viewport, &mut config.camera_settings[0]);
-    let camera_1 = Camera::new(viewport, &mut config.camera_settings[1]);
+    let camera_0 = Camera::new(viewport.physical, &mut settings.camera_settings[0]);
+    let camera_1 = Camera::new(viewport.physical, &mut settings.camera_settings[1]);
     let cameras = vec![camera_0, camera_1];
-    let selected_camera = config.camera_debugging.get_selected_camera(&cameras);
+    let selected_camera = settings.camera_debugging.get_selected_camera(&cameras);
     let camera_uniform = CameraUniform::from_camera(selected_camera);
 
     let stars_renderer = StarsRenderer::new(gfx, selected_camera.get_view_inverse_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
-      config.light.uniform,
+      settings.light.uniform,
       ModelUniform::identity(),
       None,
       StagingBelt::new(4096 * 1024), // 4 MiB staging belt
     );
 
-    let lod_render_data_manager = config.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
+    let lod_render_data_manager = settings.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
 
     Self {
-      settings: config,
+      settings,
 
       cameras,
       camera_uniform,
@@ -83,31 +82,25 @@ impl app::Application for VoxelPlanets {
       lod_render_data: LodRenderData::default(),
     }
   }
-
   fn into_config(self) -> Self::Config { self.settings }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
     for camera in &mut self.cameras {
-      camera.set_viewport(screen_size.physical);
+      camera.set_viewport(viewport.physical);
     }
-    self.stars_renderer.screen_resize(screen_size);
+    self.stars_renderer.resize_viewport(viewport);
   }
 
-
   type Input = Input;
-
   #[profiling::function]
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.settings.camera_debugging.add_to_menu(ui);
   }
-
 
   #[profiling::function]
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
@@ -119,8 +112,7 @@ impl app::Application for VoxelPlanets {
     let camera_direction_inverse = camera.get_direction_inverse();
     let camera_view_inverse_matrix = camera.get_view_inverse_matrix();
 
-    let (recreate_lod_render_data_manager, update_lod_render_data) = egui::Window::new("Voxel Planets")
-      .constrain_to(gui.area_under_title_bar)
+    let (recreate_lod_render_data_manager, update_lod_render_data) = gui.window("Voxel Planets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
       .auto_sized()
       .show(&gui, |ui| {
@@ -153,12 +145,7 @@ impl app::Application for VoxelPlanets {
     self.voxel_renderer.update_light_uniform(&gfx.queue, self.settings.light.uniform);
     let model = self.lod_render_data.model;
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
-    self.voxel_renderer.render_lod_mesh(
-      gfx,
-      &mut gfx_frame,
-      false,
-      &self.lod_render_data,
-    );
+    self.voxel_renderer.render_lod_mesh(gfx, &mut gfx_frame, false, &self.lod_render_data);
 
     // LOD render data debug draw (last so it draws over everything)
     self.lod_render_data_manager.debug_render(gfx, &mut gfx_frame, camera_view_projection, &self.lod_render_data);

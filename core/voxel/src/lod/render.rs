@@ -20,7 +20,7 @@ pub trait LodRenderDataManager<C: ChunkSize> {
     data: &mut LodRenderData,
   );
 
-  fn debug_render(&mut self, gfx: &Gfx, render: &mut GfxFrame, view_projection_matrix: Mat4, data: &LodRenderData);
+  fn debug_render(&mut self, gfx: &Gfx, frame: &mut GfxFrame, view_projection_matrix: Mat4, data: &LodRenderData);
 
   fn get_mesh_manager_parameters_mut(&mut self) -> &mut dyn LodChunkMeshManagerParameters;
 }
@@ -156,8 +156,8 @@ impl<C: ChunkSize, E: LodExtractor<C>, MM> LodRenderDataManager<C> for SimpleLod
   }
 
   #[inline]
-  fn debug_render(&mut self, gfx: &Gfx, render: &mut GfxFrame, view_projection_matrix: Mat4, data: &LodRenderData) {
-    self.debug_renderer.render(gfx, render, view_projection_matrix * data.model);
+  fn debug_render(&mut self, gfx: &Gfx, frame: &mut GfxFrame, view_projection_matrix: Mat4, data: &LodRenderData) {
+    self.debug_renderer.render(gfx, frame, view_projection_matrix * data.model);
   }
 
   #[inline]

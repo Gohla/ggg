@@ -15,7 +15,6 @@ use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
 use gfx::camera::debug::CameraDebugging;
-use gfx::render_pass::RenderPassBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
 use os::Os;
@@ -109,7 +108,6 @@ pub struct Input {
 
 impl app::Application for Quads {
   type Config = ();
-
   fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
@@ -122,12 +120,12 @@ impl app::Application for Quads {
         .with_texture_view_label("Cobblestone diffuse texture view")
         .build(&gfx.device);
       texture.write_2d_rgba_image(&gfx.queue, image);
-      let sampler = SamplerBuilder::new()
+      let sampler = SamplerBuilder::default()
         .label("Cobblestone diffuse sampler")
         .build(&gfx.device);
       let texture_binding = texture.binding(0, ShaderStages::FRAGMENT);
       let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
-      CombinedBindGroupBuilder::new()
+      CombinedBindGroupBuilder::default()
         .layout_entries(&[texture_binding.layout, sampler_binding.layout])
         .entries(&[texture_binding.entry, sampler_binding.entry])
         .layout_label("Cobblestone diffuse bind group layout")
@@ -135,7 +133,7 @@ impl app::Application for Quads {
         .build(&gfx.device)
     };
 
-    let uniform_buffer = BufferBuilder::new()
+    let uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
@@ -158,11 +156,11 @@ impl app::Application for Quads {
       .vertex_buffer_layouts(&[Vertex::buffer_layout(), Instance::buffer_layout()])
       .fragment_module(&fragment_shader_module)
       .build(&gfx.device);
-    let vertex_buffer = BufferBuilder::new()
+    let vertex_buffer = BufferBuilder::default()
       .static_vertex_usage()
       .label("Quad static vertex buffer")
       .build_with_data(&gfx.device, VERTICES);
-    let index_buffer = BufferBuilder::new()
+    let index_buffer = BufferBuilder::default()
       .static_index_usage()
       .label("Quad static index buffer")
       .build_with_data(&gfx.device, INDICES);
@@ -175,7 +173,7 @@ impl app::Application for Quads {
         Instance::from_isometry(Isometry3::new(translation, rotation))
       })
     }).collect();
-    let instance_buffer = BufferBuilder::new()
+    let instance_buffer = BufferBuilder::default()
       .static_vertex_usage()
       .label("Quads instance buffer")
       .build_with_data(&gfx.device, &instances);
@@ -198,45 +196,41 @@ impl app::Application for Quads {
     }
   }
 
-
-  fn screen_resize(&mut self, _os: &Os, _gfx: &Gfx, screen_size: ScreenSize) {
-    self.camera.set_viewport(screen_size.physical);
+  fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
+    self.camera.set_viewport(viewport.physical);
   }
 
-
   type Input = Input;
-
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera = CameraInput::from(&input);
     Input { camera }
   }
 
-
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
     self.camera_debugging.add_to_menu(ui);
   }
 
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
-    egui::Window::new("Quads").constrain_to(gui.area_under_title_bar).show(&gui, |ui| {
+    gui.window("Quads").show(&gui, |ui| {
       ui.label("Hello, world!");
     });
 
-    let mut render_pass = RenderPassBuilder::new()
+    let mut pass = gfx_frame.render_pass_builder()
       .label("Quads render pass")
-      .begin_render_pass_for_gfx_frame_with_clear(gfx, &mut render, true);
-    render_pass.push_debug_group("Draw quads");
-    render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.set_bind_group(0, &self.diffuse_bind_group.entry, &[]);
-    render_pass.set_bind_group(1, &self.uniform_bind_group.entry, &[]);
-    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
-    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-    render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
-    render_pass.pop_debug_group();
+      .begin();
+    pass.push_debug_group("Draw quads");
+    pass.set_pipeline(&self.render_pipeline);
+    pass.set_bind_group(0, &self.diffuse_bind_group.entry, &[]);
+    pass.set_bind_group(1, &self.uniform_bind_group.entry, &[]);
+    pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+    pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+    pass.draw_indexed(0..INDICES.len() as u32, 0, 0..NUM_INSTANCES);
+    pass.pop_debug_group();
     Box::new(std::iter::empty())
   }
 }

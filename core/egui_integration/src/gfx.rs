@@ -204,7 +204,7 @@ impl GuiGfx {
     device: &Device,
     queue: &Queue,
     clipped_primitives: Vec<ClippedPrimitive>,
-    screen_size: ScreenSize,
+    viewport: ScreenSize,
     output_texture: &TextureView,
     encoder: &mut CommandEncoder,
   ) {
@@ -219,7 +219,7 @@ impl GuiGfx {
     let vertex_buffer = self.vertex_buffer.ensure_minimum_size(device, (vertex_count * size_of::<Vertex>()) as BufferAddress);
 
     // Write to buffers and create draw list.
-    self.uniform_buffer.write_all_data(queue, &[Uniform::from_screen_size(screen_size)]);
+    self.uniform_buffer.write_all_data(queue, &[Uniform::from_viewport(viewport)]);
     let mut index_offset = 0;
     let mut index_buffer_offset = 0;
     let mut vertex_offset = 0;
@@ -256,10 +256,10 @@ impl GuiGfx {
       render_pass.set_pipeline(&self.render_pipeline);
       render_pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
       render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
-      let scale_factor: f64 = screen_size.scale.into();
+      let scale_factor: f64 = viewport.scale.into();
       let scale_factor = scale_factor as f32;
-      let physical_width = screen_size.physical.width as u32;
-      let physical_height = screen_size.physical.height as u32;
+      let physical_width = viewport.physical.width as u32;
+      let physical_height = viewport.physical.height as u32;
       for Draw { clip_rect, texture_id, indices, base_vertex } in draws {
         // Taken from:
         // - https://github.com/hasenbanck/egui_wgpu_backend/blob/5f33cf76d952c67bdbe7bd4ed01023899d3ac996/src/lib.rs#L272-L305
@@ -333,12 +333,12 @@ impl GuiGfx {
 #[derive(Default, Copy, Clone, Debug, Pod, Zeroable)]
 struct Uniform {
   // Note: array of size 4 due to alignment requirements for uniform buffers.
-  screen_size: [f32; 4],
+  viewport: [f32; 4],
 }
 impl Uniform {
   #[inline]
-  fn from_screen_size(screen_size: ScreenSize) -> Self {
-    Self { screen_size: [screen_size.logical.width as f32, screen_size.logical.height as f32, 0.0, 0.0] }
+  fn from_viewport(viewport: ScreenSize) -> Self {
+    Self { viewport: [viewport.logical.width as f32, viewport.logical.height as f32, 0.0, 0.0] }
   }
 }
 

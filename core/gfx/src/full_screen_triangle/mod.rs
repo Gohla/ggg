@@ -26,7 +26,7 @@ impl FullScreenTriangle {
   }
 
   #[inline]
-  pub fn draw(&self, render_pass: &mut RenderPass) {
-    render_pass.draw(0..3, 0..1);
+  pub fn draw(&self, pass: &mut RenderPass) {
+    pass.draw(0..3, 0..1);
   }
 }

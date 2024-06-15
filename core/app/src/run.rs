@@ -119,7 +119,7 @@ struct Runner<A> {
   updates: Updates,
   timing_stats: TimingStats,
 
-  screen_size: ScreenSize,
+  viewport: ScreenSize,
   resized: bool,
   minimized: bool,
 }
@@ -179,8 +179,8 @@ impl<A: Application> Runner<A> {
       label: Some("Device"),
       ..DeviceDescriptor::default()
     }, None).await?;
-    let screen_size = window.inner_size();
-    let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, screen_size);
+    let viewport = window.inner_size();
+    let surface = GfxSurface::new(surface, &adapter, &device, options.graphics_swap_chain_present_mode, viewport);
     tracing::debug!(configuration = ?surface.get_configuration(), "Created GFX surface");
 
     let egui_memory = config::deserialize_config::<egui::Memory>(os.directories.config_dir(), &config::EGUI_FILE_PATH);
@@ -188,21 +188,21 @@ impl<A: Application> Runner<A> {
 
     let sample_count = options.sample_count;
     let depth_stencil_texture = options.depth_stencil_texture_format.map(|format| {
-      TextureBuilder::new_depth(screen_size.physical, format)
+      TextureBuilder::new_depth(viewport.physical, format)
         .with_sample_count(sample_count)
         .build(&device)
     });
-    let multisampled_framebuffer = if options.sample_count > 1 {
+    let multisample_output_texture = if options.sample_count > 1 {
       Some(TextureBuilder::new_multisampled_framebuffer(&surface, sample_count)
         .with_texture_label("Multisampling texture")
         .with_texture_view_label("Multisampling texture view")
         .build(&device)
       )
     } else { None };
-    let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisample_output_texture: multisampled_framebuffer, sample_count };
+    let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisample_output_texture, sample_count };
 
     let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
-    let app = A::new(&os, &gfx, screen_size, config.app_config);
+    let app = A::new(&os, &gfx, viewport, config.app_config);
 
     let run = Self {
       os,
@@ -217,7 +217,7 @@ impl<A: Application> Runner<A> {
       updates: Updates::new(Offset::from_nanoseconds(16_666_667)),
       timing_stats: TimingStats::new(),
 
-      screen_size,
+      viewport,
       resized: false,
       minimized: false,
     };
@@ -269,8 +269,8 @@ impl<A: Application> Runner<A> {
           self.gui_integration.process_window_focus_event(window_has_focus);
         }
         Event::WindowSizeChange(inner_size) => {
-          self.screen_size = inner_size;
-          if self.screen_size.is_zero() {
+          self.viewport = inner_size;
+          if self.viewport.is_zero() {
             self.minimized = true;
           } else {
             self.minimized = false;
@@ -284,8 +284,8 @@ impl<A: Application> Runner<A> {
     // Recreate swap chain if needed
     if self.resized {
       if !self.minimized {
-        self.gfx.resize_surface(self.screen_size);
-        self.app.screen_resize(&self.os, &self.gfx, self.screen_size);
+        self.gfx.resize(self.viewport);
+        self.app.viewport_resize(&self.os, &self.gfx, self.viewport);
       }
       self.resized = false;
     }
@@ -300,7 +300,7 @@ impl<A: Application> Runner<A> {
 
     // Create GUI frame
     let gui = if !self.minimized {
-      let context = self.gui_integration.begin_frame(self.screen_size, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
+      let context = self.gui_integration.begin_frame(self.viewport, elapsed.into_seconds(), frame.duration.into_seconds() as f32);
 
       // If the GUI is capturing keyboard and/or mouse inputs, prevent the app from capturing those inputs.
       if gui_process_keyboard && context.wants_keyboard_input() {
@@ -374,7 +374,7 @@ impl<A: Application> Runner<A> {
     let encoder = self.gfx.device.create_default_command_encoder();
     let mut gfx_frame = GfxFrame {
       gfx: &self.gfx,
-      screen_size: self.screen_size,
+      viewport: self.viewport,
       output_texture,
       encoder,
     };
@@ -391,7 +391,7 @@ impl<A: Application> Runner<A> {
     let additional_command_buffers = self.app.render(render_input);
 
     // End GUI frame, handle output, and render.
-    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &gfx_frame.output_texture, &mut gfx_frame.encoder);
+    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.viewport, &gfx_frame.output_texture, &mut gfx_frame.encoder);
 
     // Submit command buffers
     let command_buffer = gfx_frame.encoder.finish();

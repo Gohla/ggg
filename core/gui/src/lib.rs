@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use egui::{Context, Rect};
+use egui::{Context, Rect, WidgetText, Window};
 
 pub mod widget;
 
@@ -15,4 +15,12 @@ impl Deref for Gui {
   type Target = Context;
   #[inline]
   fn deref(&self) -> &Self::Target { &self.context }
+}
+
+impl Gui {
+  #[inline]
+  pub fn window(&self, title: impl Into<WidgetText>) -> Window {
+    Window::new(title)
+      .constrain_to(self.area_under_title_bar)
+  }
 }
