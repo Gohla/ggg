@@ -110,7 +110,7 @@ impl app::Application for VoxelPlanets {
 
 
   #[profiling::function]
-  fn render<'app, 'frame>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'app, 'frame, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     self.settings.camera_debugging.show_multiple_cameras(&gui, &self.cameras, &mut self.settings.camera_settings);
     let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
     camera.update(camera_settings, &input.camera, frame.duration);
@@ -146,7 +146,7 @@ impl app::Application for VoxelPlanets {
     }
 
     // Render stars
-    self.stars_renderer.render(gfx, &mut render, camera_view_inverse_matrix, &self.settings.stars_renderer_settings);
+    self.stars_renderer.render(gfx, &mut gfx_frame, camera_view_inverse_matrix, &self.settings.stars_renderer_settings);
 
     // Render voxels
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
@@ -155,13 +155,13 @@ impl app::Application for VoxelPlanets {
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
     self.voxel_renderer.render_lod_mesh(
       gfx,
-      &mut render,
+      &mut gfx_frame,
       false,
       &self.lod_render_data,
     );
 
     // LOD render data debug draw (last so it draws over everything)
-    self.lod_render_data_manager.debug_render(gfx, &mut render, camera_view_projection, &self.lod_render_data);
+    self.lod_render_data_manager.debug_render(gfx, &mut gfx_frame, camera_view_projection, &self.lod_render_data);
 
     Box::new(std::iter::empty())
   }

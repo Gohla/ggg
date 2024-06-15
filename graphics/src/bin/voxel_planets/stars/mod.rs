@@ -4,7 +4,7 @@ use ultraviolet::{Mat4, Vec4};
 use wgpu::{RenderPipeline, ShaderStages};
 
 use common::screen::ScreenSize;
-use gfx::{Gfx, include_spirv_shader_for_bin, Render};
+use gfx::{Gfx, include_spirv_shader_for_bin, GfxFrame};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::full_screen_triangle::FullScreenTriangle;
@@ -85,7 +85,7 @@ impl StarsRenderer {
   pub fn render(
     &mut self,
     gfx: &Gfx,
-    render: &mut Render,
+    render: &mut GfxFrame,
     view_inverse_matrix: Mat4,
     settings: &StarsRendererSettings,
   ) {

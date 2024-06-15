@@ -128,7 +128,7 @@ impl app::Application for RayTracing {
   }
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, frame, elapsed, input, mut render, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, frame, elapsed, input, gfx_frame: mut render, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     let duration = frame.duration.into_seconds() as f32;
     if input.forward { self.camera_origin.z -= 1.0 * duration; }
     if input.backward { self.camera_origin.z += 1.0 * duration; }

@@ -10,7 +10,7 @@ use wgpu::{CreateSurfaceError, DeviceDescriptor, Instance, InstanceDescriptor, R
 use common::screen::ScreenSize;
 use common::time::{Offset, Stopwatch};
 use egui_integration::GuiIntegration;
-use gfx::{Gfx, Render};
+use gfx::{Gfx, GfxFrame};
 use gfx::prelude::*;
 use gfx::surface::GfxSurface;
 use gfx::texture::TextureBuilder;
@@ -372,7 +372,7 @@ impl<A: Application> Runner<A> {
 
     // Render application
     let encoder = self.gfx.device.create_default_command_encoder();
-    let mut render = Render {
+    let mut gfx_frame = GfxFrame {
       gfx: &self.gfx,
       screen_size: self.screen_size,
       output_texture,
@@ -383,7 +383,7 @@ impl<A: Application> Runner<A> {
       gfx: &self.gfx,
       elapsed,
       frame,
-      render: &mut render,
+      gfx_frame: &mut gfx_frame,
       extrapolate: self.updates.accumulated_lag,
       gui: gui.unwrap(),
       input: &input,
@@ -391,10 +391,10 @@ impl<A: Application> Runner<A> {
     let additional_command_buffers = self.app.render(render_input);
 
     // End GUI frame, handle output, and render.
-    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &render.output_texture, &mut render.encoder);
+    self.gui_integration.end_frame_and_handle(&self.window, &self.gfx.device, &self.gfx.queue, self.screen_size, &gfx_frame.output_texture, &mut gfx_frame.encoder);
 
     // Submit command buffers
-    let command_buffer = render.encoder.finish();
+    let command_buffer = gfx_frame.encoder.finish();
     let command_buffers = std::iter::once(command_buffer).chain(additional_command_buffers);
     self.gfx.queue.submit(command_buffers);
 

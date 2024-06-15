@@ -101,7 +101,7 @@ impl app::Application for SurfaceNetsDemo {
   }
 
 
-  fn render<'a>(&mut self, RenderInput { gfx, frame, input, mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
+  fn render<'a>(&mut self, RenderInput { gfx, frame, input, gfx_frame: mut render, gui, .. }: RenderInput<'a, Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
     self.config.camera_debugging.show(&gui, &self.camera, &mut self.config.camera_settings);
     self.camera.update(&mut self.config.camera_settings, &input.camera, frame.duration);

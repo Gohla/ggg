@@ -26,7 +26,7 @@ pub mod fmt_math;
 pub mod debug_renderer;
 pub mod full_screen_triangle;
 
-/// Fully initialized graphics facade: handles and data for rendering graphics.
+/// Fully initialized graphics instance: handles and data for rendering graphics.
 #[derive(Debug)]
 pub struct Gfx {
   pub instance: Instance,
@@ -105,29 +105,29 @@ impl Gfx {
   }
 }
 
-/// Data and handles for rendering a frame.
+/// Handles and data for rendering graphics in a single frame.
 #[derive(Debug)]
-pub struct Render<'app> {
+pub struct GfxFrame<'a> {
   /// Convenient reference back to graphics facade.
-  pub gfx: &'app Gfx,
+  pub gfx: &'a Gfx,
   /// Current size of the screen/window/viewport.
   pub screen_size: ScreenSize,
   /// Texture to output pixels to.
-  pub output_texture:TextureView,
+  pub output_texture: TextureView,
   /// Primary command encoder for recording GPU operations.
-  pub encoder:CommandEncoder,
+  pub encoder: CommandEncoder,
 }
 
-impl<'app, 'frame> Render<'app> {
+impl<'a> GfxFrame<'a> {
   #[inline]
-  pub fn render_pass_builder(&'frame mut self) -> SingleRenderPassBuilder<'frame, '_> {
+  pub fn render_pass_builder(&mut self) -> SingleRenderPassBuilder {
     SingleRenderPassBuilder::new(&mut self.encoder)
       .view(&self.output_texture)
       .resolve_target(self.gfx.multisample_output_texture_view())
       .depth_reverse_z(self.gfx.depth_stencil_texture_view())
   }
   #[inline]
-  pub fn render_pass_builder_without_depth_stencil(&'frame mut self) -> SingleRenderPassBuilder<'frame, '_> {
+  pub fn render_pass_builder_without_depth_stencil(&mut self) -> SingleRenderPassBuilder {
     SingleRenderPassBuilder::new(&mut self.encoder)
       .view(&self.output_texture)
       .resolve_target(self.gfx.multisample_output_texture_view())

@@ -6,7 +6,7 @@ use wgpu::{Backends, CommandBuffer, Features, Limits, PowerPreference, PresentMo
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use common::time::Offset;
-use gfx::{Gfx, Render};
+use gfx::{Gfx, GfxFrame};
 use gui::Gui;
 use os::{ApplicationOptions, Os};
 pub use run::RunError;
@@ -38,7 +38,8 @@ pub struct Step {
   pub target_duration: Offset,
 }
 
-/// Input for [Application::render].
+/// Input for [Application::render]. Lifetime `'app` lives for the duration of the application, whereas, whereas
+/// `'frame` only lives as long as a single frame.
 pub struct RenderInput<'app, 'frame, A: Application> {
   /// Fully initialized operating system facade.
   pub os: &'app Os,
@@ -52,7 +53,7 @@ pub struct RenderInput<'app, 'frame, A: Application> {
   /// Application input for the current frame.
   pub input: &'frame A::Input,
   /// Handles and data for rendering a frame.
-  pub render: &'frame mut Render<'app>,
+  pub gfx_frame: &'frame mut GfxFrame<'app>,
   /// Handles and data for creating GUIs.
   pub gui: Gui,
   /// The amount of time the simulated representation is behind the rendered representation. Extrapolation is required

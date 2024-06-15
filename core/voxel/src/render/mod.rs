@@ -1,7 +1,7 @@
 use wgpu::{Face, IndexFormat, Queue, RenderPass, RenderPipeline, ShaderStages};
 use wgpu::util::StagingBelt;
 
-use gfx::{Gfx, include_spirv_shader, Render};
+use gfx::{Gfx, GfxFrame, include_spirv_shader};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
@@ -102,10 +102,10 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  pub fn render_lod_mesh<'app, 'frame>(
+  pub fn render_lod_mesh(
     &mut self,
     gfx: &Gfx,
-    frame: &'frame mut Render<'app>,
+    frame: &mut GfxFrame,
     clear: bool,
     lod_mesh: &LodRenderData,
   ) {
@@ -126,10 +126,10 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  pub fn render_chunk_vertices<'a>(
+  pub fn render_chunk_vertices(
     &mut self,
     gfx: &Gfx,
-    frame: &'a mut Render<'a>,
+    frame: &mut GfxFrame,
     clear: bool,
     chunk_vertices: &ChunkMesh,
   ) {
@@ -148,11 +148,8 @@ impl VoxelRenderer {
   }
 
   #[profiling::function]
-  fn create_render_pass<'app, 'frame>(
-    render: &'frame mut Render<'app>,
-    clear: bool,
-  ) -> RenderPass<'frame> {
-    render.render_pass_builder()
+  fn create_render_pass<'a>(frame: &'a mut GfxFrame, clear: bool) -> RenderPass<'a> {
+    frame.render_pass_builder()
       .label("Voxel render pass")
       .clear_default_or_load(clear)
       .begin()
