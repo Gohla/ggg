@@ -3,6 +3,18 @@ use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, Bind
 pub mod layout_entry;
 pub mod entry;
 
+pub struct CombinedBinding<'a> {
+  pub layout: BindGroupLayoutEntry,
+  pub entry: BindGroupEntry<'a>,
+}
+impl<'a> CombinedBinding<'a> {
+  #[inline]
+  pub fn new(layout: BindGroupLayoutEntry, entry: BindGroupEntry<'a>) -> Self {
+    Self { layout, entry }
+  }
+}
+
+
 // Bind group layout creation
 
 pub struct BindGroupLayoutBuilder<'a> {
@@ -37,6 +49,7 @@ impl<'a> BindGroupLayoutBuilder<'a> {
     device.create_bind_group_layout(&self.descriptor)
   }
 }
+
 
 // Bind group creation
 
@@ -73,6 +86,7 @@ impl<'a> BindGroupBuilder<'a> {
     device.create_bind_group(&self.descriptor)
   }
 }
+
 
 // Combined bind group (layout) creation
 

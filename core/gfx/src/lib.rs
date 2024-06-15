@@ -45,7 +45,7 @@ impl Gfx {
   /// Returns the depth-stencil texture format if a depth-stencil texture was set.
   #[inline]
   pub fn depth_stencil_format(&self) -> Option<TextureFormat> {
-    self.depth_stencil_texture.as_ref().map(|t| t.format)
+    self.depth_stencil_texture.as_ref().map(|t| t.format())
   }
 
 
@@ -76,7 +76,7 @@ impl Gfx {
   pub fn resize_surface(&mut self, size: ScreenSize) {
     self.surface.resize(&self.adapter, &self.device, size);
     if let Some(depth_texture) = &mut self.depth_stencil_texture {
-      *depth_texture = TextureBuilder::new_depth(size.physical, depth_texture.format)
+      *depth_texture = TextureBuilder::new_depth(size.physical, depth_texture.format())
         .with_sample_count(self.sample_count)
         .build(&self.device);
     }

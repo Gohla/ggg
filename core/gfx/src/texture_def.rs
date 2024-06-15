@@ -1,12 +1,12 @@
 use image::{DynamicImage, GenericImageView};
 use thiserror::Error;
-use wgpu::{BindGroup, BindGroupLayout, Device, Extent3d, Queue, Sampler, ShaderStages};
+use wgpu::{BindGroup, BindGroupLayout, Device, Extent3d, Queue, ShaderStages};
 
 use common::idx_assigner;
 use common::idx_assigner::IdxAssigner;
 
 use crate::bind_group::CombinedBindGroupLayoutBuilder;
-use crate::sampler::{SamplerBuilder, SamplerBuilderSamplerEx};
+use crate::sampler::{GfxSampler, SamplerBuilder};
 use crate::texture::{GfxTexture, TextureBuilder};
 
 // Creation
@@ -67,19 +67,19 @@ impl ArrayTextureDefBuilder {
       .with_texture_label(texture_label)
       .with_texture_view_label(texture_view_label)
       .build(device);
-    let (texture_layout_entry, texture_bind_group_entry) = texture.create_default_float_2d_array_bind_group_entries(0, ShaderStages::FRAGMENT);
+    let texture_binding = texture.binding(0, ShaderStages::FRAGMENT);
     for (idx, data) in self.data.into_iter().enumerate() {
       let data = data.into_rgba8();
       let (width, height) = data.dimensions();
       texture.write_texture_data(queue, data.as_raw(), 0, Some(width * 4), None, Extent3d { width, height, depth_or_array_layers: idx as u32 });
     }
     let sampler = SamplerBuilder::new()
-      .with_label(sampler_label)
+      .label(sampler_label)
       .build(device);
-    let (sampler_layout_entry, sampler_bind_group_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
+    let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
     let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[texture_layout_entry, sampler_layout_entry])
-      .with_entries(&[texture_bind_group_entry, sampler_bind_group_entry])
+      .with_layout_entries(&[texture_binding.layout, sampler_binding.layout])
+      .with_entries(&[texture_binding.entry, sampler_binding.entry])
       .with_layout_label(bind_group_layout_label)
       .with_label(bind_group_label)
       .build(device);
@@ -96,7 +96,7 @@ impl ArrayTextureDefBuilder {
 
 pub struct ArrayTextureDef {
   pub texture: GfxTexture,
-  pub sampler: Sampler,
+  pub sampler: GfxSampler,
   pub bind_group_layout: BindGroupLayout,
   pub bind_group: BindGroup,
 }

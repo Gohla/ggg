@@ -16,7 +16,6 @@ use gfx::bind_group::layout_entry::BindGroupLayoutEntryBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::growable_buffer::{GrowableBuffer, GrowableBufferBuilder};
 use gfx::include_spirv_shader;
-use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::render_pipeline::RenderPipelineBuilder;
 use gfx::sampler::SamplerBuilder;
@@ -81,16 +80,16 @@ impl Gui {
       uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
 
     let sampler = SamplerBuilder::new()
-      .with_mag_filter(FilterMode::Linear)
-      .with_min_filter(FilterMode::Linear)
-      .with_label("GUI texture sampler")
+      .mag_filter(FilterMode::Linear)
+      .min_filter(FilterMode::Linear)
+      .label("GUI texture sampler")
       .build(device);
-    let (sampler_bind_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
+    let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_bind_layout_entry])
+      .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_binding.layout])
       .with_layout_label("GUI static bind group layout")
-      .with_entries(&[uniform_buffer_bind_entry, sampler_bind_entry])
+      .with_entries(&[uniform_buffer_bind_entry, sampler_binding.entry])
       .with_label("GUI static bind group")
       .build(device);
 
@@ -99,7 +98,7 @@ impl Gui {
       .with_entries(&[BindGroupLayoutEntryBuilder::default()
         .texture()
         .binding(0)
-        .fragment_shader_visibility()
+        .fragment_visibility()
         .build()
       ])
       .with_label("GUI texture bind group layout")
@@ -595,7 +594,7 @@ fn create_texture_and_bind_group(
     .build(device);
   write_texture(queue, &texture.texture, Origin3d::ZERO, data, layout, size);
   let bind_group = BindGroupBuilder::new(texture_bind_group_layout)
-    .with_entries(&[texture.create_bind_group_entry(0)])
+    .with_entries(&[texture.entry(0)])
     .with_label(&format!("{} bind group", label_base))
     .build(device);
   (texture, bind_group)

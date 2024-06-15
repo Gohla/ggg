@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use wgpu::{BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension};
+use wgpu::{BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, Features, SamplerBindingType, ShaderStages, TextureAspect, TextureFormat, TextureSampleType, TextureViewDimension};
 
 #[derive(Copy, Clone, Debug)]
 pub struct BindGroupLayoutEntryBuilder<T = ()> {
@@ -34,24 +34,24 @@ impl<T> BindGroupLayoutEntryBuilder<T> {
   }
 
   #[inline]
-  pub fn shader_visibility(mut self, visibility: ShaderStages) -> Self {
+  pub fn visibility(mut self, visibility: ShaderStages) -> Self {
     self.visibility = visibility;
     self
   }
   /// [ShaderStages::VERTEX]
   #[inline]
-  pub fn vertex_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::VERTEX)
+  pub fn vertex_visibility(self) -> Self {
+    self.visibility(ShaderStages::VERTEX)
   }
   /// [ShaderStages::FRAGMENT]
   #[inline]
-  pub fn fragment_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::FRAGMENT)
+  pub fn fragment_visibility(self) -> Self {
+    self.visibility(ShaderStages::FRAGMENT)
   }
   /// [ShaderStages::COMPUTE]
   #[inline]
-  pub fn compute_shader_visibility(self) -> Self {
-    self.shader_visibility(ShaderStages::COMPUTE)
+  pub fn compute_visibility(self) -> Self {
+    self.visibility(ShaderStages::COMPUTE)
   }
 
   /// [BindingType::Buffer]
@@ -108,7 +108,6 @@ pub struct BufferLayoutBuilder {
   has_dynamic_offset: bool,
   min_binding_size: Option<BufferSize>,
 }
-
 impl From<BufferLayoutBuilder> for BindingType {
   #[inline]
   fn from(builder: BufferLayoutBuilder) -> Self {
@@ -119,7 +118,6 @@ impl From<BufferLayoutBuilder> for BindingType {
     }
   }
 }
-
 impl BindGroupLayoutEntryBuilder<BufferLayoutBuilder> {
   #[inline]
   pub fn ty(mut self, ty: BufferBindingType) -> Self {
@@ -166,17 +164,14 @@ impl BindGroupLayoutEntryBuilder<BufferLayoutBuilder> {
 pub struct SamplerLayoutBuilder {
   ty: SamplerBindingType,
 }
-
 impl Default for SamplerLayoutBuilder {
   #[inline]
   fn default() -> Self { Self { ty: SamplerBindingType::Filtering } }
 }
-
 impl From<SamplerLayoutBuilder> for BindingType {
   #[inline]
   fn from(builder: SamplerLayoutBuilder) -> Self { BindingType::Sampler(builder.ty) }
 }
-
 impl BindGroupLayoutEntryBuilder<SamplerLayoutBuilder> {
   #[inline]
   pub fn ty(mut self, ty: SamplerBindingType) -> Self {
@@ -205,21 +200,25 @@ impl BindGroupLayoutEntryBuilder<SamplerLayoutBuilder> {
 #[derive(Default, Copy, Clone, Debug)]
 pub struct TextureLayoutBuilder {
   sample_type: TextureSampleType,
+  format: Option<TextureFormat>,
+  aspect: TextureAspect,
+  device_features: Features,
   view_dimension: TextureViewDimension,
   multisampled: bool,
 }
-
 impl From<TextureLayoutBuilder> for BindingType {
   #[inline]
   fn from(builder: TextureLayoutBuilder) -> Self {
+    let sample_type = builder.format
+      .and_then(|format| format.sample_type(Some(builder.aspect), Some(builder.device_features)))
+      .unwrap_or(builder.sample_type);
     BindingType::Texture {
-      sample_type: builder.sample_type,
+      sample_type,
       view_dimension: builder.view_dimension,
       multisampled: builder.multisampled,
     }
   }
 }
-
 impl BindGroupLayoutEntryBuilder<TextureLayoutBuilder> {
   #[inline]
   pub fn sample_type(mut self, sample_type: TextureSampleType) -> Self {
@@ -255,6 +254,25 @@ impl BindGroupLayoutEntryBuilder<TextureLayoutBuilder> {
   #[inline]
   pub fn unsigned_integer(self) -> Self {
     self.sample_type(TextureSampleType::Uint)
+  }
+
+  /// Set the format of textures that will be used for this binding layout. When set, the
+  /// [sample_type](Self::sample_type) will be determined by [TextureFormat::sample_type] if it returns `Some`. Set
+  /// [aspect](Self::aspect) and [device_features](Self::device_features) for a more correct sample type.
+  #[inline]
+  pub fn format(mut self, format: TextureFormat) -> Self {
+    self.ty.format = Some(format);
+    self
+  }
+  #[inline]
+  pub fn aspect(mut self, aspect: TextureAspect) -> Self {
+    self.ty.aspect = aspect;
+    self
+  }
+  #[inline]
+  pub fn device_features(mut self, device_features: Features) -> Self {
+    self.ty.device_features = device_features;
+    self
   }
 
   #[inline]

@@ -14,7 +14,6 @@ use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::CombinedBindGroupLayoutBuilder;
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraDebugging, CameraInput, CameraSettings};
-use gfx::prelude::*;
 use gfx::render_pass::RenderPassBuilder;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
@@ -123,13 +122,13 @@ impl app::Application for Quads {
         .build(&gfx.device);
       texture.write_2d_rgba_image(&gfx.queue, image);
       let sampler = SamplerBuilder::new()
-        .with_label("Cobblestone diffuse sampler")
+        .label("Cobblestone diffuse sampler")
         .build(&gfx.device);
-      let (view_layout_entry, view_bind_entry) = texture.create_default_float_2d_bind_group_entries(0, ShaderStages::FRAGMENT);
-      let (sampler_layout_entry, sampler_bind_entry) = sampler.create_bind_group_entries(1, ShaderStages::FRAGMENT);
+      let texture_binding = texture.binding(0, ShaderStages::FRAGMENT);
+      let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
       CombinedBindGroupLayoutBuilder::new()
-        .with_layout_entries(&[view_layout_entry, sampler_layout_entry])
-        .with_entries(&[view_bind_entry, sampler_bind_entry])
+        .with_layout_entries(&[texture_binding.layout, sampler_binding.layout])
+        .with_entries(&[texture_binding.entry, sampler_binding.entry])
         .with_layout_label("Cobblestone diffuse bind group layout")
         .with_label("Cobblestone diffuse bind group")
         .build(&gfx.device)

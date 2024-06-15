@@ -1,31 +1,37 @@
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages};
+use std::ops::Deref;
+
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Device, FilterMode, Sampler, SamplerDescriptor, ShaderStages};
+use crate::bind_group::CombinedBinding;
+
+use crate::bind_group::entry::BindGroupEntryBuilder;
+use crate::bind_group::layout_entry::{BindGroupLayoutEntryBuilder, SamplerLayoutBuilder};
 
 // Sampler builder creation and modification
 
+#[derive(Default, Clone, Debug)]
 pub struct SamplerBuilder<'a> {
   descriptor: SamplerDescriptor<'a>,
 }
 
 impl<'a> SamplerBuilder<'a> {
   #[inline]
-  pub fn new() -> Self { Self { descriptor: SamplerDescriptor::default() } }
+  pub fn new() -> Self { Self::default() }
 
 
   #[inline]
-  pub fn with_label(mut self, label: &'a str) -> Self {
+  pub fn label(mut self, label: &'a str) -> Self {
     self.descriptor.label = Some(label);
     self
   }
 
-
   #[inline]
-  pub fn with_mag_filter(mut self, mag_filter: FilterMode) -> Self {
+  pub fn mag_filter(mut self, mag_filter: FilterMode) -> Self {
     self.descriptor.mag_filter = mag_filter;
     self
   }
 
   #[inline]
-  pub fn with_min_filter(mut self, min_filter: FilterMode) -> Self {
+  pub fn min_filter(mut self, min_filter: FilterMode) -> Self {
     self.descriptor.min_filter = min_filter;
     self
   }
@@ -33,34 +39,49 @@ impl<'a> SamplerBuilder<'a> {
 
 // Sampler creation
 
+pub struct GfxSampler {
+  sampler: Sampler,
+}
+impl Deref for GfxSampler {
+  type Target = Sampler;
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.sampler }
+}
+
 impl<'a> SamplerBuilder<'a> {
-  pub fn build(self, device: &Device) -> Sampler {
-    device.create_sampler(&self.descriptor)
+  pub fn build(self, device: &Device) -> GfxSampler {
+    let sampler = device.create_sampler(&self.descriptor);
+    GfxSampler { sampler }
   }
 }
 
 // Bind group (layout) entries creation
 
-pub trait SamplerBuilderSamplerEx<'a> {
-  fn create_bind_group_entries(
-    &'a self,
-    binding_index: u32,
-    shader_visibility: ShaderStages,
-  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>);
-}
+impl GfxSampler {
+  #[inline]
+  pub fn layout_builder(&self) -> BindGroupLayoutEntryBuilder<SamplerLayoutBuilder> {
+    BindGroupLayoutEntryBuilder::default().sampler()
+  }
+  #[inline]
+  pub fn layout(&self, binding: u32, visibility: ShaderStages) -> BindGroupLayoutEntry {
+    self.layout_builder()
+      .binding(binding)
+      .visibility(visibility)
+      .build()
+  }
 
-impl<'a> SamplerBuilderSamplerEx<'a> for Sampler {
-  fn create_bind_group_entries(&'a self, binding_index: u32, shader_visibility: ShaderStages) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
-    let bind_group_layout = BindGroupLayoutEntry {
-      binding: binding_index,
-      visibility: shader_visibility,
-      ty: BindingType::Sampler(SamplerBindingType::Filtering), // TODO: make configurable
-      count: None,
-    };
-    let bind_group = BindGroupEntry {
-      binding: binding_index,
-      resource: BindingResource::Sampler(self),
-    };
-    (bind_group_layout, bind_group)
+  #[inline]
+  pub fn entry(&self, binding: u32) -> BindGroupEntry {
+    BindGroupEntryBuilder::default()
+      .binding(binding)
+      .sampler(&self.sampler)
+      .build()
+  }
+
+  #[inline]
+  pub fn binding(&self, binding: u32, visibility: ShaderStages) -> CombinedBinding {
+    let layout = self.layout(binding, visibility);
+    let entry = self.entry(binding);
+    CombinedBinding::new(layout, entry)
   }
 }
