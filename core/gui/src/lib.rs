@@ -76,8 +76,7 @@ impl Gui {
       .uniform_usage()
       .label("GUI uniform buffer")
       .build_with_data(device, &[Uniform::default()]);
-    let (uniform_buffer_bind_layout_entry, uniform_buffer_bind_entry) =
-      uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
 
     let sampler = SamplerBuilder::new()
       .mag_filter(FilterMode::Linear)
@@ -87,9 +86,9 @@ impl Gui {
     let sampler_binding = sampler.binding(1, ShaderStages::FRAGMENT);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_buffer_bind_layout_entry, sampler_binding.layout])
+      .with_layout_entries(&[uniform_binding.layout, sampler_binding.layout])
       .with_layout_label("GUI static bind group layout")
-      .with_entries(&[uniform_buffer_bind_entry, sampler_binding.entry])
+      .with_entries(&[uniform_binding.entry, sampler_binding.entry])
       .with_label("GUI static bind group")
       .build(device);
 

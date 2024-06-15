@@ -98,7 +98,7 @@ impl app::Application for QuadGrid {
       .uniform_usage()
       .label("Quad grid uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
 
     let mut array_texture_def_builder = ArrayTextureDefBuilder::new(350, 350);
     let texture_1 = array_texture_def_builder.add_texture(image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap()).unwrap();
@@ -132,11 +132,11 @@ impl app::Application for QuadGrid {
       buffer.unmap();
       buffer
     };
-    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStages::VERTEX, true);
+    let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
     let (bind_group_layout, bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry, instance_bind_group_entry])
+      .with_layout_entries(&[uniform_binding.layout, instance_binding.layout])
+      .with_entries(&[uniform_binding.entry, instance_binding.entry])
       .with_layout_label("Quad grid bind group layout")
       .with_label("Quad grid bind group")
       .build(&gfx.device);

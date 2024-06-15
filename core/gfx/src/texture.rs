@@ -165,6 +165,7 @@ impl<'a> TextureBuilder<'a> {
   }
 }
 
+
 // Texture creation
 
 #[derive(Debug)]
@@ -182,6 +183,7 @@ impl<'a> TextureBuilder<'a> {
     GfxTexture { texture, view, view_dimension: self.texture_view_descriptor.dimension }
   }
 }
+
 
 // Writing texture data
 
@@ -227,6 +229,7 @@ impl<'a> GfxTexture {
     self.write_2d_rgba_texture_data(queue, image.as_raw());
   }
 }
+
 
 // Bind group (layout) entries creation
 

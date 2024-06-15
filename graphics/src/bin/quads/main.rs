@@ -137,10 +137,10 @@ impl app::Application for Quads {
     let uniform_buffer = BufferBuilder::new()
       .uniform_usage()
       .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry])
+      .with_layout_entries(&[uniform_binding.layout])
+      .with_entries(&[uniform_binding.entry])
       .with_layout_label("Quads uniform bind group layout")
       .with_label("Quads uniform bind group")
       .build(&gfx.device);

@@ -103,7 +103,7 @@ impl app::Application for Cubes {
       .uniform_usage()
       .label("Cubes uniform buffer")
       .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
       let buffer = BufferBuilder::new()
@@ -123,11 +123,11 @@ impl app::Application for Cubes {
       buffer.unmap();
       buffer
     };
-    let (instance_bind_group_layout_entry, instance_bind_group_entry) = instance_buffer.create_storage_binding_entries(1, ShaderStages::VERTEX, true);
+    let instance_binding = instance_buffer.binding(1, ShaderStages::VERTEX);
 
     let (static_bind_group_layout, static_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry, instance_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry, instance_bind_group_entry])
+      .with_layout_entries(&[uniform_binding.layout, instance_binding.layout])
+      .with_entries(&[uniform_binding.entry, instance_binding.entry])
       .with_layout_label("Cubes static bind group layout")
       .with_label("Cubes static bind group")
       .build(&gfx.device);

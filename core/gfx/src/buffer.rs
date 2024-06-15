@@ -2,8 +2,12 @@ use std::mem::size_of;
 use std::ops::{Deref, RangeBounds};
 
 use bytemuck::Pod;
-use wgpu::{BindGroupEntry, BindGroupLayoutEntry, BindingType, Buffer, BufferAddress, BufferBindingType, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Label, Queue, ShaderStages};
+use wgpu::{BindGroupEntry, BindGroupLayoutEntry, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages, CommandEncoder, COPY_BUFFER_ALIGNMENT, Device, Label, Queue, ShaderStages};
 use wgpu::util::StagingBelt;
+
+use crate::bind_group::CombinedBinding;
+use crate::bind_group::entry::BindGroupEntryBuilder;
+use crate::bind_group::layout_entry::{BindGroupLayoutEntryBuilder, BufferLayoutBuilder};
 
 #[derive(Debug)]
 pub struct GfxBuffer {
@@ -338,53 +342,39 @@ impl GfxBuffer {
 }
 
 
-// Uniform buffer utilities
+// Bind group (layout) entries creation
 
 impl<'a> GfxBuffer {
   #[inline]
-  pub fn create_uniform_binding_entries(
-    &'a self,
-    binding_index: u32,
-    shader_visibility: ShaderStages,
-  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
-    let layout = BindGroupLayoutEntry {
-      binding: binding_index,
-      visibility: shader_visibility,
-      ty: BindingType::Buffer {
-        ty: BufferBindingType::Uniform,
-        has_dynamic_offset: false,
-        min_binding_size: None,
-      },
-      count: None,
-    };
-    let bind = BindGroupEntry {
-      binding: binding_index,
-      resource: self.buffer.as_entire_binding(),
-    };
-    (layout, bind)
+  pub fn layout_builder(&self) -> BindGroupLayoutEntryBuilder<BufferLayoutBuilder> {
+    let builder = BindGroupLayoutEntryBuilder::default().buffer();
+    match self.usage() {
+      u if u.contains(BufferUsages::UNIFORM) => builder.uniform(),
+      u if u.contains(BufferUsages::STORAGE) && u.contains(BufferUsages::COPY_SRC) => builder.storage_read_write(),
+      u if u.contains(BufferUsages::STORAGE) => builder.storage_read(),
+      _ => builder
+    }
+  }
+  #[inline]
+  pub fn layout(&self, binding: u32, visibility: ShaderStages) -> BindGroupLayoutEntry {
+    self.layout_builder()
+      .binding(binding)
+      .visibility(visibility)
+      .build()
   }
 
   #[inline]
-  pub fn create_storage_binding_entries(
-    &'a self,
-    binding_index: u32,
-    shader_visibility: ShaderStages,
-    read_only: bool,
-  ) -> (BindGroupLayoutEntry, BindGroupEntry<'a>) {
-    let layout = BindGroupLayoutEntry {
-      binding: binding_index,
-      visibility: shader_visibility,
-      ty: BindingType::Buffer {
-        ty: BufferBindingType::Storage { read_only },
-        has_dynamic_offset: false,
-        min_binding_size: None,
-      },
-      count: None,
-    };
-    let bind = BindGroupEntry {
-      binding: binding_index,
-      resource: self.buffer.as_entire_binding(),
-    };
-    (layout, bind)
+  pub fn entry(&self, binding: u32) -> BindGroupEntry {
+    BindGroupEntryBuilder::default()
+      .binding(binding)
+      .buffer(&self.buffer)
+      .build()
+  }
+
+  #[inline]
+  pub fn binding(&self, binding: u32, visibility: ShaderStages) -> CombinedBinding {
+    let layout = self.layout(binding, visibility);
+    let entry = self.entry(binding);
+    CombinedBinding::new(layout, entry)
   }
 }

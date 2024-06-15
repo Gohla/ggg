@@ -36,10 +36,10 @@ impl DebugRenderer {
       .uniform_usage()
       .label("Debug uniform buffer")
       .build_with_data(&gfx.device, &[Uniform { model_view_projection: view_projection }]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX_FRAGMENT);
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
-      .with_layout_entries(&[uniform_bind_group_layout_entry])
-      .with_entries(&[uniform_bind_group_entry])
+      .with_layout_entries(&[uniform_binding.layout])
+      .with_entries(&[uniform_binding.entry])
       .with_layout_label("Debug uniform bind group layout")
       .with_label("Debug uniform bind group")
       .build(&gfx.device);

@@ -52,13 +52,13 @@ impl StarsRenderer {
       .label("Stars uniform buffer")
       .uniform_usage()
       .build_with_data(&gfx.device, &[uniform]);
-    let (uniform_bind_group_layout_entry, uniform_bind_group_entry) = uniform_buffer.create_uniform_binding_entries(0, ShaderStages::FRAGMENT);
+    let uniform_binding = uniform_buffer.binding(0, ShaderStages::FRAGMENT);
 
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_label("Stars uniform bind group layout")
-      .with_layout_entries(&[uniform_bind_group_layout_entry])
+      .with_layout_entries(&[uniform_binding.layout])
       .with_label("Stars uniform bind group")
-      .with_entries(&[uniform_bind_group_entry])
+      .with_entries(&[uniform_binding.entry])
       .build(&gfx.device);
 
     let full_screen_triangle = FullScreenTriangle::new(&gfx.device);

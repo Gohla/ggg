@@ -35,17 +35,19 @@ impl VoxelRenderer {
       .uniform_usage()
       .label("Camera uniform buffer")
       .build_with_data(&gfx.device, &[camera_uniform]);
-    let (camera_uniform_bind_group_layout_entry, camera_uniform_bind_group_entry) = camera_uniform_buffer.create_uniform_binding_entries(0, ShaderStages::VERTEX_FRAGMENT);
+    let camera_uniform_binding = camera_uniform_buffer.binding(0, ShaderStages::VERTEX_FRAGMENT);
+
     let light_uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .label("Light uniform buffer")
       .build_with_data(&gfx.device, &[light_uniform]);
-    let (light_uniform_bind_group_layout_entry, light_uniform_bind_group_entry) = light_uniform_buffer.create_uniform_binding_entries(1, ShaderStages::FRAGMENT);
+    let light_uniform_binding = light_uniform_buffer.binding(1, ShaderStages::FRAGMENT);
+
     let model_uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .label("Model uniform buffer")
       .build_with_data(&gfx.device, &[model_uniform]);
-    let (model_uniform_bind_group_layout_entry, model_uniform_bind_group_entry) = model_uniform_buffer.create_uniform_binding_entries(2, ShaderStages::VERTEX);
+    let model_uniform_binding = model_uniform_buffer.binding(2, ShaderStages::VERTEX);
 
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader!("render/frag"));
@@ -53,8 +55,8 @@ impl VoxelRenderer {
     let (uniform_bind_group_layout, uniform_bind_group) = CombinedBindGroupLayoutBuilder::new()
       .with_layout_label("Voxel renderer uniform bind group layout")
       .with_label("Voxel renderer uniform bind group")
-      .with_layout_entries(&[camera_uniform_bind_group_layout_entry, light_uniform_bind_group_layout_entry, model_uniform_bind_group_layout_entry])
-      .with_entries(&[camera_uniform_bind_group_entry, light_uniform_bind_group_entry, model_uniform_bind_group_entry])
+      .with_layout_entries(&[camera_uniform_binding.layout, light_uniform_binding.layout, model_uniform_binding.layout])
+      .with_entries(&[camera_uniform_binding.entry, light_uniform_binding.entry, model_uniform_binding.entry])
       .build(&gfx.device);
 
     let (_, render_pipeline) = gfx.render_pipeline_builder()
