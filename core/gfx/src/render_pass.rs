@@ -1,9 +1,9 @@
-use wgpu::{Color, CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, TextureView};
+use wgpu::{Color, CommandEncoder, Label, LoadOp, Operations, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, TextureView};
 
-use crate::{Render, Gfx};
+use crate::{Gfx, Render};
 
 pub struct RenderPassBuilder<'a, 'b> {
-  pub label: Option<&'a str>,
+  pub label: Label<'a>,
   pub color_attachments: &'b [Option<RenderPassColorAttachment<'a>>],
   pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
 }

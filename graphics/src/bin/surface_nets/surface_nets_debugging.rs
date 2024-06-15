@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use ultraviolet::{UVec3, Vec4};
 
 use gfx::debug_renderer::DebugRenderer;
-use gfx::display_math::{UVec3DisplayExt, Vec3DisplayExt};
+use gfx::fmt_math::{UVec3DisplayExt, Vec3DisplayExt};
 use gui_widget::{Gui, UiWidgetsExt};
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSamples};

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use ultraviolet::Vec3;
 
-use gfx::camera::{CameraDebugging, CameraSettings};
+use gfx::camera::CameraSettings;
+use gfx::camera::debug::CameraDebugging;
 use voxel::uniform::LightSettings;
 
 use crate::SurfaceNetsDebugging;
@@ -37,7 +38,7 @@ impl Default for Config {
         ..Default::default()
       },
       light_settings: default_light_settings(),
-      surface_nets_debugging: Default::default()
+      surface_nets_debugging: Default::default(),
     }
   }
 }

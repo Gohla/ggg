@@ -5,7 +5,8 @@ use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
 use ultraviolet::{Isometry3, Mat4, Vec3};
 
-use gfx::camera::{CameraDebugging, CameraSettings};
+use gfx::camera::CameraSettings;
+use gfx::camera::debug::CameraDebugging;
 use gfx::Gfx;
 use gui_widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
