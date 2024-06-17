@@ -44,10 +44,17 @@ impl<Head, Rest: List> Prepend for Cons<Head, Rest> {
 pub trait Fold<A, F>: List {
   fn fold(self, accumulator: A, folder: F) -> A;
 }
+pub trait FoldRef<A, F>: List {
+  fn fold_ref(&self, accumulator: A, folder: F) -> A;
+}
 // Generic fold impl
 impl<A, F> Fold<A, F> for Nil {
   #[inline]
   fn fold(self, init: A, _folder: F) -> A { init }
+}
+impl<A, F> FoldRef<A, F> for Nil {
+  #[inline]
+  fn fold_ref(&self, init: A, _folder: F) -> A { init }
 }
 // Homogenous fold impl
 impl<A, F, Head, Tail> Fold<A, F> for Cons<Head, Tail> where
@@ -58,6 +65,16 @@ impl<A, F, Head, Tail> Fold<A, F> for Cons<Head, Tail> where
   fn fold(self, accumulator: A, mut folder: F) -> A {
     let accumulator = folder(accumulator, self.head);
     self.tail.fold(accumulator, folder)
+  }
+}
+impl<A, F, Head, Tail> FoldRef<A, F> for Cons<Head, Tail> where
+  F: FnMut(A, &Head) -> A,
+  Tail: FoldRef<A, F>,
+{
+  #[inline]
+  fn fold_ref(&self, accumulator: A, mut folder: F) -> A {
+    let accumulator = folder(accumulator, &self.head);
+    self.tail.fold_ref(accumulator, folder)
   }
 }
 // Heterogeneous fold impl
@@ -75,23 +92,33 @@ impl<A, F, Head, Tail> Fold<A, Folder<F>> for Cons<Head, Tail> where
     self.tail.fold(accumulator, folder)
   }
 }
+impl<A, F, Head, Tail> FoldRef<A, Folder<F>> for Cons<Head, Tail> where
+  F: for<'a> FolderFn<A, &'a Head>,
+  Tail: FoldRef<A, Folder<F>>,
+{
+  #[inline]
+  fn fold_ref(&self, accumulator: A, mut folder: Folder<F>) -> A {
+    let accumulator = folder.0.fold(accumulator, &self.head);
+    self.tail.fold_ref(accumulator, folder)
+  }
+}
 
 /// Convert list to list of (mutable) references
 pub trait ToRef: List {
   type Ref<'a>: List where Self: 'a;
   fn to_ref(&self) -> Self::Ref<'_>;
 
-  // type Mut<'a>: List where Self: 'a;
-  // fn to_mut(&mut self) -> Self::Mut<'_>;
+  type Mut<'a>: List where Self: 'a;
+  fn to_mut(&mut self) -> Self::Mut<'_>;
 }
 impl ToRef for Nil {
   type Ref<'a> = Nil;
   #[inline]
   fn to_ref(&self) -> Self::Ref<'_> { *self }
 
-  // type Mut<'a> = Nil where Self: 'a;
-  // #[inline]
-  // fn to_mut(&mut self) -> Self::Mut<'_> { *self }
+  type Mut<'a> = Nil where Self: 'a;
+  #[inline]
+  fn to_mut(&mut self) -> Self::Mut<'_> { *self }
 }
 impl<Head, Tail: ToRef> ToRef for Cons<Head, Tail> {
   type Ref<'a> = Cons<&'a Head, Tail::Ref<'a>> where Self: 'a;
@@ -100,9 +127,9 @@ impl<Head, Tail: ToRef> ToRef for Cons<Head, Tail> {
     Cons::new(&self.head, self.tail.to_ref())
   }
 
-  // type Mut<'a> = Cons<&'a mut Head, Tail::Mut<'a>> where Self: 'a;
-  // #[inline]
-  // fn to_mut(&mut self) -> Self::Mut<'_> {
-  //   Cons::new(&mut self.head, self.tail.to_mut())
-  // }
+  type Mut<'a> = Cons<&'a mut Head, Tail::Mut<'a>> where Self: 'a;
+  #[inline]
+  fn to_mut(&mut self) -> Self::Mut<'_> {
+    Cons::new(&mut self.head, self.tail.to_mut())
+  }
 }

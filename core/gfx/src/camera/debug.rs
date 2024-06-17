@@ -1,9 +1,9 @@
 use std::slice::from_mut;
 
-use egui::{Align2, Button, ComboBox, Ui, Window};
+use egui::{Align2, ComboBox, Ui, Window};
 
 use gui::Gui;
-use gui::reset::ResetChain;
+use gui::reset::UiResetButtonExt;
 use gui::widget::UiWidgetsExt;
 
 use crate::camera::controller::{CameraController, CameraControllerData, CameraControllerSettings, ControlType};
@@ -71,21 +71,10 @@ impl CameraDebugging {
               }
             });
           ui.select_align2(&mut self.window_anchor);
-
-          // ResetChain::new()
-          //   .add(&mut settings[self.selected_camera], self.default_settings)
-          //   .add(&mut data[self.selected_camera], self.default_data)
-          //   .reset_button_double_click(ui);
-          let reset_chain = ResetChain::new()
-            .add(&mut settings[self.selected_camera], self.default_settings)
-            .add(&mut data[self.selected_camera], self.default_data);
-          let can_reset = reset_chain.can_reset();
-          if ui.add_enabled(can_reset, Button::new("↺")).double_clicked() {
-            reset_chain.reset();
-          }
-          //self.add_enabled(can_reset, Button::new("↺"))
-
-          //ui.reset_button_double_click_with(&mut (&mut settings[self.selected_camera], &mut data[self.selected_camera]), (&mut self.default_settings, &mut self.default_data));
+          ui.reset_button_new()
+            .check(&mut settings[self.selected_camera], self.default_settings)
+            .check(&mut data[self.selected_camera], self.default_data)
+            .on_double_click();
         });
         let camera = &mut cameras[self.selected_camera];
         let data = &mut data[self.selected_camera];
