@@ -21,10 +21,8 @@ impl<L: Prepend> ResetChain<L> {
 //     }
 //   }
 // }
-impl<L> ResetChain<L> {
-  pub fn can_reset<'a>(&'a self) -> bool where
-    L: ToRef<Ref<'a>: Fold<bool, Folder<CanResetFn>>>
-  {
+impl<'a, L: ToRef<Ref<'a>: Fold<bool, Folder<CanResetFn>>> + 'a> ResetChain<L> {
+  pub fn can_reset(&'a self) -> bool {
     self.0.to_ref().fold(false, Folder(CanResetFn))
   }
 }
