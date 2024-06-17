@@ -22,6 +22,9 @@ ij_any_finally_on_new_line = false
 ij_rust_keep_blank_lines_in_code = 2
 ij_rust_keep_blank_lines_in_declarations = 2
 ij_rust_keep_line_breaks = true
+ij_rust_align_where_bounds = false
+ij_rust_where_on_new_line = false
+ij_rust_new_line_after_where = true
 
 [*.ps1]
 ij_powershell_space_before_for_left_brace = false

@@ -3,6 +3,7 @@ use std::ops::Deref;
 use egui::{Context, Rect, WidgetText, Window};
 
 pub mod widget;
+pub mod reset;
 
 /// Handles and data for creating GUIs.
 pub struct Gui {
