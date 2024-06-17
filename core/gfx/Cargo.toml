@@ -10,8 +10,8 @@ common = { path = "../../core/common" }
 wgpu = { workspace = true }
 egui = { workspace = true, optional = true }
 gui = { path = "../gui", optional = true }
-serde = { workspace = true, features = ["derive"], optional = true }
 image = { workspace = true, default-features = false }
+serde = { workspace = true, features = ["derive"], optional = true }
 ultraviolet.workspace = true
 bytemuck.workspace = true
 thiserror.workspace = true

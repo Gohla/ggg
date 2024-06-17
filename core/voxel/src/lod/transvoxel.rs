@@ -26,7 +26,6 @@ pub struct TransvoxelExtractorSettings {
   pub extract_transition_lo_z_chunks: bool,
   pub extract_transition_hi_z_chunks: bool,
 }
-
 impl Default for TransvoxelExtractorSettings {
   #[inline]
   fn default() -> Self {

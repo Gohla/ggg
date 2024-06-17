@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ultraviolet::Vec3;
 
-use gfx::camera::CameraSettings;
+use gfx::camera::{CameraSettings, ProjectionType};
 use gfx::camera::debug::CameraDebugging;
 use voxel::uniform::LightSettings;
 
@@ -16,7 +16,10 @@ pub struct Config {
 }
 
 fn default_camera_settings() -> CameraSettings {
-  let mut settings = CameraSettings::with_defaults_arcball_orthographic();
+  let mut settings = CameraSettings {
+    projection_type: ProjectionType::Orthographic,
+    ..CameraSettings::default()
+  };
   settings.arcball.distance = 3.0;
   settings
 }

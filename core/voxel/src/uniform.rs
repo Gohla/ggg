@@ -18,14 +18,14 @@ pub struct CameraUniform {
 impl CameraUniform {
   pub fn from_camera(camera: &Camera) -> Self {
     Self {
-      position: camera.get_position().into_homogeneous_point(),
-      view_projection: camera.get_view_projection_matrix(),
+      position: camera.position().into_homogeneous_point(),
+      view_projection: *camera.view_projection_matrix(),
     }
   }
 
   pub fn update_from_camera(&mut self, camera: &Camera) {
-    self.position = camera.get_position().into_homogeneous_point();
-    self.view_projection = camera.get_view_projection_matrix();
+    self.position = camera.position().into_homogeneous_point();
+    self.view_projection = *camera.view_projection_matrix();
   }
 }
 
@@ -40,13 +40,11 @@ pub struct LightUniform {
   pub direction: Vec3,
   _dummy: f32, // TODO: replace with crevice crate?
 }
-
 impl LightUniform {
   pub fn new(color: Vec3, ambient: f32, direction: Vec3) -> Self {
     Self { color, ambient, direction, _dummy: 0.0 }
   }
 }
-
 impl Default for LightUniform {
   fn default() -> Self {
     Self::new(Vec3::new(0.9, 0.9, 0.9), 0.01, Vec3::new(-0.5, -0.5, -0.5))
@@ -62,7 +60,6 @@ pub struct LightSettings {
   pub follow_camera: bool,
   pub uniform: LightUniform,
 }
-
 impl Default for LightSettings {
   fn default() -> Self {
     Self {

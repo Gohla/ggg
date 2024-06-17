@@ -40,7 +40,6 @@ pub struct LodRenderDataSettings {
   pub debug_render_octree_aabb_closest_points_color: Vec4,
   pub debug_render_octree_aabb_closest_points_point_size: f32,
 }
-
 impl Default for LodRenderDataSettings {
   fn default() -> Self {
     Self {

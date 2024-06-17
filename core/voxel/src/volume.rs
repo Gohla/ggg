@@ -44,7 +44,6 @@ pub trait Volume: Clone + Send + 'static {
 pub struct SphereSettings {
   pub radius: f32,
 }
-
 impl Default for SphereSettings {
   #[inline]
   fn default() -> Self {
@@ -57,14 +56,12 @@ pub struct Sphere {
   radius: f32,
   half_radius_vec: Vec3,
 }
-
 impl Sphere {
   #[inline]
   pub fn new(settings: SphereSettings) -> Self {
     Self { radius: settings.radius, half_radius_vec: Vec3::one() * (settings.radius / 2.0) }
   }
 }
-
 impl Volume for Sphere {
   #[inline]
   fn sample(&self, position: UVec3) -> f32 {

@@ -103,7 +103,7 @@ impl app::Application for MarchingCubesDemo {
 
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
+    self.camera_debugging.show_single(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 

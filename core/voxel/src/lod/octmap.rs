@@ -26,7 +26,6 @@ pub struct LodOctmapSettings {
   pub job_queue_worker_threads: usize,
   pub empty_lod_chunk_mesh_cache_size: usize,
 }
-
 impl LodOctmapSettings {
   #[inline]
   pub fn check(&self) {
@@ -34,7 +33,6 @@ impl LodOctmapSettings {
     assert!(self.root_size.is_power_of_two(), "Root size {} must be a power of 2", self.root_size);
   }
 }
-
 impl Default for LodOctmapSettings {
   fn default() -> Self {
     Self {

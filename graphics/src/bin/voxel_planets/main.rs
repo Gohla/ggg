@@ -6,7 +6,8 @@ use wgpu::util::StagingBelt;
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::camera::{Camera, CameraInput};
+use gfx::camera::Camera;
+use gfx::camera::controller::CameraControllerInput;
 use gfx::debug_renderer::DebugRenderer;
 use gfx::Gfx;
 use os::Os;
@@ -37,7 +38,7 @@ pub struct VoxelPlanets {
 
 #[derive(Default)]
 pub struct Input {
-  camera: CameraInput,
+  camera_controller: CameraControllerInput,
 }
 
 const EXTENDS: f32 = 4096.0 / 2.0;
@@ -50,13 +51,13 @@ impl app::Application for VoxelPlanets {
     settings.update_default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let camera_0 = Camera::new(viewport.physical, &mut settings.camera_settings[0]);
-    let camera_1 = Camera::new(viewport.physical, &mut settings.camera_settings[1]);
+    let camera_0 = Camera::new(&mut settings.camera_data[0], &mut settings.camera_settings[0], viewport.physical);
+    let camera_1 = Camera::new(&mut settings.camera_data[1], &mut settings.camera_settings[1], viewport.physical);
     let cameras = vec![camera_0, camera_1];
-    let selected_camera = settings.camera_debugging.get_selected_camera(&cameras);
+    let selected_camera = settings.camera_debugging.selected_camera(&cameras);
     let camera_uniform = CameraUniform::from_camera(selected_camera);
 
-    let stars_renderer = StarsRenderer::new(gfx, selected_camera.get_view_inverse_matrix());
+    let stars_renderer = StarsRenderer::new(gfx, *selected_camera.inverse_view_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
@@ -66,7 +67,7 @@ impl app::Application for VoxelPlanets {
       StagingBelt::new(4096 * 1024), // 4 MiB staging belt
     );
 
-    let lod_render_data_manager = settings.create_lod_render_data_manager(gfx, lod_octmap_transform, selected_camera.get_view_projection_matrix());
+    let lod_render_data_manager = settings.create_lod_render_data_manager(gfx, lod_octmap_transform, *selected_camera.view_projection_matrix());
 
     Self {
       settings,
@@ -94,8 +95,8 @@ impl app::Application for VoxelPlanets {
   type Input = Input;
   #[profiling::function]
   fn process_input(&mut self, input: RawInput) -> Input {
-    let camera = CameraInput::from(&input);
-    Input { camera }
+    let camera_controller = CameraControllerInput::from(&input);
+    Input { camera_controller }
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
@@ -104,13 +105,14 @@ impl app::Application for VoxelPlanets {
 
   #[profiling::function]
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.settings.camera_debugging.show_multiple_cameras(&gui, &self.cameras, &mut self.settings.camera_settings);
-    let (camera, camera_settings) = self.settings.camera_debugging.get_selected_camera_and_settings(&mut self.cameras, &mut self.settings.camera_settings);
-    camera.update(camera_settings, &input.camera, frame.duration);
+    self.settings.camera_debugging.show(&gui, &mut self.cameras, &mut self.settings.camera_data, &mut self.settings.camera_settings);
+    let (camera, camera_data, camera_settings) =
+      self.settings.camera_debugging.selected(&mut self.cameras, &mut self.settings.camera_data, &self.settings.camera_settings);
+    camera.update(camera_data, camera_settings, &input.camera_controller, frame.duration);
     self.camera_uniform.update_from_camera(camera);
-    let camera_view_projection = camera.get_view_projection_matrix();
-    let camera_direction_inverse = camera.get_direction_inverse();
-    let camera_view_inverse_matrix = camera.get_view_inverse_matrix();
+    let camera_view_projection = *camera.view_projection_matrix();
+    let camera_inverse_direction = camera.inverse_direction_vector();
+    let camera_view_inverse_matrix = *camera.inverse_view_matrix();
 
     let (recreate_lod_render_data_manager, update_lod_render_data) = gui.window("Voxel Planets")
       .anchor(Align2::LEFT_TOP, egui::Vec2::ZERO)
@@ -118,7 +120,7 @@ impl app::Application for VoxelPlanets {
       .show(&gui, |ui| {
         let mut recreate = false;
         recreate |= self.settings.draw_reset_to_defaults_button(ui);
-        self.settings.draw_light_gui(ui, camera_direction_inverse);
+        self.settings.draw_light_gui(ui, camera_inverse_direction);
         recreate |= self.settings.draw_volume_gui(ui);
         recreate |= self.settings.draw_extractor_gui(ui);
         recreate |= self.settings.draw_lod_octmap_gui(ui);
@@ -131,10 +133,10 @@ impl app::Application for VoxelPlanets {
 
     // LOD render data
     if recreate_lod_render_data_manager {
-      self.lod_render_data_manager = self.settings.create_lod_render_data_manager(gfx, self.lod_octmap_transform, self.cameras[0].get_view_projection_matrix());
+      self.lod_render_data_manager = self.settings.create_lod_render_data_manager(gfx, self.lod_octmap_transform, *self.cameras[0].view_projection_matrix());
     }
     if update_lod_render_data {
-      self.lod_render_data_manager.update(self.cameras[0].get_position(), &self.settings.lod_render_data_settings, &mut self.lod_render_data);
+      self.lod_render_data_manager.update(self.cameras[0].position(), &self.settings.lod_render_data_settings, &mut self.lod_render_data);
     }
 
     // Render stars

@@ -5,8 +5,10 @@ use egui::color_picker::Alpha;
 use serde::{Deserialize, Serialize};
 use ultraviolet::{Isometry3, Mat4, Vec3};
 
-use gfx::camera::CameraSettings;
+use gfx::camera::{CameraData, CameraSettings};
+use gfx::camera::controller::{Arcball, ArcballSettings, CameraControllerData, CameraControllerSettings, ControlType};
 use gfx::camera::debug::CameraDebugging;
+use gfx::camera::projection::CameraProjectionSettings;
 use gfx::Gfx;
 use gui::widget::UiWidgetsExt;
 use voxel::chunk::size::ChunkSize16;
@@ -26,31 +28,26 @@ use voxel::volume::{Noise, NoiseSettings, Plus, Sphere, SphereSettings, Volume};
 
 use crate::stars::StarsRendererSettings;
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, Debug, )]
 pub enum VolumeType {
+  #[default]
   Sphere,
   Noise,
   SpherePlusNoise,
 }
 
-impl Default for VolumeType {
-  fn default() -> Self { Self::Sphere }
-}
-
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum ExtractorType {
+  #[default]
   MarchingCubes,
   Transvoxel,
   SurfaceNets,
   Noop,
 }
 
-impl Default for ExtractorType {
-  fn default() -> Self { Self::MarchingCubes }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
+  pub camera_data: Vec<CameraData>,
   pub camera_settings: Vec<CameraSettings>,
   pub camera_debugging: CameraDebugging,
 
@@ -73,24 +70,48 @@ pub struct Settings {
   pub stars_renderer_settings: StarsRendererSettings,
 }
 
+fn default_camera_data() -> CameraData {
+  CameraData {
+    controller: CameraControllerData {
+      arcball: Arcball {
+        distance: crate::EXTENDS * 2.0 - 1.0,
+        ..Arcball::default()
+      },
+      ..CameraControllerData::default()
+    }
+  }
+}
+
 fn default_camera_settings() -> CameraSettings {
-  let mut settings = CameraSettings::with_defaults_arcball_perspective();
-  settings.arcball.distance = crate::EXTENDS * 2.0 - 1.0;
-  settings.arcball.mouse_movement_panning_speed = 2.0;
-  settings.arcball.keyboard_panning_speed = 1000.0;
-  settings.arcball.mouse_scroll_distance_speed = 100.0;
-  settings.far = 10000.0;
-  settings
+  CameraSettings {
+    controller: CameraControllerSettings {
+      control_type: ControlType::Arcball,
+      arcball: ArcballSettings {
+        mouse_movement_panning_speed: 2.0,
+        keyboard_panning_speed: 1000.0,
+        mouse_scroll_distance_speed: 100.0,
+        ..ArcballSettings::default()
+      },
+    },
+    projection: CameraProjectionSettings {
+      far: 10000.0,
+      ..CameraProjectionSettings::default()
+    },
+  }
 }
 
 impl Default for Settings {
   fn default() -> Self {
+    let default_camera_data = default_camera_data();
+    let default_camera_settings = default_camera_settings();
     Self {
-      camera_settings: vec![default_camera_settings(), default_camera_settings()],
+      camera_data: vec![default_camera_data; 2],
+      camera_settings: vec![default_camera_settings; 2],
       camera_debugging: CameraDebugging {
         show_window: true,
         window_anchor: Some(Align2::LEFT_BOTTOM),
-        default_settings: default_camera_settings(),
+        default_data: default_camera_data,
+        default_settings: default_camera_settings,
         ..Default::default()
       },
 
@@ -114,6 +135,7 @@ type C16 = ChunkSize16;
 
 impl Settings {
   pub fn update_default_camera_settings(&mut self) {
+    self.camera_debugging.default_data = default_camera_data();
     self.camera_debugging.default_settings = default_camera_settings();
   }
 
@@ -158,6 +180,7 @@ impl Settings {
   pub fn draw_reset_to_defaults_button(&mut self, ui: &mut Ui) -> bool {
     if ui.button("Reset to defaults (double click)").double_clicked() {
       *self = Self {
+        camera_data: self.camera_data.clone(),
         camera_settings: self.camera_settings.clone(),
         camera_debugging: self.camera_debugging,
         ..Self::default()

@@ -29,7 +29,9 @@ pub mod full_screen_triangle;
 /// Fully initialized graphics instance: handles and data for rendering graphics.
 #[derive(Debug)]
 pub struct Gfx {
-  // DROP: drop `surface` before other fields. Dropping `surface` before `device` causes a segfault/UB.
+  // DROP: drop `surface` before other fields. Dropping `device` before `surface` causes a segfault. This should be
+  // fixed by https://github.com/gfx-rs/wgpu/pull/5640, but it is not? Only segfaults on some demos like `triangle`,
+  // maybe has to do with the fact that they have no depth-stencil texture?
   pub surface: GfxSurface,
 
   pub instance: Instance,

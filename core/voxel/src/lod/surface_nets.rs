@@ -26,7 +26,6 @@ pub struct SurfaceNetsExtractorSettings {
   pub extract_border_yz_chunks: bool,
   pub extract_border_xz_chunks: bool,
 }
-
 impl Default for SurfaceNetsExtractorSettings {
   #[inline]
   fn default() -> Self {

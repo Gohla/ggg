@@ -21,7 +21,7 @@ publish = false
 raw-window-handle = "0.6"
 cursor-icon = "1"
 winit = "0.30"
-wgpu = "0.20"
+wgpu = "0.20.1"
 naga = "0.20" # sync with wgpu
 egui = { git = "https://github.com/emilk/egui.git", rev = "814ad07" }
 ultraviolet = "0.9"

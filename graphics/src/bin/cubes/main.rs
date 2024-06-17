@@ -190,7 +190,7 @@ impl app::Application for Cubes {
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show(&gui, &self.camera, &mut self.camera_settings);
+    self.camera_debugging.show_single(&gui, &self.camera, &mut self.camera_settings);
     self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 

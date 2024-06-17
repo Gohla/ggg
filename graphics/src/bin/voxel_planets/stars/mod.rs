@@ -27,7 +27,6 @@ pub struct StarsRendererSettings {
   pub temperature_maximum: f32,
   pub temperature_power: f32,
 }
-
 impl Default for StarsRendererSettings {
   fn default() -> Self {
     Self {
