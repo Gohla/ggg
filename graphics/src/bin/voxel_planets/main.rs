@@ -105,7 +105,7 @@ impl app::Application for VoxelPlanets {
 
   #[profiling::function]
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.settings.camera_debugging.show(&gui, &mut self.cameras, &mut self.settings.camera_data, &mut self.settings.camera_settings);
+    self.settings.camera_debugging.show_window(&gui, &mut self.cameras, &mut self.settings.camera_data, &mut self.settings.camera_settings);
     let (camera, camera_data, camera_settings) =
       self.settings.camera_debugging.selected(&mut self.cameras, &mut self.settings.camera_data, &self.settings.camera_settings);
     camera.update(camera_data, camera_settings, &input.camera_controller, frame.duration);

@@ -27,7 +27,6 @@ struct Vertex {
   pos: Vec2,
   tex: Vec2,
 }
-
 impl Vertex {
   fn buffer_layout() -> VertexBufferLayout<'static> {
     const ATTRIBUTES: &[VertexAttribute] = &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
@@ -56,7 +55,6 @@ const INDICES: &[u16] = &[
 struct Uniform {
   view_projection: Mat4,
 }
-
 impl Uniform {
   pub fn from_camera(camera: &Camera) -> Self {
     Self {
@@ -70,7 +68,6 @@ impl Uniform {
 struct Instance {
   model: Mat4,
 }
-
 impl Instance {
   fn from_isometry(isometry: Isometry3) -> Self { Self { model: isometry.into_homogeneous_matrix() } }
 
@@ -104,20 +101,30 @@ pub struct Quads {
   instance_buffer: GfxBuffer,
 }
 
-pub struct Input {
-  camera: CameraControllerInput,
-}
-
 #[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct Data {
   camera_data: CameraData,
   camera_settings: CameraSettings,
   camera_inspector: CameraInspector,
 }
+impl Data {
+  pub fn set_camera_inspector_defaults(&mut self) {
+    let default = Self::default();
+    self.camera_inspector.default_data = default.camera_data;
+    self.camera_inspector.default_settings = default.camera_settings;
+  }
+}
+
+pub struct Input {
+  camera: CameraControllerInput,
+}
 
 impl app::Application for Quads {
   type Data = Data;
   fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut data: Self::Data) -> Self {
+    data.set_camera_inspector_defaults();
+
     let camera = Camera::new(&mut data.camera_data, &data.camera_settings, screen_size.physical);
 
     let diffuse_bind_group = {
@@ -211,7 +218,7 @@ impl app::Application for Quads {
   }
 
   type Input = Input;
-  fn process_input(&mut self, input: RawInput) -> Input {
+  fn process_input(&mut self, input: RawInput) -> Self::Input {
     let camera = CameraControllerInput::from(&input);
     Input { camera }
   }
@@ -221,7 +228,7 @@ impl app::Application for Quads {
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.data.camera_inspector.show_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
+    self.data.camera_inspector.show_window_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
     self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 

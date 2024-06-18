@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="1.BDP voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
-    <option name="command" value="build --bin voxel_planets --profile=devprofile" />
+  <configuration default="false" name="R surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="broken">
+    <option name="command" value="run --bin surface_nets" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />

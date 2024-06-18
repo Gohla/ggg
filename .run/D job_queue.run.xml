@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="3.R surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin surface_nets" />
+  <configuration default="false" name="D job_queue" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="debug">
+    <option name="command" value="run --bin job_queue --profile=dbg" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />
@@ -9,9 +9,9 @@
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />
     <option name="allFeatures" value="false" />
-    <option name="withSudo" value="false" />
+    <option name="withSudo" value="true" />
     <option name="buildTarget" value="REMOTE" />
-    <option name="backtrace" value="SHORT" />
+    <option name="backtrace" value="FULL" />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">

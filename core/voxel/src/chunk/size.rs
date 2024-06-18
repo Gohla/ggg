@@ -65,9 +65,9 @@ pub trait ChunkSize: Default + Copy + Clone + Send + Sync + 'static {
 
 macro_rules! impl_chunk_size {
   ($n:literal, $id:ident) => {
-    #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+    #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
     pub struct $id {}
-    
+
     impl ChunkSize for $id {
       const CELLS_IN_CHUNK_ROW: u32 = $n;
 
@@ -75,18 +75,18 @@ macro_rules! impl_chunk_size {
       type CellRowQuadYZShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, 2, 2>;
       type CellRowQuadXZShape = ConstShape<CellIndex, 2, {Self::CELLS_IN_CHUNK_ROW}, 2>;
       type CellRowQuadArray<T: Value> = ConstArray<T, CellIndex, {Self::CELLS_IN_ROW_QUAD_USIZE}>;
-      
+
       type CellDeckDoubleXShape = ConstShape<CellIndex, 2, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
       type CellDeckDoubleYShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, 2, {Self::CELLS_IN_CHUNK_ROW}>;
       type CellDeckDoubleZShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}, 2>;
       type CellDeckDoubleArray<T: Value> = ConstArray<T, CellIndex, {Self::CELLS_IN_DECK_DOUBLE_USIZE}>;
-      
+
       type CellChunkShape = ConstShape<CellIndex, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
       type CellChunkArray<T: Value> = ConstArray<T, CellIndex, {Self::CELLS_IN_CHUNK_USIZE}>;
-      
+
       type VoxelChunkShape = ConstShape<VoxelIndex, {Self::VOXELS_IN_CHUNK_ROW}, {Self::VOXELS_IN_CHUNK_ROW}, {Self::VOXELS_IN_CHUNK_ROW}>;
       type VoxelChunkArray<T: Value> = ConstArray<T, VoxelIndex, {Self::VOXELS_IN_CHUNK_USIZE}>;
-      
+
       type MarchingCubesSharedIndicesShape = ConstShape<u32, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}, {Self::CELLS_IN_CHUNK_ROW}>;
       type MarchingCubesSharedIndicesArray<T: Value> = ConstArray<T, u32, {Self::CELLS_IN_CHUNK_USIZE * 4}>;
       // TODO: this is specific to the X border? But currently not used because transvoxel does its own indexing.

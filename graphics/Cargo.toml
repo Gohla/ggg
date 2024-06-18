@@ -11,7 +11,7 @@ os = { path = "../core/os" }
 gfx = { path = "../core/gfx", features = ["serde", "inspector_gui"] }
 gui = { path = "../core/gui" }
 app = { path = "../core/app" }
-voxel = { path = "../core/voxel" }
+voxel = { path = "../core/voxel", features = ["serde"] }
 wgpu = { workspace = true, features = ["spirv"] }
 egui = { workspace = true }
 image = { workspace = true, default-features = false, features = ["bmp", "png"] }

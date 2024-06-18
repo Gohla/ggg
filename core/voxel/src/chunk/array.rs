@@ -125,7 +125,7 @@ impl<T, I: Index> ArrayIndex<T, I> for RangeToInclusive<I> {
 // Array implementation
 
 #[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ConstArray<T, I: Index, const LEN: usize> {
   #[cfg_attr(feature = "serde", serde(bound(serialize = "T: serde::Serialize", deserialize = "T: serde::Deserialize<'de>"), with = "serde_arrays"))]

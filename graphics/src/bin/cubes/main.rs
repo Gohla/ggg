@@ -7,6 +7,7 @@ use bytemuck::{Pod, Zeroable};
 use egui::{DragValue, Ui};
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
+use serde::{Deserialize, Serialize};
 use ultraviolet::{Mat4, Vec3, Vec4};
 use wgpu::{BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages};
 
@@ -16,7 +17,8 @@ use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraInput, CameraSettings};
+use gfx::camera::{Camera, CameraData, CameraSettings};
+use gfx::camera::controller::CameraControllerInput;
 use gfx::camera::inspector::CameraInspector;
 use gui::widget::UiWidgetsExt;
 use os::Os;
@@ -38,12 +40,11 @@ struct Uniform {
   camera_position: Vec4,
   view_projection: Mat4,
 }
-
 impl Uniform {
   pub fn from_camera(camera: &Camera) -> Self {
     Self {
-      camera_position: camera.get_position().into_homogeneous_point(),
-      view_projection: camera.get_view_projection_matrix(),
+      camera_position: camera.position().into_homogeneous_point(),
+      view_projection: *camera.view_projection_matrix(),
     }
   }
 }
@@ -53,7 +54,6 @@ impl Uniform {
 struct Instance {
   position: Vec4,
 }
-
 impl Instance {
   fn from_position(position: Vec3) -> Self { Self { position: position.into_homogeneous_point() } }
 
@@ -63,8 +63,8 @@ impl Instance {
 }
 
 pub struct Cubes {
-  camera_settings: CameraSettings,
-  camera_debugging: CameraInspector,
+  data: Data,
+
   camera: Camera,
 
   uniform_buffer: GfxBuffer,
@@ -75,27 +75,56 @@ pub struct Cubes {
 
   index_buffer: GfxBuffer,
 
-  num_cubes_to_generate: u32,
-  cube_position_range: f32,
   rng: SmallRng,
 
   num_cubes: u32,
 }
 
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct Data {
+  camera_data: CameraData,
+  camera_settings: CameraSettings,
+  camera_inspector: CameraInspector,
+
+  num_cubes_to_generate: u32,
+  cube_position_range: f32,
+}
+impl Default for Data {
+  fn default() -> Self {
+    let mut data = Self {
+      camera_data: Default::default(),
+      camera_settings: Default::default(),
+      camera_inspector: Default::default(),
+      num_cubes_to_generate: 100_000,
+      cube_position_range: 1000.0,
+    };
+    data.camera_settings.controller.arcball.mouse_scroll_distance_speed = 100.0;
+
+    data.camera_inspector.default_data = data.camera_data;
+    data.camera_inspector.default_settings = data.camera_settings;
+    data
+  }
+}
+impl Data {
+  pub fn set_camera_inspector_defaults(&mut self) {
+    let default = Self::default();
+    self.camera_inspector.default_data = default.camera_data;
+    self.camera_inspector.default_settings = default.camera_settings;
+  }
+}
+
 pub struct Input {
-  camera: CameraInput,
+  camera: CameraControllerInput,
 }
 
 impl app::Application for Cubes {
-  type Data = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
-    let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
-    camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
-    let camera_debugging = CameraInspector::with_default_settings(camera_settings);
-    let camera = Camera::new(viewport.physical, &mut camera_settings);
+  type Data = Data;
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut data: Self::Data) -> Self {
+    data.set_camera_inspector_defaults();
 
-    let num_cubes_to_generate = 100_000;
-    let cube_position_range = 1000.0;
+    let camera = Camera::new(&mut data.camera_data, &data.camera_settings, viewport.physical);
+
     let mut rng = SmallRng::seed_from_u64(101702198783735);
 
     let uniform_buffer = BufferBuilder::default()
@@ -114,8 +143,8 @@ impl app::Application for Cubes {
       {
         let mut view = buffer.slice(..).get_mapped_range_mut();
         let instance_slice: &mut [Instance] = bytemuck::cast_slice_mut(&mut view);
-        (0..num_cubes_to_generate)
-          .map(|_| Instance::from_random_range(&mut rng, -cube_position_range..cube_position_range))
+        (0..data.num_cubes_to_generate)
+          .map(|_| Instance::from_random_range(&mut rng, -data.cube_position_range..data.cube_position_range))
           .zip(instance_slice)
           .for_each(|(instance, place)| *place = instance);
       }
@@ -155,8 +184,8 @@ impl app::Application for Cubes {
     };
 
     Self {
-      camera_settings,
-      camera_debugging,
+      data,
+
       camera,
 
       uniform_buffer,
@@ -167,12 +196,13 @@ impl app::Application for Cubes {
 
       index_buffer,
 
-      num_cubes_to_generate,
-      cube_position_range,
       rng,
 
-      num_cubes: num_cubes_to_generate,
+      num_cubes: data.num_cubes_to_generate,
     }
+  }
+  fn into_data(self) -> Self::Data {
+    self.data
   }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
@@ -180,35 +210,35 @@ impl app::Application for Cubes {
   }
 
   type Input = Input;
-  fn process_input(&mut self, input: RawInput) -> Input {
-    let camera = CameraInput::from(&input);
+  fn process_input(&mut self, input: RawInput) -> Self::Input {
+    let camera = CameraControllerInput::from(&input);
     Input { camera }
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    self.camera_debugging.add_to_menu(ui);
+    self.data.camera_inspector.add_to_menu(ui);
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show_single(&gui, &self.camera, &mut self.camera_settings);
-    self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
+    self.data.camera_inspector.show_window_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
+    self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     gui.window("Cubes").show(&gui, |ui| {
       ui.grid("Grid", |ui| {
         ui.label("Cube instances");
-        ui.add(DragValue::new(&mut self.num_cubes_to_generate).prefix("# ").speed(1000).clamp_range(0..=MAX_INSTANCES));
+        ui.add(DragValue::new(&mut self.data.num_cubes_to_generate).prefix("# ").speed(1000).clamp_range(0..=MAX_INSTANCES));
         ui.end_row();
         ui.label("Position range");
-        ui.add(DragValue::new(&mut self.cube_position_range).speed(10).clamp_range(100..=1_000_000));
+        ui.add(DragValue::new(&mut self.data.cube_position_range).speed(10).clamp_range(100..=1_000_000));
         ui.end_row();
       });
       if ui.button("Regenerate").clicked() {
-        let instances: Vec<_> = (0..self.num_cubes_to_generate)
-          .map(|_| Instance::from_random_range(&mut self.rng, -self.cube_position_range..self.cube_position_range))
+        let instances: Vec<_> = (0..self.data.num_cubes_to_generate)
+          .map(|_| Instance::from_random_range(&mut self.rng, -self.data.cube_position_range..self.data.cube_position_range))
           .collect();
         self.instance_buffer.write_all_data(&gfx.queue, &instances);
-        self.num_cubes = self.num_cubes_to_generate
+        self.num_cubes = self.data.num_cubes_to_generate
       }
     });
 
@@ -226,7 +256,6 @@ impl app::Application for Cubes {
 
 fn main() {
   AppRunner::from_name("Cubes")
-    .with_high_power_graphics_adapter()
     .run::<Cubes>()
     .unwrap();
 }

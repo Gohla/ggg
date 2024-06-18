@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="3.B surface_nets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="build --bin surface_nets" />
+  <configuration default="false" name="P voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="profile">
+    <option name="command" value="run --bin voxel_planets --features profile-with-tracy" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />

@@ -6,85 +6,74 @@ use wgpu::util::StagingBelt;
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::camera::{Camera, CameraInput, CameraSettings};
-use gfx::camera::inspector::CameraInspector;
+use gfx::camera::Camera;
+use gfx::camera::controller::CameraControllerInput;
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::Gfx;
 use os::Os;
 use voxel::chunk::mesh::ChunkMesh;
-use voxel::chunk::size::ChunkSize1;
 use voxel::render::VoxelRenderer;
-use voxel::uniform::{CameraUniform, LightSettings, ModelUniform};
+use voxel::uniform::{CameraUniform, ModelUniform};
 
-use crate::marching_cubes_debugging::MarchingCubesDebugging;
+use crate::data::Data;
 
-mod marching_cubes_debugging;
+mod data;
+mod inspector;
 
 pub struct MarchingCubesDemo {
-  camera_settings: CameraSettings,
-  camera_debugging: CameraInspector,
+  data: Data,
+
   camera: Camera,
 
   camera_uniform: CameraUniform,
-  light_settings: LightSettings,
   model_uniform: ModelUniform,
 
   debug_renderer: DebugRenderer,
   voxel_renderer: VoxelRenderer,
-
-  marching_cubes_debugging: MarchingCubesDebugging,
 }
 
-#[derive(Default)]
 pub struct Input {
-  camera: CameraInput,
+  camera: CameraControllerInput,
 }
 
-pub type C1 = ChunkSize1;
-
+/// Extends of the cube to render the result of marching cubes in.
 const EXTENDS: f32 = 0.5;
 
 impl app::Application for MarchingCubesDemo {
-  type Data = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
-    let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
-    camera_settings.arcball.distance = 2.0;
-    let camera_debugging = CameraInspector::with_default_settings(camera_settings);
-    let camera = Camera::new(viewport.physical, &mut camera_settings);
+  type Data = Data;
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut data: Self::Data) -> Self {
+    data.set_camera_inspector_defaults();
+
+    let camera = Camera::new(&mut data.camera_data, &data.camera_settings, viewport.physical);
 
     let camera_uniform = CameraUniform::from_camera(&camera);
-    let mut light_settings = LightSettings::default();
-    light_settings.uniform.ambient = 0.2;
-    light_settings.uniform.color = Vec3::new(0.0, 0.5, 0.35);
     let transform = Isometry3::new(Vec3::broadcast(-EXTENDS), Rotor3::identity());
     let model_uniform = ModelUniform::from_transform(transform);
 
-    let debug_renderer = DebugRenderer::new(gfx, camera.get_view_projection_matrix());
+    let debug_renderer = DebugRenderer::new(gfx, *camera.view_projection_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
-      light_settings.uniform,
+      data.light.uniform,
       model_uniform,
       None,
       StagingBelt::new(256), // Tiny staging belt: tiny buffers in this demo.
     );
 
-    let marching_cubes_debugging = MarchingCubesDebugging::default();
-
     Self {
-      camera_settings,
-      camera_debugging,
+      data,
+
       camera,
 
       camera_uniform,
-      light_settings,
       model_uniform,
 
       debug_renderer,
       voxel_renderer,
-
-      marching_cubes_debugging,
     }
+  }
+  fn into_data(self) -> Self::Data {
+    self.data
   }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
@@ -92,45 +81,45 @@ impl app::Application for MarchingCubesDemo {
   }
 
   type Input = Input;
-  fn process_input(&mut self, input: RawInput) -> Input {
-    let camera = CameraInput::from(&input);
+  fn process_input(&mut self, input: RawInput) -> Self::Input {
+    let camera = CameraControllerInput::from(&input);
     Input { camera }
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    self.camera_debugging.add_to_menu(ui);
+    self.data.camera_inspector.add_to_menu(ui);
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
     // Update camera
-    self.camera_debugging.show_single(&gui, &self.camera, &mut self.camera_settings);
-    self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
+    self.data.camera_inspector.show_window_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
+    self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
     self.camera_uniform.update_from_camera(&self.camera);
 
     // Debug GUI
-    self.marching_cubes_debugging.show(&gui);
+    self.data.inspector.show_window(&gui);
     gui.window("Demo").anchor(Align2::LEFT_BOTTOM, egui::Vec2::default()).show(&gui, |ui| {
-      self.light_settings.render_gui(ui, self.camera.get_direction_inverse());
+      self.data.light.show(ui, self.camera.inverse_direction_vector());
     });
 
 
     // Write uniforms, run MC to create vertices from voxels, and render them.
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
-    self.voxel_renderer.update_light_uniform(&gfx.queue, self.light_settings.uniform);
+    self.voxel_renderer.update_light_uniform(&gfx.queue, self.data.light.uniform);
     let mut chunk_vertices = ChunkMesh::new();
-    self.marching_cubes_debugging.extract_chunk(&mut chunk_vertices);
+    self.data.inspector.extract_chunk(&mut chunk_vertices);
     self.voxel_renderer.render_chunk_vertices(gfx, &mut gfx_frame, true, &chunk_vertices);
 
     // Debug rendering.
     self.debug_renderer.clear();
     self.debug_renderer.draw_axes_lines(Vec3::broadcast(EXTENDS), EXTENDS);
-    self.marching_cubes_debugging.debug_draw(&mut self.debug_renderer);
+    self.data.inspector.debug_draw(&mut self.debug_renderer);
     self.debug_renderer.draw_triangle_vertices_wireframe_indexed(
       chunk_vertices.vertices().into_iter().map(|v| RegularVertex::new(v.position, Vec4::one())),
       chunk_vertices.indices().into_iter().map(|i| *i as u32),
     );
     self.debug_renderer.draw_point_vertices(chunk_vertices.vertices().into_iter().map(|v| PointVertex::new(v.position, Vec4::one(), 10.0)));
-    self.debug_renderer.render(gfx, &mut gfx_frame, self.camera.get_view_projection_matrix() * self.model_uniform.model);
+    self.debug_renderer.render(gfx, &mut gfx_frame, *self.camera.view_projection_matrix() * self.model_uniform.model);
 
     Box::new(std::iter::empty())
   }

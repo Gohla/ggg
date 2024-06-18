@@ -16,8 +16,9 @@ use voxel::surface_nets::lod::SurfaceNetsLod;
 
 use crate::{C2, C6};
 
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct SurfaceNetsDebugging {
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct SurfaceNetsInspector {
   main_lores: Chunk,
   x_positive: Chunk,
   x_positive_y: Chunk,
@@ -28,7 +29,7 @@ pub struct SurfaceNetsDebugging {
   selected_chunk: SelectedChunk,
 }
 
-#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, Debug)]
 enum SelectedChunk {
   #[default]
   Main,
@@ -38,26 +39,23 @@ enum SelectedChunk {
   XPositiveYZ,
 }
 
-#[derive(Default, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
 struct Chunk {
   selected_cell: Cell,
 }
 
-impl SurfaceNetsDebugging {
-  pub fn show(&mut self, gui: &Gui) {
-    egui::Window::new("Surface Nets")
-      .constrain_to(gui.area_under_title_bar)
-      .anchor(Align2::LEFT_TOP, egui::Vec2::default())
-      .show(&gui, |ui| {
-        ComboBox::from_id_source("Selected Chunk")
-          .selected_text(format!("{}", self.selected_chunk))
-          .show_ui(ui, |ui| {
-            for chunk in SelectedChunk::iter() {
-              ui.selectable_value(&mut self.selected_chunk, chunk, format!("{}", chunk));
-            }
-          });
-        self.draw_window_contents(ui);
-      });
+impl SurfaceNetsInspector {
+  pub fn show_window(&mut self, gui: &Gui) {
+    gui.window("Surface Nets").anchor(Align2::LEFT_TOP, egui::Vec2::default()).show(&gui, |ui| {
+      ComboBox::from_id_source("Selected Chunk")
+        .selected_text(format!("{}", self.selected_chunk))
+        .show_ui(ui, |ui| {
+          for chunk in SelectedChunk::iter() {
+            ui.selectable_value(&mut self.selected_chunk, chunk, format!("{}", chunk));
+          }
+        });
+      self.draw_window_contents(ui);
+    });
   }
 
   pub fn extract_chunk_and_debug_draw(&self, chunk_vertices: &mut ChunkMesh, debug_renderer: &mut DebugRenderer) {

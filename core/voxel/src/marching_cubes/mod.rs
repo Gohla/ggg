@@ -22,7 +22,7 @@ use crate::marching_cubes::tables::RegularVertexData;
 
 pub mod tables;
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct MarchingCubes<C: ChunkSize> {
   _chunk_size_phantom: PhantomData<C>,
 }

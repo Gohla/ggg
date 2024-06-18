@@ -1,10 +1,8 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="0.2.P voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin voxel_planets --features profile-with-tracy" />
+  <configuration default="false" name="Clean" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="cargo">
+    <option name="command" value="clean" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-    <envs>
-      <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />
-    </envs>
+    <envs />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="false" />

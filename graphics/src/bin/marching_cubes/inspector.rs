@@ -1,4 +1,5 @@
 use egui::{Align2, ComboBox, Ui};
+use serde::{Deserialize, Serialize};
 use ultraviolet::{UVec3, Vec4};
 
 use gfx::debug_renderer::DebugRenderer;
@@ -7,40 +8,39 @@ use gui::Gui;
 use gui::widget::UiWidgetsExt;
 use voxel::chunk::mesh::ChunkMesh;
 use voxel::chunk::sample::{ChunkSampleArray, ChunkSamples, ChunkSamplesMut, MaybeCompressedChunkSampleArray};
-use voxel::chunk::size::ChunkSize;
+use voxel::chunk::size::{ChunkSize, ChunkSize1};
 use voxel::marching_cubes;
 use voxel::marching_cubes::{MarchingCubes, RegularCell};
 
-use crate::C1;
+pub type C1 = ChunkSize1;
 
 pub type MC = MarchingCubes<C1>;
 
 pub const MIN: UVec3 = UVec3::new(0, 0, 0);
 pub const STEP: u32 = 1;
 
-#[derive(Default)]
-pub struct MarchingCubesDebugging {
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
+pub struct Inspector {
+  #[serde(skip)]
   marching_cubes: MC,
   samples: ChunkSampleArray<C1>,
   equivalence_class: u8,
 }
 
-impl MarchingCubesDebugging {
-  pub fn show(&mut self, gui: &Gui) {
-    egui::Window::new("Marching Cubes")
-      .constrain_to(gui.area_under_title_bar)
-      .anchor(Align2::LEFT_TOP, egui::Vec2::default())
-      .show(&gui, |ui| {
-        self.draw_window_contents(ui);
-      });
+impl Inspector {
+  pub fn show_window(&mut self, gui: &Gui) {
+    gui.window("Marching Cubes").anchor(Align2::LEFT_TOP, egui::Vec2::default()).show(&gui, |ui| {
+      self.show(ui);
+    });
   }
 
-  fn draw_window_contents(&mut self, ui: &mut Ui) {
-    self.draw_cell_gui(ui);
-    self.draw_data_gui(ui);
+  pub fn show(&mut self, ui: &mut Ui) {
+    self.show_cell_gui(ui);
+    self.show_data_gui(ui);
   }
 
-  fn draw_cell_gui(&mut self, ui: &mut Ui) {
+
+  fn show_cell_gui(&mut self, ui: &mut Ui) {
     ui.collapsing_open("Cell", |ui| {
       ui.horizontal(|ui| {
         ComboBox::from_id_source("Equivalence class")
@@ -192,7 +192,7 @@ impl MarchingCubesDebugging {
     });
   }
 
-  fn draw_data_gui(&mut self, ui: &mut Ui) {
+  fn show_data_gui(&mut self, ui: &mut Ui) {
     let local_coordinates = MC::local_coordinates(RegularCell::new(0, 0, 0));
     let global_coordinates = MC::global_coordinates(UVec3::zero(), STEP, &local_coordinates);
     let values = MC::sample(&self.samples, &local_coordinates);

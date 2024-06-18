@@ -48,10 +48,10 @@ impl CameraInspector {
   }
 
 
-  pub fn show_single(&mut self, gui: &Gui, camera: &mut Camera, data: &mut CameraData, settings: &mut CameraSettings) {
-    self.show(gui, from_mut(camera), from_mut(data), from_mut(settings));
+  pub fn show_window_single(&mut self, gui: &Gui, camera: &mut Camera, data: &mut CameraData, settings: &mut CameraSettings) {
+    self.show_window(gui, from_mut(camera), from_mut(data), from_mut(settings));
   }
-  pub fn show(&mut self, gui: &Gui, cameras: &mut [Camera], data: &mut [CameraData], settings: &mut [CameraSettings]) {
+  pub fn show_window(&mut self, gui: &Gui, cameras: &mut [Camera], data: &mut [CameraData], settings: &mut [CameraSettings]) {
     if !self.show_window { return; }
     let mut window = Window::new("Camera")
       .constrain_to(gui.area_under_title_bar);

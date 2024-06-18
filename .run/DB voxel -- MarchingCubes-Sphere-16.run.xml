@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="1.RDP voxel_planets" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Z. voxel">
-    <option name="command" value="run --bin voxel_planets --profile=devprofile" />
+  <configuration default="false" name="DB voxel -- MarchingCubes-Sphere-16" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="voxel">
+    <option name="command" value="bench --package voxel --profile=devbench -- MarchingCubes-Sphere-16" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUSTFLAGS" value="-Ctarget-cpu=native" />

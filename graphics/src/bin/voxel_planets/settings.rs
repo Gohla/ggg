@@ -191,7 +191,7 @@ impl Settings {
   }
 
   pub fn draw_light_gui(&mut self, ui: &mut Ui, camera_direction_inverse: Vec3) {
-    self.light.render_gui(ui, camera_direction_inverse);
+    self.light.show(ui, camera_direction_inverse);
   }
 
   /// Returns true if update button was pressed.
