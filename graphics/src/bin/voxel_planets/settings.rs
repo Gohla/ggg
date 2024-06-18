@@ -7,7 +7,7 @@ use ultraviolet::{Isometry3, Mat4, Vec3};
 
 use gfx::camera::{CameraData, CameraSettings};
 use gfx::camera::controller::{Arcball, ArcballSettings, CameraControllerData, CameraControllerSettings, ControlType};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::inspector::CameraInspector;
 use gfx::camera::projection::CameraProjectionSettings;
 use gfx::Gfx;
 use gui::widget::UiWidgetsExt;
@@ -49,7 +49,7 @@ pub enum ExtractorType {
 pub struct Settings {
   pub camera_data: Vec<CameraData>,
   pub camera_settings: Vec<CameraSettings>,
-  pub camera_debugging: CameraDebugging,
+  pub camera_debugging: CameraInspector,
 
   pub light: LightSettings,
 
@@ -107,7 +107,7 @@ impl Default for Settings {
     Self {
       camera_data: vec![default_camera_data; 2],
       camera_settings: vec![default_camera_settings; 2],
-      camera_debugging: CameraDebugging {
+      camera_debugging: CameraInspector {
         show_window: true,
         window_anchor: Some(Align2::LEFT_BOTTOM),
         default_data: default_camera_data,

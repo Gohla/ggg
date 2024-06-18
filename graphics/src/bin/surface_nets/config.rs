@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use ultraviolet::Vec3;
 
 use gfx::camera::{CameraSettings, ProjectionType};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::inspector::CameraInspector;
 use voxel::uniform::LightSettings;
 
 use crate::SurfaceNetsDebugging;
@@ -10,7 +10,7 @@ use crate::SurfaceNetsDebugging;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
   pub camera_settings: CameraSettings,
-  pub camera_debugging: CameraDebugging,
+  pub camera_debugging: CameraInspector,
   pub light_settings: LightSettings,
   pub surface_nets_debugging: SurfaceNetsDebugging,
 }
@@ -35,7 +35,7 @@ impl Default for Config {
   fn default() -> Self {
     Self {
       camera_settings: default_camera_settings(),
-      camera_debugging: CameraDebugging {
+      camera_debugging: CameraInspector {
         window_anchor: Some(egui::Align2::LEFT_BOTTOM),
         default_settings: default_camera_settings(),
         ..Default::default()

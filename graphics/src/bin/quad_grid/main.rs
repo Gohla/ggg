@@ -17,7 +17,7 @@ use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::inspector::CameraInspector;
 use gfx::texture_def::{ArrayTextureDef, ArrayTextureDefBuilder};
 use os::Os;
 
@@ -72,7 +72,7 @@ pub struct Input {
 
 pub struct QuadGrid {
   camera_settings: CameraSettings,
-  camera_debugging: CameraDebugging,
+  camera_debugging: CameraInspector,
   camera: Camera,
 
   uniform_buffer: GfxBuffer,
@@ -87,10 +87,10 @@ pub struct QuadGrid {
 }
 
 impl app::Application for QuadGrid {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
+  type Data = ();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
-    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    let camera_debugging = CameraInspector::with_default_settings(camera_settings);
     let camera = Camera::new(viewport.physical, &mut camera_settings);
 
     let uniform_buffer = BufferBuilder::default()

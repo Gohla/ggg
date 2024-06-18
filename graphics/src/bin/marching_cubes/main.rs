@@ -7,7 +7,7 @@ use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
 use gfx::camera::{Camera, CameraInput, CameraSettings};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::inspector::CameraInspector;
 use gfx::debug_renderer::{DebugRenderer, PointVertex, RegularVertex};
 use gfx::Gfx;
 use os::Os;
@@ -22,7 +22,7 @@ mod marching_cubes_debugging;
 
 pub struct MarchingCubesDemo {
   camera_settings: CameraSettings,
-  camera_debugging: CameraDebugging,
+  camera_debugging: CameraInspector,
   camera: Camera,
 
   camera_uniform: CameraUniform,
@@ -45,11 +45,11 @@ pub type C1 = ChunkSize1;
 const EXTENDS: f32 = 0.5;
 
 impl app::Application for MarchingCubesDemo {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
+  type Data = ();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_orthographic();
     camera_settings.arcball.distance = 2.0;
-    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    let camera_debugging = CameraInspector::with_default_settings(camera_settings);
     let camera = Camera::new(viewport.physical, &mut camera_settings);
 
     let camera_uniform = CameraUniform::from_camera(&camera);

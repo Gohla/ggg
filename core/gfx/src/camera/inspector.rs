@@ -13,7 +13,7 @@ use super::{Camera, CameraData, CameraSettings};
 
 #[derive(Default, Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct CameraDebugging {
+pub struct CameraInspector {
   pub show_window: bool,
   pub window_anchor: Option<Align2>,
   pub selected_camera: usize,
@@ -24,7 +24,7 @@ pub struct CameraDebugging {
   pub default_settings: CameraSettings,
 }
 
-impl CameraDebugging {
+impl CameraInspector {
   pub fn default_data(mut self, default_data: CameraData) -> Self {
     self.default_data = default_data;
     self
@@ -71,10 +71,10 @@ impl CameraDebugging {
               }
             });
           ui.select_align2(&mut self.window_anchor);
-          ui.reset_button_new()
-            .check(&mut settings[self.selected_camera], self.default_settings)
-            .check(&mut data[self.selected_camera], self.default_data)
-            .on_double_click();
+          ui.reset_button()
+            .compare(&mut settings[self.selected_camera], self.default_settings)
+            .compare(&mut data[self.selected_camera], self.default_data)
+            .reset_on_double_click();
         });
         let camera = &mut cameras[self.selected_camera];
         let data = &mut data[self.selected_camera];
@@ -112,14 +112,11 @@ impl CameraDebugging {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("key: ", &mut settings.arcball.keyboard_panning_speed, 1.0, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_panning_speed, 1.0, 0.0..=f32::INFINITY);
-            let can_reset = settings.arcball.mouse_movement_panning_speed != default_settings.arcball.mouse_movement_panning_speed
-              || settings.arcball.keyboard_panning_speed != default_settings.arcball.keyboard_panning_speed
-              || settings.arcball.debug_gui_panning_speed != default_settings.arcball.debug_gui_panning_speed;
-            if ui.reset_button_response(can_reset).clicked() {
-              settings.arcball.mouse_movement_panning_speed = default_settings.arcball.mouse_movement_panning_speed;
-              settings.arcball.keyboard_panning_speed = default_settings.arcball.keyboard_panning_speed;
-              settings.arcball.debug_gui_panning_speed = default_settings.arcball.debug_gui_panning_speed;
-            }
+            ui.reset_button()
+              .compare(&mut settings.arcball.mouse_movement_panning_speed, default_settings.arcball.mouse_movement_panning_speed)
+              .compare(&mut settings.arcball.keyboard_panning_speed, default_settings.arcball.keyboard_panning_speed)
+              .compare(&mut settings.arcball.debug_gui_panning_speed, default_settings.arcball.debug_gui_panning_speed)
+              .reset_on_click();
           });
           ui.end_row();
 
@@ -131,12 +128,10 @@ impl CameraDebugging {
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_scroll_distance_speed, 0.1, 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_distance_speed, 1.0, 0.0..=f32::INFINITY);
-            let can_reset = settings.arcball.mouse_scroll_distance_speed != default_settings.arcball.mouse_scroll_distance_speed
-              || settings.arcball.debug_gui_distance_speed != default_settings.arcball.debug_gui_distance_speed;
-            if ui.reset_button_response(can_reset).clicked() {
-              settings.arcball.mouse_scroll_distance_speed = default_settings.arcball.mouse_scroll_distance_speed;
-              settings.arcball.debug_gui_distance_speed = default_settings.arcball.debug_gui_distance_speed;
-            }
+            ui.reset_button()
+              .compare(&mut settings.arcball.mouse_scroll_distance_speed, default_settings.arcball.mouse_scroll_distance_speed)
+              .compare(&mut settings.arcball.debug_gui_distance_speed, default_settings.arcball.debug_gui_distance_speed)
+              .reset_on_click();
           });
           ui.end_row();
 
@@ -144,12 +139,10 @@ impl CameraDebugging {
           ui.horizontal(|ui| {
             ui.drag("x: ", &mut data.arcball.rotation_around_x, 0.01);
             ui.drag("y: ", &mut data.arcball.rotation_around_y, 0.01);
-            let can_reset = data.arcball.rotation_around_x != default_data.arcball.rotation_around_x
-              || data.arcball.rotation_around_y != default_data.arcball.rotation_around_y;
-            if ui.reset_button_response(can_reset).clicked() {
-              data.arcball.rotation_around_x = default_data.arcball.rotation_around_x;
-              data.arcball.rotation_around_y = default_data.arcball.rotation_around_y;
-            }
+            ui.reset_button()
+              .compare(&mut data.arcball.rotation_around_x, default_data.arcball.rotation_around_x)
+              .compare(&mut data.arcball.rotation_around_y, default_data.arcball.rotation_around_y)
+              .reset_on_click();
           });
           ui.end_row();
 
@@ -157,10 +150,10 @@ impl CameraDebugging {
           ui.horizontal(|ui| {
             ui.drag_range("mouse: ", &mut settings.arcball.mouse_movement_rotation_speed, 1., 0.0..=f32::INFINITY);
             ui.drag_range("drag: ", &mut settings.arcball.debug_gui_rotation_speed, 1.0, 0.0..=f32::INFINITY);
-            if ui.reset_button_response(settings.arcball.mouse_movement_rotation_speed != default_settings.arcball.mouse_movement_rotation_speed || settings.arcball.debug_gui_rotation_speed != default_settings.arcball.debug_gui_rotation_speed).clicked() {
-              settings.arcball.mouse_movement_rotation_speed = default_settings.arcball.mouse_movement_rotation_speed;
-              settings.arcball.debug_gui_rotation_speed = default_settings.arcball.debug_gui_rotation_speed;
-            }
+            ui.reset_button()
+              .compare(&mut settings.arcball.mouse_movement_rotation_speed, default_settings.arcball.mouse_movement_rotation_speed)
+              .compare(&mut settings.arcball.debug_gui_rotation_speed, default_settings.arcball.debug_gui_rotation_speed)
+              .reset_on_click();
           });
           ui.end_row();
         }
@@ -194,7 +187,9 @@ impl CameraDebugging {
           ui.label("Vertical FOV");
           ui.horizontal(|ui| {
             ui.drag_angle(&mut settings.perspective.vertical_fov_radians);
-            ui.reset_button_with(&mut settings.perspective.vertical_fov_radians, default_settings.perspective.vertical_fov_radians);
+            ui.reset_button()
+              .compare(&mut settings.perspective.vertical_fov_radians, default_settings.perspective.vertical_fov_radians)
+              .reset_on_click();
           });
           ui.end_row();
         }

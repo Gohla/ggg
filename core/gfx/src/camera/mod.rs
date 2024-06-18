@@ -8,8 +8,8 @@ use crate::camera::projection::{CameraProjection, CameraProjectionSettings};
 
 pub mod controller;
 pub mod projection;
-#[cfg(feature = "debugging_gui")]
-pub mod debug;
+#[cfg(feature = "inspector_gui")]
+pub mod inspector;
 
 /// Camera settings
 #[derive(Default, Copy, Clone, PartialEq, Debug)]

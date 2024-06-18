@@ -43,8 +43,8 @@ pub struct Triangle {
 }
 
 impl app::Application for Triangle {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, _viewport: ScreenSize, _config: Self::Config) -> Self {
+  type Data = ();
+  fn new(_os: &Os, gfx: &Gfx, _viewport: ScreenSize, _config: Self::Data) -> Self {
     let vertex_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("vert"));
     let fragment_shader_module = gfx.device.create_shader_module(include_spirv_shader_for_bin!("frag"));
     let (_, render_pipeline) = gfx.render_pipeline_builder()

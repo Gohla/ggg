@@ -54,8 +54,8 @@ pub struct RayTracing {
 }
 
 impl app::Application for RayTracing {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
+  type Data = ();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
     let camera_aperture = 0.1;
     let camera_origin = Vec3::new(0.0, 1.0, 3.0);
     let v_fov = 45.0;

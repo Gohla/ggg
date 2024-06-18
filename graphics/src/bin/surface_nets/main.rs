@@ -44,8 +44,8 @@ pub type C6 = ChunkSize6;
 const EXTENDS: f32 = C2::CELLS_IN_CHUNK_ROW_F32 / 2.0;
 
 impl app::Application for SurfaceNetsDemo {
-  type Config = Config;
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut config: Self::Config) -> Self {
+  type Data = Config;
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut config: Self::Data) -> Self {
     config.update_default_camera_settings();
 
     let camera = Camera::new(viewport.physical, &mut config.camera_settings);
@@ -76,7 +76,7 @@ impl app::Application for SurfaceNetsDemo {
       voxel_renderer,
     }
   }
-  fn into_config(self) -> Self::Config {
+  fn into_data(self) -> Self::Data {
     self.config
   }
 

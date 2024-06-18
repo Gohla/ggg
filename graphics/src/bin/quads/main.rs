@@ -4,6 +4,7 @@ use std::mem::size_of;
 
 use bytemuck::{Pod, Zeroable};
 use egui::Ui;
+use serde::{Deserialize, Serialize};
 use ultraviolet::{Isometry3, Mat4, Rotor3, Vec2, Vec3};
 use wgpu::{BufferAddress, CommandBuffer, IndexFormat, RenderPipeline, ShaderStages, VertexAttribute, VertexBufferLayout, VertexStepMode};
 
@@ -13,8 +14,9 @@ use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraInput, CameraSettings};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::{Camera, CameraData, CameraSettings};
+use gfx::camera::controller::CameraControllerInput;
+use gfx::camera::inspector::CameraInspector;
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
 use os::Os;
@@ -58,7 +60,7 @@ struct Uniform {
 impl Uniform {
   pub fn from_camera(camera: &Camera) -> Self {
     Self {
-      view_projection: camera.get_view_projection_matrix(),
+      view_projection: *camera.view_projection_matrix(),
     }
   }
 }
@@ -86,8 +88,8 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 
 pub struct Quads {
-  camera_settings: CameraSettings,
-  camera_debugging: CameraDebugging,
+  data: Data,
+
   camera: Camera,
 
   diffuse_bind_group: CombinedBindGroup,
@@ -103,15 +105,20 @@ pub struct Quads {
 }
 
 pub struct Input {
-  camera: CameraInput,
+  camera: CameraControllerInput,
+}
+
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
+pub struct Data {
+  camera_data: CameraData,
+  camera_settings: CameraSettings,
+  camera_inspector: CameraInspector,
 }
 
 impl app::Application for Quads {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, _config: Self::Config) -> Self {
-    let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
-    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
-    let camera = Camera::new(screen_size.physical, &mut camera_settings);
+  type Data = Data;
+  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut data: Self::Data) -> Self {
+    let camera = Camera::new(&mut data.camera_data, &data.camera_settings, screen_size.physical);
 
     let diffuse_bind_group = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
@@ -135,7 +142,7 @@ impl app::Application for Quads {
 
     let uniform_buffer = BufferBuilder::default()
       .uniform_usage()
-      .build_with_data(&gfx.device, &[Uniform { view_projection: camera.get_view_projection_matrix() }]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
     let uniform_bind_group = CombinedBindGroupBuilder::new()
       .layout_entries(&[uniform_binding.layout])
@@ -179,8 +186,8 @@ impl app::Application for Quads {
       .build_with_data(&gfx.device, &instances);
 
     Self {
-      camera_settings,
-      camera_debugging,
+      data,
+
       camera,
 
       diffuse_bind_group,
@@ -195,6 +202,9 @@ impl app::Application for Quads {
       instance_buffer,
     }
   }
+  fn into_data(self) -> Self::Data {
+    self.data
+  }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
     self.camera.set_viewport(viewport.physical);
@@ -202,17 +212,17 @@ impl app::Application for Quads {
 
   type Input = Input;
   fn process_input(&mut self, input: RawInput) -> Input {
-    let camera = CameraInput::from(&input);
+    let camera = CameraControllerInput::from(&input);
     Input { camera }
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    self.camera_debugging.add_to_menu(ui);
+    self.data.camera_inspector.add_to_menu(ui);
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.camera_debugging.show_single(&gui, &self.camera, &mut self.camera_settings);
-    self.camera.update(&mut self.camera_settings, &input.camera, frame.duration);
+    self.data.camera_inspector.show_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
+    self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
     self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
 
     gui.window("Quads").show(&gui, |ui| {

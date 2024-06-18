@@ -17,7 +17,7 @@ use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
 use gfx::camera::{Camera, CameraInput, CameraSettings};
-use gfx::camera::debug::CameraDebugging;
+use gfx::camera::inspector::CameraInspector;
 use gui::widget::UiWidgetsExt;
 use os::Os;
 
@@ -64,7 +64,7 @@ impl Instance {
 
 pub struct Cubes {
   camera_settings: CameraSettings,
-  camera_debugging: CameraDebugging,
+  camera_debugging: CameraInspector,
   camera: Camera,
 
   uniform_buffer: GfxBuffer,
@@ -87,11 +87,11 @@ pub struct Input {
 }
 
 impl app::Application for Cubes {
-  type Config = ();
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Config) -> Self {
+  type Data = ();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, _config: Self::Data) -> Self {
     let mut camera_settings = CameraSettings::with_defaults_arcball_perspective();
     camera_settings.arcball.mouse_scroll_distance_speed = 100.0;
-    let camera_debugging = CameraDebugging::with_default_settings(camera_settings);
+    let camera_debugging = CameraInspector::with_default_settings(camera_settings);
     let camera = Camera::new(viewport.physical, &mut camera_settings);
 
     let num_cubes_to_generate = 100_000;

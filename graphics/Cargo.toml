@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 common = { path = "../core/common" }
 os = { path = "../core/os" }
-gfx = { path = "../core/gfx" }
+gfx = { path = "../core/gfx", features = ["serde", "inspector_gui"] }
 gui = { path = "../core/gui" }
 app = { path = "../core/app" }
 voxel = { path = "../core/voxel" }

@@ -22,6 +22,6 @@ profiling.workspace = true
 gfxc = { path = "../gfxc" }
 
 [features]
-default = ["serde", "debugging_gui"]
-serde = ["dep:serde", "common/serde", "egui/serde", "ultraviolet/serde"]
-debugging_gui = ["dep:egui", "dep:gui"]
+default = []
+serde = ["dep:serde", "common/serde", "ultraviolet/serde", "egui?/serde"]
+inspector_gui = ["dep:egui", "dep:gui"]

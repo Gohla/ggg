@@ -2,10 +2,12 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::RangeInclusive;
 
-use egui::{Align2, Button, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
+use egui::{Align2, CollapsingHeader, CollapsingResponse, color_picker, ComboBox, Context, DragValue, Grid, InnerResponse, Response, Rgba, Ui, WidgetText, Window};
 use egui::color_picker::Alpha;
 use egui::emath::Numeric;
 use ultraviolet::{Mat4, Vec2, Vec3, Vec4};
+
+use crate::reset::UiResetButtonExt;
 
 pub trait ContextWidgetsExt {
   fn window(&self, title: impl Into<WidgetText>, add_contents: impl FnOnce(&mut Ui)) -> Option<InnerResponse<Option<()>>>;
@@ -22,12 +24,6 @@ pub trait UiWidgetsExt {
   fn grid<R>(&mut self, id_source: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
   fn collapsing_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
   fn collapsing_open_with_grid<R>(&mut self, heading: impl Into<WidgetText>, grid_id: impl Hash, add_contents: impl FnOnce(&mut Ui) -> R) -> CollapsingResponse<InnerResponse<R>>;
-
-  fn reset_button<T: Default + PartialEq>(&mut self, value: &mut T);
-  fn reset_button_with<T: PartialEq>(&mut self, value: &mut T, reset_value: T);
-  fn reset_button_double_click<T: Default + PartialEq>(&mut self, value: &mut T);
-  fn reset_button_double_click_with<T: PartialEq>(&mut self, value: &mut T, reset_value: T);
-  fn reset_button_response(&mut self, can_reset: bool) -> Response;
 
   fn drag<N: Numeric>(&mut self, prefix: impl ToString, value: &mut N, speed: impl Into<f64>) -> Response;
   fn drag_with_reset<N: Numeric>(&mut self, prefix: impl ToString, value: &mut N, speed: impl Into<f64>, reset_value: N) -> Response;
@@ -82,32 +78,6 @@ impl UiWidgetsExt for Ui {
 
 
   #[inline]
-  fn reset_button<T: Default + PartialEq>(&mut self, value: &mut T) {
-    self.reset_button_with(value, T::default());
-  }
-  #[inline]
-  fn reset_button_with<T: PartialEq>(&mut self, value: &mut T, reset_value: T) {
-    if self.reset_button_response(*value != reset_value).clicked() {
-      *value = reset_value;
-    }
-  }
-  #[inline]
-  fn reset_button_double_click<T: Default + PartialEq>(&mut self, value: &mut T) {
-    self.reset_button_double_click_with(value, T::default());
-  }
-  #[inline]
-  fn reset_button_double_click_with<T: PartialEq>(&mut self, value: &mut T, reset_value: T) {
-    if self.reset_button_response(*value != reset_value).double_clicked() {
-      *value = reset_value;
-    }
-  }
-  #[inline]
-  fn reset_button_response(&mut self, can_reset: bool) -> Response {
-    self.add_enabled(can_reset, Button::new("↺"))
-  }
-
-
-  #[inline]
   fn drag<N: Numeric>(&mut self, prefix: impl ToString, value: &mut N, speed: impl Into<f64>) -> Response {
     self.add(DragValue::new(value).prefix(prefix).speed(speed))
   }
@@ -115,7 +85,7 @@ impl UiWidgetsExt for Ui {
   fn drag_with_reset<N: Numeric>(&mut self, prefix: impl ToString, value: &mut N, speed: impl Into<f64>, reset_value: N) -> Response {
     self.horizontal(|ui| {
       let response = ui.drag(prefix, value, speed);
-      ui.reset_button_with(value, reset_value);
+      ui.reset_button().compare(value, reset_value).reset_on_click();
       response
     }).response
   }
@@ -127,7 +97,7 @@ impl UiWidgetsExt for Ui {
   fn drag_range_with_reset<N: Numeric>(&mut self, prefix: impl ToString, value: &mut N, speed: impl Into<f64>, clamp_range: RangeInclusive<N>, reset_value: N) -> Response {
     self.horizontal(|ui| {
       let response = ui.drag_range(prefix, value, speed, clamp_range);
-      ui.reset_button_with(value, reset_value);
+      ui.reset_button().compare(value, reset_value).reset_on_click();
       response
     }).response
   }
@@ -139,7 +109,7 @@ impl UiWidgetsExt for Ui {
   fn drag_unlabelled_with_reset<N: Numeric>(&mut self, value: &mut N, speed: impl Into<f64>, reset_value: N) -> Response {
     self.horizontal(|ui| {
       let response = ui.drag_unlabelled(value, speed);
-      ui.reset_button_with(value, reset_value);
+      ui.reset_button().compare(value, reset_value).reset_on_click();
       response
     }).response
   }
@@ -151,7 +121,7 @@ impl UiWidgetsExt for Ui {
   fn drag_unlabelled_range_with_reset<N: Numeric>(&mut self, value: &mut N, speed: impl Into<f64>, clamp_range: RangeInclusive<N>, reset_value: N) -> Response {
     self.horizontal(|ui| {
       let response = ui.drag_unlabelled_range(value, speed, clamp_range);
-      ui.reset_button_with(value, reset_value);
+      ui.reset_button().compare(value, reset_value).reset_on_click();
       response
     }).response
   }
@@ -210,7 +180,7 @@ impl UiWidgetsExt for Ui {
       ui.drag("x: ", &mut vec.x, speed);
       ui.drag("y: ", &mut vec.y, speed);
       ui.drag("z: ", &mut vec.z, speed);
-      ui.reset_button_with(vec, reset_value);
+      ui.reset_button().compare(vec, reset_value).reset_on_click();
     });
   }
 

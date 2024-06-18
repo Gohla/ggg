@@ -44,10 +44,10 @@ pub struct Input {
 const EXTENDS: f32 = 4096.0 / 2.0;
 
 impl app::Application for VoxelPlanets {
-  type Config = Settings;
+  type Data = Settings;
 
   #[profiling::function]
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut settings: Self::Config) -> Self {
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut settings: Self::Data) -> Self {
     settings.update_default_camera_settings();
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
@@ -83,7 +83,7 @@ impl app::Application for VoxelPlanets {
       lod_render_data: LodRenderData::default(),
     }
   }
-  fn into_config(self) -> Self::Config { self.settings }
+  fn into_data(self) -> Self::Data { self.settings }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
     for camera in &mut self.cameras {

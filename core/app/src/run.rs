@@ -201,7 +201,7 @@ impl<A: Application> Runner<A> {
     } else { None };
     let gfx = Gfx { instance, adapter, device, queue, surface, depth_stencil_texture, multisample_output_texture, sample_count };
 
-    let config = config::deserialize_config::<Config<A::Config>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
+    let config = config::deserialize_config::<Config<A::Data>>(os.directories.config_dir(), &config::CONFIG_FILE_PATH);
     let app = A::new(&os, &gfx, viewport, config.app_config);
 
     let run = Self {
@@ -248,8 +248,8 @@ impl<A: Application> Runner<A> {
     }
 
     let config_dir = self.os.directories.config_dir();
-    let config = Config { app_config: self.app.into_config(), debug_gui: self.debug_gui };
-    config::serialize_config::<Config<A::Config>>(config_dir, &config::CONFIG_FILE_PATH, &config);
+    let config = Config { app_config: self.app.into_data(), debug_gui: self.debug_gui };
+    config::serialize_config::<Config<A::Data>>(config_dir, &config::CONFIG_FILE_PATH, &config);
     self.gui_integration.into_context().memory(|m| config::serialize_config::<egui::Memory>(config_dir, &config::EGUI_FILE_PATH, m));
   }
 

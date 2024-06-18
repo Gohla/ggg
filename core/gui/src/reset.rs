@@ -1,77 +1,68 @@
 use egui::{Button, PointerButton, Response, Ui};
 
-use common::list::{Fold, Folder, FoldRef, Nil, Prepend};
-use internal::{CanResetFn, Reset, ResetFn};
+use common::list::{Fold, Folder, Nil, Prepend};
+use internal::{Reset, ResetFn};
 
 pub trait UiResetButtonExt {
-  fn reset_button_new(&mut self) -> ResetButton<Nil>;
+  fn reset_button(&mut self) -> ResetButton<Nil>;
 }
 impl UiResetButtonExt for Ui {
-  fn reset_button_new(&mut self) -> ResetButton<Nil> {
+  #[inline]
+  fn reset_button(&mut self) -> ResetButton<Nil> {
     ResetButton::new(self)
   }
 }
 
-pub struct ResetButton<'ui, L> {
-  list: L,
+pub struct ResetButton<'ui, R> {
   ui: &'ui mut Ui,
+  can_reset: bool,
+  resets: R,
 }
 impl<'ui> ResetButton<'ui, Nil> {
-  pub fn new(ui: &'ui mut Ui) -> Self { Self { list: Nil, ui } }
+  pub fn new(ui: &'ui mut Ui) -> Self { Self { ui, can_reset: false, resets: Nil } }
 }
-impl<'ui, L: Prepend> ResetButton<'ui, L> {
-  #[inline]
-  pub fn check<T: PartialEq>(self, value: &mut T, reset: T) -> ResetButton<'ui, L::Output<Reset<T>>> {
-    ResetButton { list: self.list.prepend(Reset::new(value, reset)), ui: self.ui }
+impl<'ui, R: Prepend> ResetButton<'ui, R> {
+  pub fn compare<T: PartialEq>(self, value: &mut T, reset: T) -> ResetButton<'ui, R::Output<Reset<T>>> {
+    let can_reset = self.can_reset || *value != reset;
+    ResetButton { ui: self.ui, can_reset, resets: self.resets.prepend(Reset::new(value, reset)) }
   }
 }
-impl<L> ResetButton<'_, L> where
-  L: FoldRef<bool, Folder<CanResetFn>>,
-  L: Fold<(), Folder<ResetFn>>,
-{
-  pub fn can_reset(&self) -> bool {
-    self.list.fold_ref(false, Folder(CanResetFn))
-  }
-  pub fn reset(self) {
-    self.list.fold((), Folder(ResetFn));
-  }
-
-  pub fn add(&mut self) -> Response {
-    let can_reset = self.can_reset();
-    self.ui.add_enabled(can_reset, Button::new("↺"))
-  }
-
-  pub fn on_click_by(mut self, button: PointerButton) {
+impl<R: Fold<(), Folder<ResetFn>>> ResetButton<'_, R> {
+  pub fn reset_on_click_by(mut self, button: PointerButton) {
     if self.add().clicked_by(button) {
       self.reset();
     }
   }
-  pub fn on_click(self) {
-    self.on_click_by(PointerButton::Primary);
+  pub fn reset_on_click(self) {
+    self.reset_on_click_by(PointerButton::Primary);
   }
-  pub fn on_middle_click(self) {
-    self.on_click_by(PointerButton::Middle);
+  pub fn reset_on_right_click(self) {
+    self.reset_on_click_by(PointerButton::Secondary);
+  }
+  pub fn reset_on_middle_click(self) {
+    self.reset_on_click_by(PointerButton::Middle);
   }
 
-  pub fn on_double_click_by(mut self, button: PointerButton) {
+  pub fn reset_on_double_click_by(mut self, button: PointerButton) {
     if self.add().double_clicked_by(button) {
       self.reset();
     }
   }
-  pub fn on_double_click(self) {
-    self.on_double_click_by(PointerButton::Primary)
+  pub fn reset_on_double_click(self) {
+    self.reset_on_double_click_by(PointerButton::Primary)
+  }
+
+  fn add(&mut self) -> Response {
+    self.ui.add_enabled(self.can_reset, Button::new("↺"))
+  }
+  fn reset(self) {
+    self.resets.fold((), Folder(ResetFn));
   }
 }
 
 mod internal {
   use common::list::FolderFn;
 
-  pub struct CanResetFn;
-  impl<'a, T: PartialEq> FolderFn<bool, &Reset<'a, T>> for CanResetFn {
-    fn fold(&mut self, can_reset: bool, reset: &Reset<'a, T>) -> bool {
-      can_reset || reset.can_reset()
-    }
-  }
   pub struct ResetFn;
   impl<'a, T: PartialEq> FolderFn<(), Reset<'a, T>> for ResetFn {
     fn fold(&mut self, _: (), reset: Reset<'a, T>) {
@@ -84,15 +75,9 @@ mod internal {
     reset: T,
   }
   impl<'a, T: PartialEq> Reset<'a, T> {
-    #[inline]
     pub fn new(value: &'a mut T, reset: T) -> Self {
       Self { value, reset }
     }
-    #[inline]
-    pub fn can_reset(&'a self) -> bool {
-      *self.value != self.reset
-    }
-    #[inline]
     pub fn reset(self) {
       *self.value = self.reset;
     }

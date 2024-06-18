@@ -101,7 +101,7 @@ impl Default for CameraControllerData {
   #[inline]
   fn default() -> Self {
     Self {
-      target: Vec3::one(),
+      target: Vec3::zero(),
       arcball: Arcball::default(),
     }
   }

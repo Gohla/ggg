@@ -65,13 +65,13 @@ pub struct RenderInput<'app, 'frame, A: Application> {
 /// Application trait
 #[allow(unused_variables)]
 pub trait Application: Sized {
-  /// Type of configuration this application expects, passed into [new](Self::new) and retrieved with
-  /// [into_config](Self::into_config).
-  type Config: Default + Serialize + DeserializeOwned + Send + 'static;
+  /// Type of data this application wants to persist, passed into [new](Self::new) and extracted with
+  /// [into_data](Self::into_data).
+  type Data: Default + Serialize + DeserializeOwned + Send + 'static;
   /// Create a new instance of the application.
-  fn new(os: &Os, gfx: &Gfx, viewport: ScreenSize, config: Self::Config) -> Self;
-  /// Converts this application into its configuration.
-  fn into_config(self) -> Self::Config { Self::Config::default() }
+  fn new(os: &Os, gfx: &Gfx, viewport: ScreenSize, data: Self::Data) -> Self;
+  /// Converts this application into its persistent data.
+  fn into_data(self) -> Self::Data { Self::Data::default() }
 
   /// Update this application with a new `viewport`, possibly updating internal structures to reflect the new size.
   fn viewport_resize(&mut self, os: &Os, gfx: &Gfx, viewport: ScreenSize) {}
