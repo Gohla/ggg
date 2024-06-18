@@ -3,11 +3,12 @@ use ultraviolet::{Mat4, Vec3};
 use common::screen::PhysicalSize;
 use common::time::Offset;
 
-use crate::camera::controller::{CameraController, CameraControllerData, CameraControllerInput, CameraControllerSettings};
+use crate::camera::controller::{CameraController, CameraControllerInput, CameraControllerSettings, CameraControllerState};
 use crate::camera::projection::{CameraProjection, CameraProjectionSettings};
 
 pub mod controller;
 pub mod projection;
+pub mod system;
 #[cfg(feature = "inspector_gui")]
 pub mod inspector;
 
@@ -32,11 +33,11 @@ impl CameraSettings {
   }
 }
 
-/// Camera data
+/// Camera state
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct CameraData {
-  pub controller: CameraControllerData,
+pub struct CameraState {
+  pub controller: CameraControllerState,
 }
 
 /// Camera
@@ -49,35 +50,35 @@ pub struct Camera {
 impl Camera {
   #[inline]
   pub fn new(
-    data: &mut CameraData,
+    state: &mut CameraState,
     settings: &CameraSettings,
     viewport: PhysicalSize,
   ) -> Self {
     let mut controller = CameraController::default();
-    controller.update(&mut data.controller, &settings.controller, &CameraControllerInput::default(), Offset::zero());
+    controller.update(&mut state.controller, &settings.controller, &CameraControllerInput::default(), Offset::zero());
     let mut projection = CameraProjection::new(viewport);
     projection.update(&settings.projection, controller.position(), controller.target());
     Self { controller, projection }
   }
 
 
-  /// Gets the position of this camera. That is, the eye of the camera.
+  /// Gets the position of this camera. That is, the "eye" of the camera.
   #[inline]
   pub fn position(&self) -> Vec3 { self.controller.position() }
-  // /// Gets the target of this camera. That is, the target the eyes of the camera are looking at.
-  // #[inline]
-  // pub fn target(&self) -> Vec3 { self.controller.target() }
+  /// Gets the target of this camera. That is, the target the "eye" of the camera is looking at.
+  #[inline]
+  pub fn target(&self) -> Vec3 { self.controller.target() }
+
+  /// Gets the direction vector. That is, the vector from the "eye" of the camera to the target of the camera.
+  #[inline]
+  pub fn direction_vector(&self) -> Vec3 { self.projection.direction_vector() }
+  /// Gets the inverse direction vector. That is, the vector from the target of the camera to the "eye" of the camera.
+  #[inline]
+  pub fn inverse_direction_vector(&self) -> Vec3 { self.projection.inverse_direction_vector() }
 
   /// Gets the viewport.
   #[inline]
   pub fn viewport(&self) -> &PhysicalSize { self.projection.viewport() }
-
-  /// Gets the view matrix.
-  #[inline]
-  pub fn direction_vector(&self) -> Vec3 { self.projection.direction_vector() }
-  /// Gets the inverse view matrix.
-  #[inline]
-  pub fn inverse_direction_vector(&self) -> Vec3 { self.projection.inverse_direction_vector() }
 
   /// Gets the view matrix.
   #[inline]
@@ -120,12 +121,12 @@ impl Camera {
   #[inline]
   pub fn update(
     &mut self,
-    data: &mut CameraData,
+    state: &mut CameraState,
     settings: &CameraSettings,
     input: &CameraControllerInput,
     frame_duration: Offset,
   ) {
-    self.controller.update(&mut data.controller, &settings.controller, input, frame_duration);
+    self.controller.update(&mut state.controller, &settings.controller, input, frame_duration);
     self.projection.update(&settings.projection, self.controller.position(), self.controller.target());
   }
 }

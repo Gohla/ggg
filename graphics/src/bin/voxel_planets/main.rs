@@ -6,8 +6,10 @@ use wgpu::util::StagingBelt;
 use app::{AppRunner, RenderInput};
 use common::input::RawInput;
 use common::screen::ScreenSize;
-use gfx::camera::Camera;
-use gfx::camera::controller::CameraControllerInput;
+use gfx::camera::{CameraSettings, CameraState};
+use gfx::camera::controller::{ArcballSettings, ArcballState, CameraControllerInput, CameraControllerSettings, CameraControllerState, ControlType};
+use gfx::camera::projection::CameraProjectionSettings;
+use gfx::camera::system::{CameraData, CameraSystem};
 use gfx::debug_renderer::DebugRenderer;
 use gfx::Gfx;
 use os::Os;
@@ -16,16 +18,16 @@ use voxel::lod::render::{LodRenderData, LodRenderDataManager};
 use voxel::render::VoxelRenderer;
 use voxel::uniform::{CameraUniform, ModelUniform};
 
-use crate::settings::Settings;
+use crate::data::Data;
 use crate::stars::StarsRenderer;
 
-pub mod settings;
+pub mod data;
 pub mod stars;
 
 pub struct VoxelPlanets {
-  settings: Settings,
+  data: Data,
 
-  cameras: Vec<Camera>,
+  camera_system: CameraSystem,
   camera_uniform: CameraUniform,
 
   stars_renderer: StarsRenderer,
@@ -36,43 +38,65 @@ pub struct VoxelPlanets {
   lod_render_data: LodRenderData,
 }
 
-#[derive(Default)]
 pub struct Input {
-  camera_controller: CameraControllerInput,
+  camera: CameraControllerInput,
 }
 
 const EXTENDS: f32 = 4096.0 / 2.0;
 
 impl app::Application for VoxelPlanets {
-  type Data = Settings;
-
+  type Data = Data;
   #[profiling::function]
-  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut settings: Self::Data) -> Self {
-    settings.update_default_camera_settings();
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut data: Self::Data) -> Self {
     let lod_octmap_transform = Isometry3::new(Vec3::new(-EXTENDS, -EXTENDS, -EXTENDS), Rotor3::identity());
 
-    let camera_0 = Camera::new(&mut settings.camera_data[0], &mut settings.camera_settings[0], viewport.physical);
-    let camera_1 = Camera::new(&mut settings.camera_data[1], &mut settings.camera_settings[1], viewport.physical);
-    let cameras = vec![camera_0, camera_1];
-    let selected_camera = settings.camera_debugging.selected_camera(&cameras);
-    let camera_uniform = CameraUniform::from_camera(selected_camera);
+    let default_camera_data = CameraData {
+      state: CameraState {
+        controller: CameraControllerState {
+          arcball: ArcballState {
+            distance: EXTENDS * 2.0 - 1.0,
+            ..Default::default()
+          },
+          ..Default::default()
+        }
+      },
+      settings: CameraSettings {
+        controller: CameraControllerSettings {
+          control_type: ControlType::Arcball,
+          arcball: ArcballSettings {
+            mouse_movement_panning_speed: 2.0,
+            keyboard_panning_speed: 1000.0,
+            mouse_scroll_distance_speed: 100.0,
+            ..Default::default()
+          },
+        },
+        projection: CameraProjectionSettings {
+          far: 10000.0,
+          ..Default::default()
+        },
+      },
+    };
+    let mut camera_system = data.camera_manager_state.take_into(default_camera_data, viewport.physical);
+    camera_system.ensure_minimum_camera_count(2, viewport.physical);
+    let camera = camera_system.active_camera();
+    let camera_uniform = CameraUniform::from_camera(camera.camera);
 
-    let stars_renderer = StarsRenderer::new(gfx, *selected_camera.inverse_view_matrix());
+    let stars_renderer = StarsRenderer::new(gfx, *camera.inverse_view_matrix());
     let voxel_renderer = VoxelRenderer::new(
       gfx,
       camera_uniform,
-      settings.light.uniform,
+      data.light.uniform,
       ModelUniform::identity(),
       None,
       StagingBelt::new(4096 * 1024), // 4 MiB staging belt
     );
 
-    let lod_render_data_manager = settings.create_lod_render_data_manager(gfx, lod_octmap_transform, *selected_camera.view_projection_matrix());
+    let lod_render_data_manager = data.create_lod_render_data_manager(gfx, lod_octmap_transform, *camera.view_projection_matrix());
 
     Self {
-      settings,
+      data,
 
-      cameras,
+      camera_system,
       camera_uniform,
 
       stars_renderer,
@@ -83,12 +107,13 @@ impl app::Application for VoxelPlanets {
       lod_render_data: LodRenderData::default(),
     }
   }
-  fn into_data(self) -> Self::Data { self.settings }
+  fn into_data(mut self) -> Self::Data {
+    self.data.camera_manager_state = self.camera_system.into();
+    self.data
+  }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
-    for camera in &mut self.cameras {
-      camera.set_viewport(viewport.physical);
-    }
+    self.camera_system.set_viewport(viewport.physical);
     self.stars_renderer.resize_viewport(viewport);
   }
 
@@ -96,20 +121,19 @@ impl app::Application for VoxelPlanets {
   #[profiling::function]
   fn process_input(&mut self, input: RawInput) -> Input {
     let camera_controller = CameraControllerInput::from(&input);
-    Input { camera_controller }
+    Input { camera: camera_controller }
   }
 
   fn add_to_debug_menu(&mut self, ui: &mut Ui) {
-    self.settings.camera_debugging.add_to_menu(ui);
+    self.data.camera_inspector.add_to_menu(ui);
   }
 
   #[profiling::function]
   fn render(&mut self, RenderInput { gfx, frame, input, mut gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.settings.camera_debugging.show_window(&gui, &mut self.cameras, &mut self.settings.camera_data, &mut self.settings.camera_settings);
-    let (camera, camera_data, camera_settings) =
-      self.settings.camera_debugging.selected(&mut self.cameras, &mut self.settings.camera_data, &self.settings.camera_settings);
-    camera.update(camera_data, camera_settings, &input.camera_controller, frame.duration);
-    self.camera_uniform.update_from_camera(camera);
+    self.data.camera_inspector.show_window(&gui, &mut self.camera_system);
+    let mut camera = self.camera_system.active_camera();
+    camera.update(&input.camera, frame.duration);
+    self.camera_uniform.update_from_camera(&camera);
     let camera_view_projection = *camera.view_projection_matrix();
     let camera_inverse_direction = camera.inverse_direction_vector();
     let camera_view_inverse_matrix = *camera.inverse_view_matrix();
@@ -119,32 +143,32 @@ impl app::Application for VoxelPlanets {
       .auto_sized()
       .show(&gui, |ui| {
         let mut recreate = false;
-        recreate |= self.settings.draw_reset_to_defaults_button(ui);
-        self.settings.draw_light_gui(ui, camera_inverse_direction);
-        recreate |= self.settings.draw_volume_gui(ui);
-        recreate |= self.settings.draw_extractor_gui(ui);
-        recreate |= self.settings.draw_lod_octmap_gui(ui);
-        self.settings.draw_lod_chunk_mesh_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
-        let update = self.settings.draw_lod_render_data_manager_gui(ui);
-        self.settings.draw_lod_render_data_gui(ui, &self.lod_render_data);
-        self.settings.draw_stars_renderer_settings(ui);
+        recreate |= self.data.draw_reset_to_defaults_button(ui);
+        self.data.draw_light_gui(ui, camera_inverse_direction);
+        recreate |= self.data.draw_volume_gui(ui);
+        recreate |= self.data.draw_extractor_gui(ui);
+        recreate |= self.data.draw_lod_octmap_gui(ui);
+        self.data.draw_lod_chunk_mesh_manager_gui(ui, self.lod_render_data_manager.get_mesh_manager_parameters_mut());
+        let update = self.data.draw_lod_render_data_manager_gui(ui);
+        self.data.draw_lod_render_data_gui(ui, &self.lod_render_data);
+        self.data.draw_stars_renderer_settings(ui);
         (recreate, update)
       }).map_or((false, false), |r| r.inner.unwrap_or_default());
 
     // LOD render data
     if recreate_lod_render_data_manager {
-      self.lod_render_data_manager = self.settings.create_lod_render_data_manager(gfx, self.lod_octmap_transform, *self.cameras[0].view_projection_matrix());
+      self.lod_render_data_manager = self.data.create_lod_render_data_manager(gfx, self.lod_octmap_transform, *self.camera_system.camera_at(0).view_projection_matrix());
     }
     if update_lod_render_data {
-      self.lod_render_data_manager.update(self.cameras[0].position(), &self.settings.lod_render_data_settings, &mut self.lod_render_data);
+      self.lod_render_data_manager.update(self.camera_system.camera_at(0).position(), &self.data.lod_render_data_settings, &mut self.lod_render_data);
     }
 
     // Render stars
-    self.stars_renderer.render(gfx, &mut gfx_frame, camera_view_inverse_matrix, &self.settings.stars_renderer_settings);
+    self.stars_renderer.render(gfx, &mut gfx_frame, camera_view_inverse_matrix, &self.data.stars_renderer_settings);
 
     // Render voxels
     self.voxel_renderer.update_camera_uniform(&gfx.queue, self.camera_uniform);
-    self.voxel_renderer.update_light_uniform(&gfx.queue, self.settings.light.uniform);
+    self.voxel_renderer.update_light_uniform(&gfx.queue, self.data.light.uniform);
     let model = self.lod_render_data.model;
     self.voxel_renderer.update_model_uniform(&gfx.queue, ModelUniform::new(model));
     self.voxel_renderer.render_lod_mesh(gfx, &mut gfx_frame, false, &self.lod_render_data);

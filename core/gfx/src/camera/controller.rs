@@ -90,19 +90,19 @@ impl From<&RawInput> for CameraControllerInput {
 }
 
 
-/// Camera controller data
+/// Camera controller state
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct CameraControllerData {
+pub struct CameraControllerState {
   pub target: Vec3,
-  pub arcball: Arcball,
+  pub arcball: ArcballState,
 }
-impl Default for CameraControllerData {
+impl Default for CameraControllerState {
   #[inline]
   fn default() -> Self {
     Self {
       target: Vec3::zero(),
-      arcball: Arcball::default(),
+      arcball: ArcballState::default(),
     }
   }
 }
@@ -110,12 +110,12 @@ impl Default for CameraControllerData {
 /// Arcball data for camera controller.
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Arcball {
+pub struct ArcballState {
   pub distance: f32,
   pub rotation_around_x: f32,
   pub rotation_around_y: f32,
 }
-impl Default for Arcball {
+impl Default for ArcballState {
   #[inline]
   fn default() -> Self {
     Self {
@@ -147,7 +147,7 @@ impl CameraController {
   /// Update the position and target.
   pub fn update(
     &mut self,
-    data: &mut CameraControllerData,
+    state: &mut CameraControllerState,
     settings: &CameraControllerSettings,
     input: &CameraControllerInput,
     frame_duration: Offset,
@@ -156,25 +156,25 @@ impl CameraController {
       ControlType::Arcball => {
         // Rotation
         // Scrolling up should zoom in, decreasing distance, so multiply by -1.0.
-        data.arcball.distance += input.mouse_wheel_scroll_delta * settings.arcball.mouse_scroll_distance_speed * -1.0;
-        if data.arcball.distance < 0.1 { data.arcball.distance = 0.1; }
+        state.arcball.distance += input.mouse_wheel_scroll_delta * settings.arcball.mouse_scroll_distance_speed * -1.0;
+        if state.arcball.distance < 0.1 { state.arcball.distance = 0.1; }
         if input.primary_mouse_button_down && !input.secondary_mouse_button_down {
-          data.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_rotation_speed;
-          data.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_rotation_speed;
+          state.arcball.rotation_around_x += input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_rotation_speed;
+          state.arcball.rotation_around_y -= input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_rotation_speed;
         }
-        data.arcball.rotation_around_x = data.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
-        data.arcball.rotation_around_y = data.arcball.rotation_around_y % (PI * 2.0);
-        let rotor = Rotor3::from_euler_angles(0.0, data.arcball.rotation_around_x, data.arcball.rotation_around_y).normalized();
+        state.arcball.rotation_around_x = state.arcball.rotation_around_x.clamp(-FRAC_PI_2 + 0.01, FRAC_PI_2 - 0.01);
+        state.arcball.rotation_around_y = state.arcball.rotation_around_y % (PI * 2.0);
+        let rotor = Rotor3::from_euler_angles(0.0, state.arcball.rotation_around_x, state.arcball.rotation_around_y).normalized();
 
         // Panning (mouse)
         if input.secondary_mouse_button_down {
           if input.primary_mouse_button_down {
             // Y-up is negative, so multiply by -1.0.
-            data.target += Vec3::unit_z().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0;
+            state.target += Vec3::unit_z().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0;
           } else {
-            data.target += Vec3::unit_x().rotated_by(rotor) * input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_panning_speed;
+            state.target += Vec3::unit_x().rotated_by(rotor) * input.mouse_position_delta.logical.x as f32 * settings.arcball.mouse_movement_panning_speed;
             // Y-up is negative, so multiply by -1.0.
-            data.target += Vec3::unit_y().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0;
+            state.target += Vec3::unit_y().rotated_by(rotor) * input.mouse_position_delta.logical.y as f32 * settings.arcball.mouse_movement_panning_speed * -1.0;
           }
         }
 
@@ -182,29 +182,29 @@ impl CameraController {
         let frame_delta = frame_duration.into_seconds() as f32;
         let keyboard_panning_speed = settings.arcball.keyboard_panning_speed * frame_delta;
         if input.forward_key_down {
-          data.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed;
+          state.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed;
         }
         if input.left_key_down {
-          data.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed * -1.0;
+          state.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed * -1.0;
         }
         if input.backward_key_down {
-          data.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed * -1.0;
+          state.target += Vec3::unit_z().rotated_by(rotor) * keyboard_panning_speed * -1.0;
         }
         if input.right_key_down {
-          data.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed;
+          state.target += Vec3::unit_x().rotated_by(rotor) * keyboard_panning_speed;
         }
         if input.up_key_down {
-          data.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed;
+          state.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed;
         }
         if input.down_key_down {
-          data.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed * -1.0;
+          state.target += Vec3::unit_y().rotated_by(rotor) * keyboard_panning_speed * -1.0;
         }
 
-        self.target = data.target;
+        self.target = state.target;
 
         // Camera position
         // Distance is positive, but moving backwards is negative-Z, so multiply by -1.0.
-        self.position = data.target + Vec3::unit_z().rotated_by(rotor) * data.arcball.distance * -1.0
+        self.position = state.target + Vec3::unit_z().rotated_by(rotor) * state.arcball.distance * -1.0
       }
     };
   }

@@ -1,57 +1,22 @@
-use std::slice::from_mut;
-
 use egui::{Align2, ComboBox, Ui, Window};
 
 use gui::Gui;
 use gui::reset::UiResetButtonExt;
 use gui::widget::UiWidgetsExt;
 
-use crate::camera::controller::{CameraController, CameraControllerData, CameraControllerSettings, ControlType};
+use crate::camera::controller::{CameraController, CameraControllerSettings, CameraControllerState, ControlType};
+use crate::camera::system::CameraSystem;
 use crate::camera::projection::{CameraProjection, CameraProjectionSettings, ProjectionType};
-
-use super::{Camera, CameraData, CameraSettings};
 
 #[derive(Default, Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct CameraInspector {
   pub show_window: bool,
   pub window_anchor: Option<Align2>,
-  pub selected_camera: usize,
-
-  #[cfg_attr(feature = "serde", serde(skip))]
-  pub default_data: CameraData,
-  #[cfg_attr(feature = "serde", serde(skip))]
-  pub default_settings: CameraSettings,
 }
 
 impl CameraInspector {
-  pub fn default_data(mut self, default_data: CameraData) -> Self {
-    self.default_data = default_data;
-    self
-  }
-  pub fn default_settings(mut self, default_settings: CameraSettings) -> Self {
-    self.default_settings = default_settings;
-    self
-  }
-
-  pub fn selected_camera<'c>(&self, cameras: &'c [Camera]) -> &'c Camera {
-    &cameras[self.selected_camera]
-  }
-  pub fn selected_camera_mut<'c>(&self, cameras: &'c mut [Camera]) -> &'c mut Camera {
-    &mut cameras[self.selected_camera]
-  }
-  pub fn selected<'c>(&self, cameras: &'c mut [Camera], data: &'c mut [CameraData], settings: &'c [CameraSettings]) -> (&'c mut Camera, &'c mut CameraData, &'c CameraSettings) {
-    let camera = &mut cameras[self.selected_camera];
-    let data = &mut data[self.selected_camera];
-    let settings = &settings[self.selected_camera];
-    (camera, data, settings)
-  }
-
-
-  pub fn show_window_single(&mut self, gui: &Gui, camera: &mut Camera, data: &mut CameraData, settings: &mut CameraSettings) {
-    self.show_window(gui, from_mut(camera), from_mut(data), from_mut(settings));
-  }
-  pub fn show_window(&mut self, gui: &Gui, cameras: &mut [Camera], data: &mut [CameraData], settings: &mut [CameraSettings]) {
+  pub fn show_window(&mut self, gui: &Gui, system: &mut CameraSystem) {
     if !self.show_window { return; }
     let mut window = Window::new("Camera")
       .constrain_to(gui.area_under_title_bar);
@@ -64,23 +29,24 @@ impl CameraInspector {
       .show(gui, |ui| {
         ui.horizontal(|ui| {
           ComboBox::from_id_source("Camera")
-            .selected_text(format!("Camera #{}", self.selected_camera))
+            .selected_text(format!("Camera #{}", system.active_camera_index_mut()))
             .show_ui(ui, |ui| {
-              for i in 0..cameras.len() {
-                ui.selectable_value(&mut self.selected_camera, i, format!("Camera #{}", i));
+              for i in 0..system.camera_count() {
+                ui.selectable_value(system.active_camera_index_mut(), i, format!("Camera #{}", i));
               }
             });
           ui.select_align2(&mut self.window_anchor);
+          let default_data = system.default_data();
+          let combined = system.active_camera();
           ui.reset_button()
-            .compare(&mut settings[self.selected_camera], self.default_settings)
-            .compare(&mut data[self.selected_camera], self.default_data)
+            .compare(combined.state, default_data.state)
+            .compare(combined.settings, default_data.settings)
             .reset_on_double_click();
         });
-        let camera = &mut cameras[self.selected_camera];
-        let data = &mut data[self.selected_camera];
-        let settings = &mut settings[self.selected_camera];
-        Self::draw_controller(ui, &self.default_data.controller, &self.default_settings.controller, &mut camera.controller, &mut data.controller, &mut settings.controller);
-        Self::draw_projection(ui, &self.default_settings.projection, &mut camera.projection, &mut settings.projection);
+        let default_data = system.default_data();
+        let combined = system.active_camera();
+        Self::draw_controller(ui, &default_data.state.controller, &default_data.settings.controller, &mut combined.camera.controller, &mut combined.state.controller, &mut combined.settings.controller);
+        Self::draw_projection(ui, &default_data.settings.projection, &mut combined.camera.projection, &mut combined.settings.projection);
       });
   }
 
@@ -91,10 +57,10 @@ impl CameraInspector {
 
   fn draw_controller(
     ui: &mut Ui,
-    default_data: &CameraControllerData,
+    default_state: &CameraControllerState,
     default_settings: &CameraControllerSettings,
     controller: &mut CameraController,
-    data: &mut CameraControllerData,
+    data: &mut CameraControllerState,
     settings: &mut CameraControllerSettings,
   ) {
     ui.collapsing_open_with_grid("Controller", "Grid", |ui| {
@@ -121,7 +87,7 @@ impl CameraInspector {
           ui.end_row();
 
           ui.label("Distance");
-          ui.drag_unlabelled_range_with_reset(&mut data.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.1..=f32::INFINITY, default_data.arcball.distance);
+          ui.drag_unlabelled_range_with_reset(&mut data.arcball.distance, settings.arcball.debug_gui_distance_speed, 0.1..=f32::INFINITY, default_state.arcball.distance);
           ui.end_row();
 
           ui.label("Distance change");
@@ -140,8 +106,8 @@ impl CameraInspector {
             ui.drag("x: ", &mut data.arcball.rotation_around_x, 0.01);
             ui.drag("y: ", &mut data.arcball.rotation_around_y, 0.01);
             ui.reset_button()
-              .compare(&mut data.arcball.rotation_around_x, default_data.arcball.rotation_around_x)
-              .compare(&mut data.arcball.rotation_around_y, default_data.arcball.rotation_around_y)
+              .compare(&mut data.arcball.rotation_around_x, default_state.arcball.rotation_around_x)
+              .compare(&mut data.arcball.rotation_around_y, default_state.arcball.rotation_around_y)
               .reset_on_click();
           });
           ui.end_row();
@@ -162,7 +128,7 @@ impl CameraInspector {
       ui.show_vec3(&controller.position());
       ui.end_row();
       ui.label("Target");
-      ui.drag_vec3_with_reset(settings.arcball.debug_gui_panning_speed, &mut data.target, default_data.target);
+      ui.drag_vec3_with_reset(settings.arcball.debug_gui_panning_speed, &mut data.target, default_state.target);
       ui.end_row();
     });
   }

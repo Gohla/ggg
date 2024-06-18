@@ -17,9 +17,10 @@ use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraData, CameraSettings};
+use gfx::camera::{Camera};
 use gfx::camera::controller::CameraControllerInput;
 use gfx::camera::inspector::CameraInspector;
+use gfx::camera::system::{CameraData, CameraSystem, CameraSystemState};
 use gui::widget::UiWidgetsExt;
 use os::Os;
 
@@ -65,7 +66,7 @@ impl Instance {
 pub struct Cubes {
   data: Data,
 
-  camera: Camera,
+  camera_system: CameraSystem,
 
   uniform_buffer: GfxBuffer,
   instance_buffer: GfxBuffer,
@@ -76,15 +77,12 @@ pub struct Cubes {
   index_buffer: GfxBuffer,
 
   rng: SmallRng,
-
-  num_cubes: u32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Data {
-  camera_data: CameraData,
-  camera_settings: CameraSettings,
+  camera_manager_state: CameraSystemState,
   camera_inspector: CameraInspector,
 
   num_cubes_to_generate: u32,
@@ -92,25 +90,12 @@ pub struct Data {
 }
 impl Default for Data {
   fn default() -> Self {
-    let mut data = Self {
-      camera_data: Default::default(),
-      camera_settings: Default::default(),
+    Self {
+      camera_manager_state: Default::default(),
       camera_inspector: Default::default(),
       num_cubes_to_generate: 100_000,
       cube_position_range: 1000.0,
-    };
-    data.camera_settings.controller.arcball.mouse_scroll_distance_speed = 100.0;
-
-    data.camera_inspector.default_data = data.camera_data;
-    data.camera_inspector.default_settings = data.camera_settings;
-    data
-  }
-}
-impl Data {
-  pub fn set_camera_inspector_defaults(&mut self) {
-    let default = Self::default();
-    self.camera_inspector.default_data = default.camera_data;
-    self.camera_inspector.default_settings = default.camera_settings;
+    }
   }
 }
 
@@ -121,16 +106,18 @@ pub struct Input {
 impl app::Application for Cubes {
   type Data = Data;
   fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut data: Self::Data) -> Self {
-    data.set_camera_inspector_defaults();
-
-    let camera = Camera::new(&mut data.camera_data, &data.camera_settings, viewport.physical);
+    let mut camera_system = {
+      let mut default = CameraData::default();
+      default.settings.controller.arcball.mouse_scroll_distance_speed = 100.0;
+      data.camera_manager_state.take_into(default, viewport.physical)
+    };
 
     let mut rng = SmallRng::seed_from_u64(101702198783735);
 
     let uniform_buffer = BufferBuilder::default()
       .uniform_usage()
       .label("Cubes uniform buffer")
-      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera)]);
+      .build_with_data(&gfx.device, &[Uniform::from_camera(&camera_system.active_camera())]);
     let uniform_binding = uniform_buffer.binding(0, ShaderStages::VERTEX);
 
     let instance_buffer = {
@@ -186,7 +173,7 @@ impl app::Application for Cubes {
     Self {
       data,
 
-      camera,
+      camera_system,
 
       uniform_buffer,
       instance_buffer,
@@ -197,16 +184,15 @@ impl app::Application for Cubes {
       index_buffer,
 
       rng,
-
-      num_cubes: data.num_cubes_to_generate,
     }
   }
-  fn into_data(self) -> Self::Data {
+  fn into_data(mut self) -> Self::Data {
+    self.data.camera_manager_state = self.camera_system.into();
     self.data
   }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
-    self.camera.set_viewport(viewport.physical);
+    self.camera_system.set_viewport(viewport.physical);
   }
 
   type Input = Input;
@@ -220,9 +206,10 @@ impl app::Application for Cubes {
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.data.camera_inspector.show_window_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
-    self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
-    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.data.camera_inspector.show_window(&gui, &mut self.camera_system);
+    let mut camera = self.camera_system.active_camera();
+    camera.update(&input.camera, frame.duration);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&camera)]);
 
     gui.window("Cubes").show(&gui, |ui| {
       ui.grid("Grid", |ui| {
@@ -238,7 +225,6 @@ impl app::Application for Cubes {
           .map(|_| Instance::from_random_range(&mut self.rng, -self.data.cube_position_range..self.data.cube_position_range))
           .collect();
         self.instance_buffer.write_all_data(&gfx.queue, &instances);
-        self.num_cubes = self.data.num_cubes_to_generate
       }
     });
 
@@ -247,7 +233,7 @@ impl app::Application for Cubes {
     pass.set_pipeline(&self.render_pipeline);
     pass.set_bind_group(0, &self.static_bind_group.entry, &[]);
     pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint32);
-    let num_indices = self.num_cubes * NUM_CUBE_INDICES as u32;
+    let num_indices = self.data.num_cubes_to_generate * NUM_CUBE_INDICES as u32;
     pass.draw_indexed(0..num_indices, 0, 0..1);
     pass.pop_debug_group();
     Box::new(std::iter::empty())

@@ -14,9 +14,10 @@ use common::screen::ScreenSize;
 use gfx::{Gfx, include_spirv_shader_for_bin};
 use gfx::bind_group::{CombinedBindGroup, CombinedBindGroupBuilder};
 use gfx::buffer::{BufferBuilder, GfxBuffer};
-use gfx::camera::{Camera, CameraData, CameraSettings};
+use gfx::camera::Camera;
 use gfx::camera::controller::CameraControllerInput;
 use gfx::camera::inspector::CameraInspector;
+use gfx::camera::system::{CameraData, CameraSystem, CameraSystemState};
 use gfx::sampler::SamplerBuilder;
 use gfx::texture::TextureBuilder;
 use os::Os;
@@ -87,7 +88,7 @@ const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
 pub struct Quads {
   data: Data,
 
-  camera: Camera,
+  camera_system: CameraSystem,
 
   diffuse_bind_group: CombinedBindGroup,
 
@@ -101,19 +102,11 @@ pub struct Quads {
   instance_buffer: GfxBuffer,
 }
 
-#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Data {
-  camera_data: CameraData,
-  camera_settings: CameraSettings,
+  camera_manager_state: CameraSystemState,
   camera_inspector: CameraInspector,
-}
-impl Data {
-  pub fn set_camera_inspector_defaults(&mut self) {
-    let default = Self::default();
-    self.camera_inspector.default_data = default.camera_data;
-    self.camera_inspector.default_settings = default.camera_settings;
-  }
 }
 
 pub struct Input {
@@ -122,10 +115,9 @@ pub struct Input {
 
 impl app::Application for Quads {
   type Data = Data;
-  fn new(_os: &Os, gfx: &Gfx, screen_size: ScreenSize, mut data: Self::Data) -> Self {
-    data.set_camera_inspector_defaults();
-
-    let camera = Camera::new(&mut data.camera_data, &data.camera_settings, screen_size.physical);
+  fn new(_os: &Os, gfx: &Gfx, viewport: ScreenSize, mut data: Self::Data) -> Self {
+    let mut camera_system = data.camera_manager_state.take_into(CameraData::default(), viewport.physical);
+    let camera = camera_system.active_camera();
 
     let diffuse_bind_group = {
       let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
@@ -195,7 +187,7 @@ impl app::Application for Quads {
     Self {
       data,
 
-      camera,
+      camera_system,
 
       diffuse_bind_group,
 
@@ -209,12 +201,13 @@ impl app::Application for Quads {
       instance_buffer,
     }
   }
-  fn into_data(self) -> Self::Data {
+  fn into_data(mut self) -> Self::Data {
+    self.data.camera_manager_state = self.camera_system.into();
     self.data
   }
 
   fn viewport_resize(&mut self, _os: &Os, _gfx: &Gfx, viewport: ScreenSize) {
-    self.camera.set_viewport(viewport.physical);
+    self.camera_system.set_viewport(viewport.physical);
   }
 
   type Input = Input;
@@ -228,9 +221,10 @@ impl app::Application for Quads {
   }
 
   fn render(&mut self, RenderInput { gfx, frame, input, gfx_frame, gui, .. }: RenderInput<Self>) -> Box<dyn Iterator<Item=CommandBuffer>> {
-    self.data.camera_inspector.show_window_single(&gui, &mut self.camera, &mut self.data.camera_data, &mut self.data.camera_settings);
-    self.camera.update(&mut self.data.camera_data, &self.data.camera_settings, &input.camera, frame.duration);
-    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&self.camera)]);
+    self.data.camera_inspector.show_window(&gui, &mut self.camera_system);
+    let mut camera = self.camera_system.active_camera();
+    camera.update(&input.camera, frame.duration);
+    self.uniform_buffer.write_all_data(&gfx.queue, &[Uniform::from_camera(&camera)]);
 
     gui.window("Quads").show(&gui, |ui| {
       ui.label("Hello, world!");
