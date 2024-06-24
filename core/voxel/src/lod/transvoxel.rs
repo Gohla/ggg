@@ -31,12 +31,12 @@ impl Default for TransvoxelExtractorSettings {
   fn default() -> Self {
     Self {
       extract_regular_chunks: true,
-      extract_transition_lo_x_chunks: true,
-      extract_transition_hi_x_chunks: true,
-      extract_transition_lo_y_chunks: true,
-      extract_transition_hi_y_chunks: true,
-      extract_transition_lo_z_chunks: true,
-      extract_transition_hi_z_chunks: true,
+      extract_transition_lo_x_chunks: false,
+      extract_transition_hi_x_chunks: false,
+      extract_transition_lo_y_chunks: false,
+      extract_transition_hi_y_chunks: false,
+      extract_transition_lo_z_chunks: false,
+      extract_transition_hi_z_chunks: false,
     }
   }
 }

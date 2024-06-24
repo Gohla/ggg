@@ -39,7 +39,9 @@ impl Default for LodOctmapSettings {
       root_size: 4096,
       lod_factor: 1.0,
       fixed_lod_level: None,
-      job_queue_worker_threads: std::thread::available_parallelism().ok().and_then(|p| NonZeroUsize::new(p.get().saturating_sub(1))).unwrap_or(NonZeroUsize::new(7).unwrap()).get(),
+      job_queue_worker_threads: std::thread::available_parallelism().ok()
+        .and_then(|p| NonZeroUsize::new(p.get().saturating_sub(1)))
+        .unwrap_or(NonZeroUsize::new(7).unwrap()).get(),
       empty_lod_chunk_mesh_cache_size: 4096,
     }
   }

@@ -87,8 +87,8 @@ impl Default for NoiseSettings {
   #[inline]
   fn default() -> Self {
     Self {
-      seed: 1337,
-      lacunarity: 0.5,
+      seed: 1576,
+      lacunarity: 0.001,
       frequency: 0.002,
       gain: 10.0,
       octaves: 3,

@@ -28,9 +28,9 @@ use crate::stars::StarsRendererSettings;
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, Debug, )]
 pub enum VolumeType {
-  #[default]
   Sphere,
   Noise,
+  #[default]
   SpherePlusNoise,
 }
 
@@ -206,7 +206,8 @@ impl Data {
         .show_ui(ui, |ui| {
           ui.selectable_value(&mut self.extractor_type, ExtractorType::MarchingCubes, "Marching Cubes");
           ui.selectable_value(&mut self.extractor_type, ExtractorType::Transvoxel, "Transvoxel");
-          ui.selectable_value(&mut self.extractor_type, ExtractorType::SurfaceNets, "Surface Nets");
+          // TODO: enable when fixed
+          //ui.selectable_value(&mut self.extractor_type, ExtractorType::SurfaceNets, "Surface Nets");
           ui.selectable_value(&mut self.extractor_type, ExtractorType::Noop, "No-op");
         });
       ui.end_row();

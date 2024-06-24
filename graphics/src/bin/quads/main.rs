@@ -120,7 +120,7 @@ impl app::Application for Quads {
     let camera = camera_system.active_camera();
 
     let diffuse_bind_group = {
-      let image = image::load_from_memory(include_bytes!("../../../../assets/alias3/construction_materials/cobble_stone_1.png")).unwrap().into_rgba8();
+      let image = image::load_from_memory(include_bytes!("texture.png")).unwrap().into_rgba8();
       let texture = TextureBuilder::new_from_2d_rgba_image(&image)
         .with_texture_label("Cobblestone diffuse texture")
         .with_texture_view_label("Cobblestone diffuse texture view")
